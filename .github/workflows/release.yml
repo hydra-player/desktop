@@ -30,7 +30,18 @@ jobs:
         if: matrix.settings.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad gstreamer1.0-libav
+
+      - name: install linuxdeploy gstreamer plugin (ubuntu only)
+        if: matrix.settings.platform == 'ubuntu-22.04'
+        run: |
+          wget -q "https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gstreamer/master/linuxdeploy-plugin-gstreamer.sh" \
+            -O /usr/local/bin/linuxdeploy-plugin-gstreamer.sh
+          chmod +x /usr/local/bin/linuxdeploy-plugin-gstreamer.sh
 
       - name: setup node
         uses: actions/setup-node@v4
@@ -48,6 +59,7 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPIMAGE_EXTRACT_AND_RUN: 1
         with:
           tagName: app-v__VERSION__
           releaseName: 'Psysonic v__VERSION__'
