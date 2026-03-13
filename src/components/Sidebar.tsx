@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Disc3, Users, Music4, Radio, Settings, Heart, BarChart3, Shuffle, ListMusic,
-  PanelLeftClose, PanelLeft, HelpCircle, Dices
+  PanelLeftClose, PanelLeft, HelpCircle, Dices, ArrowUpCircle
 } from 'lucide-react';
 
 const PsysonicLogo = () => (
@@ -21,14 +21,74 @@ const navItems = [
   { icon: Heart, labelKey: 'sidebar.favorites', to: '/favorites' },
 ];
 
-export default function Sidebar({ 
-  isCollapsed = false, 
-  toggleCollapse 
-}: { 
+function isNewer(latest: string, current: string): boolean {
+  const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number);
+  const [lMaj, lMin, lPat] = parse(latest);
+  const [cMaj, cMin, cPat] = parse(current);
+  if (lMaj !== cMaj) return lMaj > cMaj;
+  if (lMin !== cMin) return lMin > cMin;
+  return lPat > cPat;
+}
+
+function UpdateToast({ isCollapsed, latestVersion }: { isCollapsed: boolean; latestVersion: string }) {
+  const { t } = useTranslation();
+
+  if (isCollapsed) {
+    return (
+      <div className="update-toast-icon" style={{ marginTop: 'auto' }} title={`${t('sidebar.updateAvailable')}: ${latestVersion}`}>
+        <ArrowUpCircle size={20} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="update-toast">
+      <div className="update-toast-header">
+        <ArrowUpCircle size={14} />
+        <span className="update-toast-label">{t('sidebar.updateAvailable')}</span>
+      </div>
+      <div className="update-toast-version">{t('sidebar.updateReady', { version: latestVersion })}</div>
+      <a
+        className="update-toast-link"
+        href="https://github.com/Psychotoxical/psysonic/releases"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {t('sidebar.updateLink')}
+      </a>
+    </div>
+  );
+}
+
+export default function Sidebar({
+  isCollapsed = false,
+  toggleCollapse
+}: {
   isCollapsed?: boolean;
   toggleCollapse?: () => void;
 }) {
   const { t } = useTranslation();
+  const [latestVersion, setLatestVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const { getVersion } = await import('@tauri-apps/api/app');
+        const current = await getVersion();
+        const res = await fetch('https://api.github.com/repos/Psychotoxical/psysonic/releases/latest');
+        if (!res.ok) return;
+        const data = await res.json();
+        const tag: string = data.tag_name ?? '';
+        if (!cancelled && tag && isNewer(tag, current)) {
+          setLatestVersion(tag.startsWith('v') ? tag : `v${tag}`);
+        }
+      } catch {
+        // network unavailable or not running in Tauri — silently skip
+      }
+    }, 1500);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, []);
 
   return (
     <aside className={`sidebar animate-slide-in ${isCollapsed ? 'collapsed' : ''}`}>
@@ -61,10 +121,11 @@ export default function Sidebar({
         ))}
 
         {!isCollapsed && <span className="nav-section-label" style={{ marginTop: 'auto' }}>{t('sidebar.system')}</span>}
+        {latestVersion && <UpdateToast isCollapsed={isCollapsed} latestVersion={latestVersion} />}
         <NavLink
           to="/statistics"
           className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-          style={isCollapsed ? { marginTop: 'auto' } : undefined}
+          style={isCollapsed && !latestVersion ? { marginTop: 'auto' } : undefined}
           title={isCollapsed ? t('sidebar.statistics') : undefined}
         >
           <BarChart3 size={isCollapsed ? 22 : 18} />

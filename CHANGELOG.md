@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7] - 2026-03-13
+
+### Added
+- **Update Notifications**: Integrated a native update check system in the sidebar that notifies you when a new version is available on GitHub.
+- **Improved Settings**: Refined layout and styling for a cleaner settings experience.
+
+### Fixed
+- **UI/UX Refinements**: Polished sidebar animations and layout for better visual consistency.
+- **i18n**: Added missing translations for update notifications and system status.
+
 ## [1.0.6] - 2026-03-13
 
 ### Added

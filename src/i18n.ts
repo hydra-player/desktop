@@ -18,7 +18,10 @@ const enTranslation = {
     settings: 'Settings',
     help: 'Help',
     expand: 'Expand Sidebar',
-    collapse: 'Collapse Sidebar'
+    collapse: 'Collapse Sidebar',
+    updateAvailable: 'Update available',
+    updateReady: '{{version}} is ready',
+    updateLink: 'Go to release →'
   },
   home: {
     starred: 'Personal Favorites',
@@ -372,7 +375,10 @@ const deTranslation = {
     settings: 'Einstellungen',
     help: 'Hilfe',
     expand: 'Sidebar einblenden',
-    collapse: 'Sidebar ausblenden'
+    collapse: 'Sidebar ausblenden',
+    updateAvailable: 'Update verfügbar',
+    updateReady: '{{version}} ist bereit',
+    updateLink: 'Zum Release →'
   },
   home: {
     starred: 'Persönliche Favoriten',
