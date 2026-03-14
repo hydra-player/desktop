@@ -1,6 +1,6 @@
 [package]
 name = "psysonic"
-version = "1.0.11"
+version = "1.0.12"
 description = "Psysonic Desktop Music Player"
 authors = []
 license = ""

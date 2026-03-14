@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.12] - 2026-03-14
+
+### Fixed
+- **Seek Stop Bug**: Clicking the progress bar a second time no longer stops playback. Root cause: WebKit and GStreamer fire spurious `ended` events immediately after a direct `audioNode.currentTime` seek. A guard now checks `lastSeekAt` + playhead position to silently discard these false alarms.
+- **Play/Pause Hang**: Rapidly double-clicking the play/pause button no longer freezes the audio pipeline. A 300 ms lock prevents a second toggle from issuing `pause→play` before GStreamer has finished the previous state transition.
+- **Queue DnD (macOS / Windows)**: Drop target index is now calculated from the mouse `clientY` position at drop time instead of refs, eliminating the `dragend`-before-`drop` timing race on macOS WKWebView and Windows WebView2.
+
+### Added
+- **Live Now Playing navigation**: Clicking an entry in the Live dropdown now navigates to the corresponding album page.
+
+### Changed
+- **Hero blur**: Increased background blur in the Hero section for a more immersive look.
+
 ## [1.0.11] - 2026-03-14
 
 ### Added
@@ -18,8 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Gapless Playback removed**: Removed the experimental gapless playback feature. It caused intermittent song skipping and beginning cutoffs and was not reliable enough to ship. Standard sequential playback is used instead.
 
 ### Known Issues
-- **Seeking**: Seeking may occasionally be unreliable, particularly on Linux/GStreamer. Being actively investigated.
-- **Queue drag & drop (macOS / Windows)**: Queue reordering via drag & drop may not always work correctly on macOS and Windows. Being actively worked on.
+- ~~**Seeking**: Seeking may occasionally be unreliable, particularly on Linux/GStreamer.~~ Fixed in 1.0.12.
+- ~~**Queue drag & drop (macOS / Windows)**: Queue reordering via drag & drop may not always work correctly on macOS and Windows.~~ Fixed in 1.0.12.
 
 ## [1.0.10] - 2026-03-14
 
