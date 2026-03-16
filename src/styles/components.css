@@ -313,19 +313,7 @@
   gap: var(--space-4);
 }
 
-.random-albums-progress {
-  height: 2px;
-  background: var(--border-subtle);
-  border-radius: var(--radius-full);
-  margin-bottom: 1.5rem;
-  overflow: hidden;
-}
-.random-albums-progress-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: var(--radius-full);
-  transition: width 0.1s linear;
-}
+
 @media (min-width: 1024px) {
   .album-grid-wrap { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
 }

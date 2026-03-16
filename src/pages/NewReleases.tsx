@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import AlbumCard from '../components/AlbumCard';
 import { getAlbumList, SubsonicAlbum } from '../api/subsonic';
+import { useTranslation } from 'react-i18next';
 
 export default function NewReleases() {
+  const { t } = useTranslation();
   const [albums, setAlbums] = useState<SubsonicAlbum[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -49,7 +51,7 @@ export default function NewReleases() {
 
   return (
     <div className="content-body animate-fade-in">
-      <h1 className="page-title" style={{ marginBottom: '1.5rem' }}>Neueste</h1>
+      <h1 className="page-title" style={{ marginBottom: '1.5rem' }}>{t('sidebar.newReleases')}</h1>
       
       {loading && albums.length === 0 ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem' }}>

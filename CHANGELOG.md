@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-03-16
+
+### Fixed
+
+#### Random Albums — Performance & Memory
+- **Auto-refresh removed**: The 30-second auto-cycle timer caused 10 React state updates/second (progress bar interval) and a burst of 30 concurrent image fetches on every tick, eventually making the whole app unresponsive. The page now loads once on mount; use the manual refresh button to get a new selection.
+- **Concurrent fetch limit**: Image fetches are now capped at 5 simultaneous network requests (was unlimited — 30 at once on every refresh).
+- **Object URL memory leak**: The in-memory image cache now caps at 150 entries and revokes old object URLs via `URL.revokeObjectURL()` when evicting. Previously, object URLs accumulated without bound across the entire session.
+- **Dangling state updates**: `useCachedUrl` now uses a cancellation flag — if a component unmounts while a fetch is in flight (e.g. during a grid refresh), the resolved URL is discarded instead of calling `setState` on an unmounted component.
+
+#### i18n
+- Page title "Neueste" on the New Releases page was hardcoded German. Now uses `t('sidebar.newReleases')`.
+
 ## [1.4.0] - 2026-03-16
 
 ### Added

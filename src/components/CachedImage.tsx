@@ -10,7 +10,9 @@ export function useCachedUrl(fetchUrl: string, cacheKey: string): string {
   const [resolved, setResolved] = useState('');
   useEffect(() => {
     if (!fetchUrl) { setResolved(''); return; }
-    getCachedUrl(fetchUrl, cacheKey).then(setResolved);
+    let cancelled = false;
+    getCachedUrl(fetchUrl, cacheKey).then(url => { if (!cancelled) setResolved(url); });
+    return () => { cancelled = true; };
   }, [fetchUrl, cacheKey]);
   return resolved || fetchUrl;
 }

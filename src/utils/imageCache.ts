@@ -1,9 +1,38 @@
 const DB_NAME = 'psysonic-img-cache';
 const STORE_NAME = 'images';
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const MAX_MEMORY_CACHE = 150; // max object URLs kept in RAM
+const MAX_CONCURRENT_FETCHES = 5;
 
-// In-memory map: cacheKey → object URL (avoids creating multiple object URLs per session)
+// In-memory map: cacheKey → object URL (insertion-order = LRU approximation)
 const objectUrlCache = new Map<string, string>();
+
+// Concurrency limiter for network fetches
+let activeFetches = 0;
+const fetchQueue: Array<() => void> = [];
+
+function acquireFetchSlot(): Promise<void> {
+  if (activeFetches < MAX_CONCURRENT_FETCHES) {
+    activeFetches++;
+    return Promise.resolve();
+  }
+  return new Promise(resolve => fetchQueue.push(resolve));
+}
+
+function releaseFetchSlot(): void {
+  activeFetches--;
+  const next = fetchQueue.shift();
+  if (next) { activeFetches++; next(); }
+}
+
+function evictIfNeeded(): void {
+  while (objectUrlCache.size > MAX_MEMORY_CACHE) {
+    const oldestKey = objectUrlCache.keys().next().value;
+    if (!oldestKey) break;
+    URL.revokeObjectURL(objectUrlCache.get(oldestKey)!);
+    objectUrlCache.delete(oldestKey);
+  }
+}
 
 let db: IDBDatabase | null = null;
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -75,10 +104,12 @@ export async function getCachedUrl(fetchUrl: string, cacheKey: string): Promise<
   if (blob) {
     const objUrl = URL.createObjectURL(blob);
     objectUrlCache.set(cacheKey, objUrl);
+    evictIfNeeded();
     return objUrl;
   }
 
-  // 3. Network fetch → store in IDB → return object URL
+  // 3. Network fetch with concurrency limit → store in IDB → return object URL
+  await acquireFetchSlot();
   try {
     const resp = await fetch(fetchUrl);
     if (!resp.ok) return fetchUrl;
@@ -86,8 +117,11 @@ export async function getCachedUrl(fetchUrl: string, cacheKey: string): Promise<
     putBlob(cacheKey, newBlob); // fire-and-forget
     const objUrl = URL.createObjectURL(newBlob);
     objectUrlCache.set(cacheKey, objUrl);
+    evictIfNeeded();
     return objUrl;
   } catch {
-    return fetchUrl; // fallback: direct URL
+    return fetchUrl;
+  } finally {
+    releaseFetchSlot();
   }
 }
