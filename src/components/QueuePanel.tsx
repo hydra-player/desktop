@@ -316,7 +316,9 @@ export default function QueuePanel() {
               style={{ cursor: currentTrack.albumId ? 'pointer' : 'default' }}
               onClick={() => currentTrack.albumId && navigate(`/album/${currentTrack.albumId}`)}
             >{currentTrack.album}</div>
-            
+            {currentTrack.year && (
+              <div className="queue-current-sub">{currentTrack.year}</div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
               <div className="queue-current-tech">
                 {currentTrack.bitRate && currentTrack.suffix ? (

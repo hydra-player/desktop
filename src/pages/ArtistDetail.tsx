@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getArtist, getArtistInfo, getTopSongs, getSimilarSongs2, SubsonicArtist, SubsonicAlbum, SubsonicSong, SubsonicArtistInfo, buildCoverArtUrl, coverArtCacheKey, star, unstar } from '../api/subsonic';
 import AlbumCard from '../components/AlbumCard';
 import CachedImage from '../components/CachedImage';
 import { ArrowLeft, Users, ExternalLink, Star, Play, Shuffle, Radio } from 'lucide-react';
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { open } from '@tauri-apps/plugin-shell';
 import { usePlayerStore } from '../store/playerStore';
 import { useTranslation } from 'react-i18next';
 
@@ -50,6 +50,7 @@ export default function ArtistDetail() {
   const [loading, setLoading] = useState(true);
   const [radioLoading, setRadioLoading] = useState(false);
   const [isStarred, setIsStarred] = useState(false);
+  const [openedLink, setOpenedLink] = useState<string | null>(null);
 
   const playTrack = usePlayerStore(state => state.playTrack);
   const enqueue = usePlayerStore(state => state.enqueue);
@@ -77,15 +78,10 @@ export default function ArtistDetail() {
     });
   }, [id]);
 
-  const openLink = (url: string, title: string) => {
-    const label = `browser_${Date.now()}`;
-    new WebviewWindow(label, {
-      url,
-      title,
-      width: 1100,
-      height: 780,
-      center: true,
-    });
+  const openLink = (url: string, key: string) => {
+    open(url);
+    setOpenedLink(key);
+    setTimeout(() => setOpenedLink(null), 2500);
   };
 
   const toggleStar = async () => {
@@ -192,14 +188,14 @@ export default function ArtistDetail() {
             {(info?.lastFmUrl || artist.name) && (
               <div className="artist-detail-links">
                 {info?.lastFmUrl && (
-                  <button className="artist-ext-link" onClick={() => openLink(info.lastFmUrl!, `${artist.name} — Last.fm`)}>
+                  <button className="artist-ext-link" onClick={() => openLink(info.lastFmUrl!, 'lastfm')}>
                     <LastfmIcon size={14} />
-                    Last.fm
+                    {openedLink === 'lastfm' ? t('artistDetail.openedInBrowser') : 'Last.fm'}
                   </button>
                 )}
-                <button className="artist-ext-link" onClick={() => openLink(wikiUrl, `${artist.name} — Wikipedia`)}>
+                <button className="artist-ext-link" onClick={() => openLink(wikiUrl, 'wiki')}>
                   <ExternalLink size={14} />
-                  Wikipedia
+                  {openedLink === 'wiki' ? t('artistDetail.openedInBrowser') : 'Wikipedia'}
                 </button>
               </div>
             )}

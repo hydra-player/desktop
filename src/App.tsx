@@ -73,7 +73,7 @@ function AppShell() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     return localStorage.getItem('psysonic_sidebar_collapsed') === 'true';
   });
-  const [queueWidth, setQueueWidth] = useState(300);
+  const [queueWidth, setQueueWidth] = useState(340);
   const [isDraggingQueue, setIsDraggingQueue] = useState(false);
 
   useEffect(() => {

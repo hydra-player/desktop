@@ -19,6 +19,7 @@ fn exit_app(app_handle: tauri::AppHandle) {
     app_handle.exit(0);
 }
 
+
 pub fn run() {
     let (audio_engine, _audio_thread) = audio::create_engine();
 
@@ -107,9 +108,11 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
-                // Emit event so JS can decide: hide to tray or allow close.
-                // JS handles prevent_close via onCloseRequested() in App.tsx.
-                let _ = window.emit("window:close-requested", ());
+                // Only intercept close for the main window (hide to tray).
+                // Browser popup windows (browser_*) close normally.
+                if window.label() == "main" {
+                    let _ = window.emit("window:close-requested", ());
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![

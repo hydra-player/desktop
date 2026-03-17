@@ -120,6 +120,7 @@ const enTranslation = {
     favorite: 'Favorite',
     albumCount_one: '{{count}} Album',
     albumCount_other: '{{count}} Albums',
+    openedInBrowser: 'Opened in browser',
   },
   favorites: {
     title: 'Favorites',
@@ -539,6 +540,7 @@ const deTranslation = {
     favorite: 'Als Favorit',
     albumCount_one: '{{count}} Album',
     albumCount_other: '{{count}} Alben',
+    openedInBrowser: 'Im Browser geöffnet',
   },
   favorites: {
     title: 'Favoriten',

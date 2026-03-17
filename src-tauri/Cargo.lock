@@ -3118,7 +3118,7 @@ dependencies = [
 
 [[package]]
 name = "psysonic"
-version = "1.4.2"
+version = "1.4.5"
 dependencies = [
  "reqwest 0.12.28",
  "rodio",

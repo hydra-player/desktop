@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.5] - 2026-03-17
+
+### Changed
+
+#### Artist Pages — External Links
+- Last.fm and Wikipedia buttons now open in the **system browser** instead of an in-app window. The button label temporarily changes to "Opened in browser" / "Im Browser geöffnet" for 2.5 seconds as visual confirmation.
+
+#### Queue Panel
+- **Release year** added to the now-playing meta box, shown below the album name (when available).
+- **Cover art enlarged** from 72 × 72 px to 90 × 90 px, aligned to the top of the meta block so it lines up with the song title.
+- **Default width increased** from 300 px to 340 px.
+
 ## [1.4.4] - 2026-03-17
 
 ### Added

@@ -7,12 +7,13 @@
     <a href="https://github.com/Psychotoxical/psysonic/releases/latest"><img alt="Latest Release" src="https://img.shields.io/github/v/release/Psychotoxical/psysonic?style=flat-square&color=8839ef"></a>
     <a href="https://github.com/Psychotoxical/psysonic/blob/main/LICENSE"><img alt="License: GPL v3" src="https://img.shields.io/badge/License-GPLv3-cba6f7?style=flat-square"></a>
     <a href="https://tauri.app/"><img alt="Built with Tauri" src="https://img.shields.io/badge/Built%20with-Tauri-242938?style=flat-square&logo=tauri"></a>
+    <a href="https://aur.archlinux.org/packages/psysonic"><img alt="AUR" src="https://img.shields.io/aur/version/psysonic?style=flat-square&color=1793d1"></a>
   </p>
 </div>
 
 ---
 
-Psysonic is a beautiful desktop music player built completely from the ground up for the modern era. Utilizing **Tauri v2** and **React**, it offers a native-feeling, lightweight, and incredibly fast experience with a stunning UI inspired by the [Catppuccin](https://github.com/catppuccin/catppuccin) aesthetic. 
+Psysonic is a beautiful desktop music player built completely from the ground up for the modern era. Utilizing **Tauri v2** and **React**, it offers a native-feeling, lightweight, and incredibly fast experience with a stunning UI inspired by the [Catppuccin](https://github.com/catppuccin/catppuccin) and [Nord](https://www.nordtheme.com/) aesthetics.
 
 Designed specifically for users hosting their own music via Navidrome or other Subsonic API servers, Psysonic aims to be the best way to interact with your personal library.
 
@@ -33,7 +34,6 @@ Designed specifically for users hosting their own music via Navidrome or other S
 - 🌊 **MilkDrop Visualizer**: Full-screen Butterchurn/MilkDrop visualizer in the Ambient Stage with hundreds of presets and smooth transitions.
 - 🎛️ **Queue Management**: Drag & drop reordering, shuffle, playlist saving/loading, and server-side queue synchronization.
 - 🎼 **Random Mix**: Generate a random playlist from your entire library. Filter by keyword or pick a Super Genre (Metal, Rock, Electronic, Jazz…) for a focused mix with progressive loading.
-- 🔗 **In-App Browser**: Last.fm and Wikipedia links on artist pages open in a dedicated native window — no need to leave the app.
 - 🔄 **Update Notifications**: Built-in update checker (on startup + every 10 minutes) that notifies you when a new version is available on GitHub.
 - 🖥️ **Cross-Platform**: Available natively for Windows, macOS, and Linux (including Wayland support).
 
@@ -47,7 +47,11 @@ Navigate to the [Releases](https://github.com/Psychotoxical/psysonic/releases) p
 
 - **Windows**: `.exe` or `.msi`
 - **macOS**: `.dmg` (Universal or Apple Silicon)
-- **Linux**: `.AppImage` or `.deb`
+- **Linux (Ubuntu/Debian)**: `.deb` from GitHub Releases
+- **Linux (Fedora/RHEL)**: `.rpm` from GitHub Releases
+- **Linux (Arch/CachyOS)**: AUR — `yay -S psysonic` or `paru -S psysonic`
+
+> The AUR package builds from source using your system's own WebKitGTK — no bundled libs, no EGL/Mesa compatibility issues.
 
 ## 🚀 Getting Started
 
