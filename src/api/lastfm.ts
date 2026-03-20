@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 
-const API_KEY = import.meta.env.VITE_LASTFM_API_KEY as string;
-const API_SECRET = import.meta.env.VITE_LASTFM_API_SECRET as string;
+const API_KEY = '9917fb39049225a13bec225ad6d49054';
+const API_SECRET = '03817dda02bee87a178aab7581abae3b';
 
 export function lastfmIsConfigured(): boolean {
   return Boolean(API_KEY && API_SECRET);
