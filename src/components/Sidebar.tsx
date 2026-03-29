@@ -7,8 +7,8 @@ import { version as appVersion } from '../../package.json';
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
-  Disc3, Users, Music4, Radio, Settings, Heart, BarChart3, Shuffle, ListMusic,
-  PanelLeftClose, PanelLeft, HelpCircle, Dices, ArrowUpCircle, AudioLines, HardDriveDownload
+  Disc3, Users, Music4, Radio, Settings, Heart, BarChart3, Shuffle,
+  PanelLeftClose, PanelLeft, HelpCircle, Dices, ArrowUpCircle, AudioLines, HardDriveDownload, Tags
 } from 'lucide-react';
 import PsysonicLogo from './PsysonicLogo';
 import PSmallLogo from './PSmallLogo';
@@ -19,7 +19,7 @@ const navItems = [
   { icon: Music4,  labelKey: 'sidebar.allAlbums',    to: '/albums' },
   { icon: Dices,   labelKey: 'sidebar.randomAlbums', to: '/random-albums' },
   { icon: Users, labelKey: 'sidebar.artists', to: '/artists' },
-  { icon: ListMusic, labelKey: 'sidebar.playlists', to: '/playlists' },
+  { icon: Tags, labelKey: 'sidebar.genres', to: '/genres' },
   { icon: Shuffle, labelKey: 'sidebar.randomMix', to: '/random-mix' },
   { icon: Heart, labelKey: 'sidebar.favorites', to: '/favorites' },
 ];

@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.0] - 2026-03-29
+
+### Added
+
+- **Chinese language (zh)**: Full UI translation contributed by [@jiezhuo](https://github.com/jiezhuo). Language can be selected in Settings → General.
+- **Genres page** *(requested by [@grillonbleu](https://github.com/grillonbleu))*: New page (sidebar: Tags icon) showing all server genres as coloured cards — icon watermark, genre name, album count. Cards are sorted by album count descending and deterministically colour-coded from the Catppuccin palette. Clicking a card opens the album list for that genre. Navigating back restores the previous scroll position.
+- **Genre filter on Albums, New Releases, Random Albums** *(requested by [@grillonbleu](https://github.com/grillonbleu))*: A multi-select genre combobox in the page header lets you filter any of these views to one or more genres. Chips show selected genres; backspace removes the last one; clicking outside collapses the filter automatically when nothing is selected. In filter mode, results are fetched in parallel across all selected genres and deduped client-side.
+- **Settings — Contributors**: A new "Contributors" row in the About section credits community translators.
+
+### Changed
+
+- **Theme — W10** *(Operating Systems)*: New Windows 10 Fluent Design light theme. Clean white content area, flat light-grey `#F3F3F3` navigation pane, near-black `#1C1C1C` taskbar player bar with a Windows-blue `#0078D4` accent stripe, flat buttons without gradients (4 px radius). Sharp, unmistakably W10 — distinct from the glass-era W7/Vista and the rounded-corner W11.
+- **ThemePicker — Windows themes sorted by release year**: W3.1 → W98 → WXP → Wista → W7 → W10 → W11.
+- **Playlists page — removed**: The dedicated Playlists page has been removed. Playlists remain fully accessible via the Queue panel (Save / Load buttons in the toolbar).
+
+### Fixed
+
+- **FLAC seeking** *(Rust audio engine)*: `rodio`'s internal `ReadSeekSource` hardcodes `byte_len() → None`, which caused the symphonia FLAC demuxer to reject all seek attempts (it validates seek byte offsets against the total stream length). Replaced `rodio::Decoder` with a direct symphonia pipeline (`SizedDecoder`) that wraps the audio bytes in a `SizedCursorSource` providing the correct `byte_len()`. FLAC seeking now works regardless of whether the file has an embedded SEEKTABLE.
+- **Genre missing in Queue meta box when playing from album card**: `playAlbum()` (used by the play button on all album cards) mapped song-level genre only — which Navidrome does not always return per song. Now falls back to the album-level genre from `getAlbum`. Same fallback applied to all three play/enqueue handlers in `AlbumDetail`.
+- **Logo gradient CSS variables**: Sidebar logo gradient now uses `--logo-color-start` / `--logo-color-end` with fallbacks, allowing themes with dark sidebars to override the gradient colours.
+
+---
+
 ## [1.19.0] - 2026-03-27
 
 ### Added

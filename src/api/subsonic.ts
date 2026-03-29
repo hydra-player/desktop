@@ -230,8 +230,19 @@ export async function getSimilarSongs2(id: string, count = 50): Promise<Subsonic
 }
 
 export async function getGenres(): Promise<SubsonicGenre[]> {
-  const data = await api<{ genres: { genre: SubsonicGenre[] } }>('getGenres.view');
-  return data.genres?.genre ?? [];
+  const data = await api<{ genres: { genre: SubsonicGenre | SubsonicGenre[] } }>('getGenres.view');
+  const raw = data.genres?.genre;
+  if (!raw) return [];
+  return Array.isArray(raw) ? raw : [raw];
+}
+
+export async function getAlbumsByGenre(genre: string, size = 50, offset = 0): Promise<SubsonicAlbum[]> {
+  const data = await api<{ albumList2: { album: SubsonicAlbum | SubsonicAlbum[] } }>('getAlbumList2.view', {
+    type: 'byGenre', genre, size, offset, _t: Date.now(),
+  });
+  const raw = data.albumList2?.album;
+  if (!raw) return [];
+  return Array.isArray(raw) ? raw : [raw];
 }
 
 export interface SearchResults {

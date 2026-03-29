@@ -1017,6 +1017,10 @@ export default function Settings() {
                   <span style={{ color: 'var(--text-muted)', minWidth: 56 }}>AI</span>
                   <span style={{ color: 'var(--text-secondary)' }}>{t('settings.aboutAiCredit')}</span>
                 </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <span style={{ color: 'var(--text-muted)', minWidth: 56 }}>{t('settings.aboutContributorsLabel')}</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{t('settings.aboutContributors')}</span>
+                </div>
               </div>
 
               <button

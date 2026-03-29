@@ -3370,6 +3370,7 @@ dependencies = [
  "serde",
  "serde_json",
  "souvlaki",
+ "symphonia",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

@@ -22,7 +22,6 @@ import Login from './pages/Login';
 import AlbumDetail from './pages/AlbumDetail';
 import LabelAlbums from './pages/LabelAlbums';
 import Statistics from './pages/Statistics';
-import Playlists from './pages/Playlists';
 import Help from './pages/Help';
 import RandomAlbums from './pages/RandomAlbums';
 import SearchResults from './pages/SearchResults';
@@ -36,6 +35,8 @@ import LastfmIndicator from './components/LastfmIndicator';
 import OfflineOverlay from './components/OfflineOverlay';
 import OfflineBanner from './components/OfflineBanner';
 import OfflineLibrary from './pages/OfflineLibrary';
+import Genres from './pages/Genres';
+import GenreDetail from './pages/GenreDetail';
 import ExportPickerModal from './components/ExportPickerModal';
 import { useConnectionStatus } from './hooks/useConnectionStatus';
 import { useAuthStore } from './store/authStore';
@@ -200,7 +201,6 @@ function AppShell() {
             <Route path="/new-releases" element={<NewReleases />} />
             <Route path="/favorites" element={<Favorites />} />
             <Route path="/random-mix" element={<RandomMix />} />
-            <Route path="/playlists" element={<Playlists />} />
             <Route path="/label/:name" element={<LabelAlbums />} />
             <Route path="/search" element={<SearchResults />} />
             <Route path="/statistics" element={<Statistics />} />
@@ -208,6 +208,8 @@ function AppShell() {
             <Route path="/settings" element={<Settings />} />
             <Route path="/help" element={<Help />} />
             <Route path="/offline" element={<OfflineLibrary />} />
+            <Route path="/genres" element={<Genres />} />
+            <Route path="/genres/:name" element={<GenreDetail />} />
           </Routes>
         </div>
       </main>

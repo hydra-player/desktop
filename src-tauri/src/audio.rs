@@ -1,12 +1,21 @@
-use std::io::Cursor;
+use std::io::{Cursor, Read, Seek};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use biquad::{Biquad, Coefficients, DirectForm2Transposed, ToHertz, Type as FilterType};
-use rodio::{Decoder, Sink, Source};
+use rodio::{Sink, Source};
 use rodio::source::UniformSourceIterator;
 use serde::Serialize;
+use symphonia::core::{
+    audio::{AudioBufferRef, SampleBuffer, SignalSpec},
+    codecs::{DecoderOptions, CODEC_TYPE_NULL},
+    formats::{FormatOptions, FormatReader, SeekMode, SeekTo},
+    io::{MediaSource, MediaSourceStream},
+    meta::MetadataOptions,
+    probe::Hint,
+    units::{self, Time},
+};
 use tauri::{AppHandle, Emitter, State};
 
 // ─── 10-Band Graphic Equalizer ────────────────────────────────────────────────
@@ -394,6 +403,264 @@ impl<S: Source<Item = f32>> Source for CountingSource<S> {
     }
 }
 
+// ─── SizedCursorSource — MediaSource with correct byte_len ────────────────────
+//
+// rodio's internal ReadSeekSource wraps Cursor<Vec<u8>> but hardcodes
+// byte_len() → None.  This tells symphonia "stream length unknown", which
+// prevents the FLAC demuxer from seeking (it validates seek offsets against
+// the total stream length from byte_len).  MP3 is unaffected because its
+// demuxer uses Xing/LAME headers instead.
+//
+// This wrapper provides the actual byte length, fixing seek for all formats.
+
+struct SizedCursorSource {
+    inner: Cursor<Vec<u8>>,
+    len: u64,
+}
+
+impl Read for SizedCursorSource {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.inner.read(buf)
+    }
+}
+
+impl Seek for SizedCursorSource {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        self.inner.seek(pos)
+    }
+}
+
+impl MediaSource for SizedCursorSource {
+    fn is_seekable(&self) -> bool { true }
+    fn byte_len(&self) -> Option<u64> { Some(self.len) }
+}
+
+// ─── SizedDecoder — symphonia decoder with correct byte_len ───────────────────
+//
+// Replaces rodio::Decoder::new() which wraps the source in ReadSeekSource
+// (byte_len = None).  This constructs the symphonia pipeline directly,
+// providing the correct byte_len via SizedCursorSource.
+//
+// Implements Iterator<Item = i16> + Source — identical interface to
+// rodio::Decoder, so the rest of the source chain is unchanged.
+
+const DECODE_MAX_RETRIES: usize = 3;
+
+struct SizedDecoder {
+    decoder: Box<dyn symphonia::core::codecs::Decoder>,
+    current_frame_offset: usize,
+    format: Box<dyn FormatReader>,
+    total_duration: Option<Time>,
+    buffer: SampleBuffer<i16>,
+    spec: SignalSpec,
+}
+
+impl SizedDecoder {
+    fn new(data: Vec<u8>, format_hint: Option<&str>) -> Result<Self, String> {
+        let data_len = data.len() as u64;
+        let source = SizedCursorSource {
+            inner: Cursor::new(data),
+            len: data_len,
+        };
+        let mss = MediaSourceStream::new(
+            Box::new(source) as Box<dyn MediaSource>,
+            Default::default(),
+        );
+
+        let mut hint = Hint::new();
+        if let Some(ext) = format_hint {
+            hint.with_extension(ext);
+        }
+        let format_opts = FormatOptions {
+            enable_gapless: true,
+            ..Default::default()
+        };
+
+        let probed = symphonia::default::get_probe()
+            .format(&hint, mss, &format_opts, &MetadataOptions::default())
+            .map_err(|e| format!("probe failed: {e}"))?;
+
+        let track = probed.format
+            .tracks()
+            .iter()
+            .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
+            .ok_or_else(|| "no supported audio track".to_string())?;
+
+        let track_id = track.id;
+        let total_duration = track.codec_params.time_base
+            .zip(track.codec_params.n_frames)
+            .map(|(base, frames)| base.calc_time(frames));
+
+        let mut decoder = symphonia::default::get_codecs()
+            .make(&track.codec_params, &DecoderOptions::default())
+            .map_err(|e| format!("codec init failed: {e}"))?;
+
+        let mut format = probed.format;
+
+        // Decode the first packet to initialise spec + buffer.
+        let mut decode_errors: usize = 0;
+        let decoded = loop {
+            let packet = match format.next_packet() {
+                Ok(p) => p,
+                Err(symphonia::core::errors::Error::IoError(_)) => {
+                    break decoder.last_decoded();
+                }
+                Err(e) => return Err(format!("first packet: {e}")),
+            };
+            if packet.track_id() != track_id { continue; }
+            match decoder.decode(&packet) {
+                Ok(decoded) => break decoded,
+                Err(symphonia::core::errors::Error::DecodeError(_)) => {
+                    decode_errors += 1;
+                    if decode_errors > DECODE_MAX_RETRIES {
+                        return Err("too many decode errors".into());
+                    }
+                }
+                Err(e) => return Err(format!("decode: {e}")),
+            }
+        };
+
+        let spec = decoded.spec().to_owned();
+        let buffer = Self::make_buffer(decoded, &spec);
+
+        Ok(SizedDecoder {
+            decoder,
+            current_frame_offset: 0,
+            format,
+            total_duration,
+            buffer,
+            spec,
+        })
+    }
+
+    #[inline]
+    fn make_buffer(decoded: AudioBufferRef, spec: &SignalSpec) -> SampleBuffer<i16> {
+        let duration = units::Duration::from(decoded.capacity() as u64);
+        let mut buffer = SampleBuffer::<i16>::new(duration, *spec);
+        buffer.copy_interleaved_ref(decoded);
+        buffer
+    }
+
+    /// Refine position after a coarse seek — decode packets until we reach the
+    /// exact requested timestamp.
+    fn refine_position(
+        &mut self,
+        seek_res: symphonia::core::formats::SeekedTo,
+    ) -> Result<(), String> {
+        let mut samples_to_pass = seek_res.required_ts - seek_res.actual_ts;
+        let packet = loop {
+            let candidate = self.format.next_packet()
+                .map_err(|e| format!("refine seek: {e}"))?;
+            if candidate.dur() > samples_to_pass {
+                break candidate;
+            }
+            samples_to_pass -= candidate.dur();
+        };
+
+        let mut decoded = self.decoder.decode(&packet);
+        for _ in 0..DECODE_MAX_RETRIES {
+            if decoded.is_err() {
+                let p = self.format.next_packet()
+                    .map_err(|e| format!("refine retry: {e}"))?;
+                decoded = self.decoder.decode(&p);
+            }
+        }
+
+        let decoded = decoded.map_err(|e| format!("refine decode: {e}"))?;
+        decoded.spec().clone_into(&mut self.spec);
+        self.buffer = Self::make_buffer(decoded, &self.spec);
+        self.current_frame_offset = samples_to_pass as usize * self.spec.channels.count();
+        Ok(())
+    }
+}
+
+impl Iterator for SizedDecoder {
+    type Item = i16;
+
+    #[inline]
+    fn next(&mut self) -> Option<i16> {
+        if self.current_frame_offset >= self.buffer.len() {
+            let packet = self.format.next_packet().ok()?;
+            let mut decoded = self.decoder.decode(&packet);
+            for _ in 0..DECODE_MAX_RETRIES {
+                if decoded.is_err() {
+                    let p = self.format.next_packet().ok()?;
+                    decoded = self.decoder.decode(&p);
+                }
+            }
+            let decoded = decoded.ok()?;
+            decoded.spec().clone_into(&mut self.spec);
+            self.buffer = Self::make_buffer(decoded, &self.spec);
+            self.current_frame_offset = 0;
+        }
+
+        let sample = *self.buffer.samples().get(self.current_frame_offset)?;
+        self.current_frame_offset += 1;
+        Some(sample)
+    }
+}
+
+impl Source for SizedDecoder {
+    #[inline]
+    fn current_frame_len(&self) -> Option<usize> {
+        Some(self.buffer.samples().len())
+    }
+
+    #[inline]
+    fn channels(&self) -> u16 {
+        self.spec.channels.count() as u16
+    }
+
+    #[inline]
+    fn sample_rate(&self) -> u32 {
+        self.spec.rate
+    }
+
+    #[inline]
+    fn total_duration(&self) -> Option<Duration> {
+        self.total_duration.map(|Time { seconds, frac }| {
+            Duration::new(seconds, (frac * 1_000_000_000.0) as u32)
+        })
+    }
+
+    fn try_seek(&mut self, pos: Duration) -> Result<(), rodio::source::SeekError> {
+        let seek_beyond_end = self
+            .total_duration()
+            .is_some_and(|dur| dur.saturating_sub(pos).as_millis() < 1);
+
+        let time: Time = if seek_beyond_end {
+            let t = self.total_duration.unwrap_or(pos.as_secs_f64().into());
+            // Step back a tiny bit — some demuxers can't seek to the exact end.
+            let mut secs = t.seconds;
+            let mut frac = t.frac - 0.0001;
+            if frac < 0.0 {
+                secs = secs.saturating_sub(1);
+                frac = 1.0 - frac;
+            }
+            Time { seconds: secs, frac }
+        } else {
+            pos.as_secs_f64().into()
+        };
+
+        let to_skip = self.current_frame_offset % self.channels() as usize;
+
+        let seek_res = self
+            .format
+            .seek(SeekMode::Accurate, SeekTo::Time { time, track_id: None })
+            .map_err(|e| rodio::source::SeekError::Other(
+                Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+            ))?;
+
+        self.refine_position(seek_res)
+            .map_err(|e| rodio::source::SeekError::Other(
+                Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))
+            ))?;
+
+        self.current_frame_offset += to_skip;
+        Ok(())
+    }
+}
+
 // ─── Encoder-gap trimming (iTunSMPB) ─────────────────────────────────────────
 //
 // MP3/AAC encoders prepend an "encoder delay" (typically 576–2112 silent
@@ -473,6 +740,7 @@ struct BuiltSource {
 ///
 /// `sample_counter`: atomic counter incremented per sample for drift-free position.
 /// `target_rate`: canonical output sample rate for resampling (0 = no resampling).
+/// `format_hint`: optional file extension (e.g. "flac", "mp3") to help symphonia probe.
 fn build_source(
     data: Vec<u8>,
     duration_hint: f64,
@@ -482,11 +750,11 @@ fn build_source(
     fade_in_dur: Duration,
     sample_counter: Arc<AtomicU64>,
     target_rate: u32,
+    format_hint: Option<&str>,
 ) -> Result<BuiltSource, String> {
     let gapless = parse_gapless_info(&data);
 
-    let cursor = Cursor::new(data);
-    let decoder = Decoder::new(cursor).map_err(|e| e.to_string())?;
+    let decoder = SizedDecoder::new(data, format_hint)?;
     let sample_rate = decoder.sample_rate();
     let channels = decoder.channels();
 
@@ -881,6 +1149,10 @@ pub async fn audio_play(
     // Reset sample counter for the new track.
     state.samples_played.store(0, Ordering::Relaxed);
     let target_rate = state.current_sample_rate.load(Ordering::Relaxed);
+    // Extract format hint from URL for better symphonia probing.
+    let format_hint = url.rsplit('.').next()
+        .and_then(|ext| ext.split('?').next())
+        .map(|s| s.to_lowercase());
     let built = build_source(
         data,
         duration_hint,
@@ -890,6 +1162,7 @@ pub async fn audio_play(
         fade_in_dur,
         state.samples_played.clone(),
         target_rate,
+        format_hint.as_deref(),
     ).map_err(|e| { app.emit("audio:error", &e).ok(); e })?;
     let source = built.source;
     let duration_secs = built.duration_secs;
@@ -1071,6 +1344,9 @@ pub async fn audio_chain_preload(
     // samples_played when the chained track becomes active.
     let chain_counter = Arc::new(AtomicU64::new(0));
     let target_rate = state.current_sample_rate.load(Ordering::Relaxed);
+    let format_hint = url.rsplit('.').next()
+        .and_then(|ext| ext.split('?').next())
+        .map(|s| s.to_lowercase());
     let built = build_source(
         data,
         duration_hint,
@@ -1080,6 +1356,7 @@ pub async fn audio_chain_preload(
         Duration::ZERO, // gapless: no fade-in — sample-accurate boundary, no click
         chain_counter.clone(),
         target_rate,
+        format_hint.as_deref(),
     ).map_err(|e| e.to_string())?;
     let source = built.source;
     let duration_secs = built.duration_secs;
@@ -1144,6 +1421,8 @@ fn spawn_progress_task(
         let mut near_end_ticks: u32 = 0;
         // Local done-flag reference; swapped on gapless transition.
         let mut current_done = initial_done;
+        // Local sample counter; swapped to chained source's counter on transition.
+        let mut samples_played = samples_played;
 
         loop {
             // 100 ms tick — tight enough for responsive UI, low enough CPU cost.
@@ -1163,12 +1442,11 @@ fn spawn_progress_task(
                     // Swap to the chained source's done flag.
                     current_done = info.source_done;
 
-                    // Swap the sample counter: the chained source's counter
-                    // is already being incremented by CountingSource. Copy its
-                    // current value into the shared samples_played so the
-                    // progress calculation stays accurate.
-                    let chained_samples = info.sample_counter.load(Ordering::Relaxed);
-                    samples_played.store(chained_samples, Ordering::Relaxed);
+                    // Swap to the chained source's sample counter.
+                    // The chained CountingSource increments its own Arc,
+                    // so we must rebind our local reference to it —
+                    // a one-time value copy would go stale immediately.
+                    samples_played = info.sample_counter;
 
                     // Update tracking state.
                     {
@@ -1234,6 +1512,15 @@ fn spawn_progress_task(
                 near_end_ticks += 1;
                 // At 100 ms ticks, 10 ticks ≈ 1 s — equivalent to the old 2×500ms.
                 if near_end_ticks >= 10 {
+                    // If a gapless chain is pending, the source hasn't
+                    // exhausted yet — duration_hint (integer seconds from
+                    // Subsonic) is shorter than the actual audio content.
+                    // Don't emit audio:ended; let the gapless transition
+                    // handle it when current_done fires.
+                    let has_chain = chained_arc.lock().unwrap().is_some();
+                    if has_chain {
+                        continue;
+                    }
                     gen_counter.fetch_add(1, Ordering::SeqCst);
                     app.emit("audio:ended", ()).ok();
                     break;

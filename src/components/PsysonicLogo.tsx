@@ -9,8 +9,8 @@ export default function PsysonicLogo({ className, style }: Props) {
   return (
     <svg viewBox="0 0 594.45007 134.93138" xmlns="http://www.w3.org/2000/svg" style={style} className={className}><defs id="defs1">
       <linearGradient id="psysonicGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="var(--accent)" />
-        <stop offset="100%" stopColor="var(--ctp-blue)" />
+        <stop offset="0%" stopColor="var(--logo-color-start, var(--accent))" />
+        <stop offset="100%" stopColor="var(--logo-color-end, var(--ctp-blue))" />
       </linearGradient>
     </defs><g
      id="layer1"

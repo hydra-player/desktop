@@ -24,7 +24,7 @@ Designed specifically for users hosting their own music via Navidrome or other S
 
 - 🎨 **Gorgeous UI**: A large selection of beautiful, lean themes for every taste — Open Source Classics (Catppuccin, Nord, Gruvbox), Operating Systems, Games, Movies, Series, Psysonic originals, and Mediaplayer — with smooth glassmorphism effects and micro-animations.
 - ⚡ **Blazing Fast**: Built with Rust & Tauri — native audio engine (rodio), minimal RAM usage compared to typical Electron apps.
-- 🌍 **Internationalization (i18n)**: Fully translated into English, German, French, and Dutch.
+- 🌍 **Internationalization (i18n)**: Fully translated into English, German, French, Dutch, and Chinese.
 - 📻 **Live "Now Playing"**: See what other users on your server are currently listening to in real-time.
 - 🎵 **Last.fm Integration**: Direct scrobbling, Now Playing updates, love/unlove, Similar Artists, and top stats — no Navidrome configuration required.
 - 🎤 **Synchronized Lyrics**: In-sidebar lyrics pane powered by LRCLIB — synced with auto-scroll and line highlighting, plain-text fallback.
@@ -36,6 +36,7 @@ Designed specifically for users hosting their own music via Navidrome or other S
 - ⌨️ **Configurable Keybindings**: Rebind any playback action (play/pause, next, seek, volume…) directly in Settings.
 - 🔤 **Font Picker**: 10 UI fonts to choose from in Settings → Appearance.
 - 🎼 **Random Mix**: Generate a random playlist from your entire library. Filter by keyword or pick a Super Genre (Metal, Rock, Electronic, Jazz…) for a focused mix with progressive loading.
+- 🏷️ **Genres**: Browse your entire library by genre — coloured cards sorted by album count with a dedicated album view per genre. Multi-select genre filter available on Albums, New Releases, and Random Albums pages.
 - 🔄 **Update Notifications**: Built-in update checker (on startup + every 10 minutes) that notifies you when a new version is available on GitHub.
 - 🖥️ **Cross-Platform**: Available natively for Windows, macOS, and Linux (including Wayland support).
 
@@ -56,7 +57,7 @@ Designed specifically for users hosting their own music via Navidrome or other S
 - [x] IndexedDB image caching
 - [x] Random Mix with keyword filter & Super Genre mix
 - [x] Large theme library across 8 groups: Open Source Classics, Operating Systems, Games, Movies, Series, Social Media, Psysonic originals, Mediaplayer
-- [x] Internationalization (English, German, French, Dutch)
+- [x] Internationalization (English, German, French, Dutch, Chinese)
 - [x] AUR package (Arch / CachyOS)
 - [x] Configurable keybindings
 - [x] Font picker (10 UI fonts)
@@ -71,7 +72,6 @@ Designed specifically for users hosting their own music via Navidrome or other S
 ## ● Known Limitations
 
 - **Linux (drag & drop cursor feedback)**: Due to a WebKitGTK limitation, the drag cursor does not reflect the drop operation type — it may appear as a "forbidden" symbol or show no indicator at all, depending on the desktop environment. Drag and drop itself works correctly.
-- **FLAC seeking**: Seeking in FLAC files requires an embedded SEEKTABLE metadata block. Files encoded without one cannot be seeked — clicking the waveform has no effect. Most modern encoders include a SEEKTABLE by default. You can add one retroactively with `metaflac --add-seekpoint=10s *.flac`.
 
 ## 📥 Installation
 

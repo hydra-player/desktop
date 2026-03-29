@@ -91,32 +91,35 @@ export default function AlbumDetail() {
 
   const handlePlayAll = () => {
     if (!album) return;
+    const albumGenre = album.album.genre;
     const tracks = album.songs.map(s => ({
       id: s.id, title: s.title, artist: s.artist, album: s.album,
       albumId: s.albumId, artistId: s.artistId, duration: s.duration, coverArt: s.coverArt,
       track: s.track, year: s.year, bitRate: s.bitRate, suffix: s.suffix, userRating: s.userRating,
-      starred: s.starred, genre: s.genre,
+      starred: s.starred, genre: s.genre ?? albumGenre,
     }));
     if (tracks[0]) playTrack(tracks[0], tracks);
   };
 
   const handleEnqueueAll = () => {
     if (!album) return;
+    const albumGenre = album.album.genre;
     const tracks = album.songs.map(s => ({
       id: s.id, title: s.title, artist: s.artist, album: s.album,
       albumId: s.albumId, artistId: s.artistId, duration: s.duration, coverArt: s.coverArt,
       track: s.track, year: s.year, bitRate: s.bitRate, suffix: s.suffix, userRating: s.userRating,
-      starred: s.starred, genre: s.genre,
+      starred: s.starred, genre: s.genre ?? albumGenre,
     }));
     enqueue(tracks);
   };
 
   const handlePlaySong = (song: SubsonicSong) => {
+    const albumGenre = album?.album.genre;
     const track = {
       id: song.id, title: song.title, artist: song.artist, album: song.album,
       albumId: song.albumId, artistId: song.artistId, duration: song.duration, coverArt: song.coverArt,
       track: song.track, year: song.year, bitRate: song.bitRate, suffix: song.suffix, userRating: song.userRating,
-      starred: song.starred, genre: song.genre,
+      starred: song.starred, genre: song.genre ?? albumGenre,
     };
     playTrack(track, [track]);
   };

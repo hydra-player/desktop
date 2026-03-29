@@ -20,7 +20,12 @@ function fadeOut(setVolume: (v: number) => void, from: number, durationMs: numbe
 
 export async function playAlbum(albumId: string): Promise<void> {
   const albumData = await getAlbum(albumId);
-  const tracks = albumData.songs.map(songToTrack);
+  const albumGenre = albumData.album.genre;
+  const tracks = albumData.songs.map(s => {
+    const track = songToTrack(s);
+    if (!track.genre && albumGenre) track.genre = albumGenre;
+    return track;
+  });
   if (!tracks.length) return;
 
   const store = usePlayerStore.getState();

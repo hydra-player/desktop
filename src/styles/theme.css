@@ -3918,30 +3918,32 @@ input[type="range"]:hover::-webkit-slider-thumb {
 }
 
 /* ─── PowerDVD Classic — Virtual HiFi Receiver / VFD Display ─── */
+/* ─── CyberLink PowerDVD ─── */
+/* Midnight navy-blue darkness — not flat black, but that specific cinema-hall depth */
 [data-theme='p-dvd'] {
   color-scheme: dark;
-  --select-arrow: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23666666%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
+  --select-arrow: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%235a7090%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
 
-  /* ── Palette ── */
-  --ctp-crust:     #000000;   /* pure black — VFD glass */
-  --ctp-mantle:    #0a0a0a;   /* drive bay depth */
-  --ctp-base:      #141414;   /* brushed aluminium chassis */
-  --ctp-surface0:  #1c1c1c;
-  --ctp-surface1:  #242424;
-  --ctp-surface2:  #2e2e2e;
-  --ctp-overlay0:  #3a3a3a;
-  --ctp-overlay1:  #4a4a4a;
-  --ctp-overlay2:  #5a5a5a;
-  --ctp-text:      #b3b3b3;   /* matte metal label */
-  --ctp-subtext1:  #888888;
-  --ctp-subtext0:  #666666;
-  /* VFD blue + chrome accents */
-  --ctp-mauve:     #00aaff;   /* VFD blue — primary accent */
-  --ctp-lavender:  #00c8ff;
-  --ctp-sky:       #00e5ff;   /* glow/highlight cyan */
-  --ctp-teal:      #00cccc;
-  --ctp-blue:      #0080e0;
-  --ctp-sapphire:  #0060c0;
+  /* ── Palette — midnight navy spectrum ── */
+  --ctp-crust:     #020306;   /* cinema blackout */
+  --ctp-mantle:    #060810;   /* control deck depth */
+  --ctp-base:      #0a0d18;   /* main chassis — navy-black */
+  --ctp-surface0:  #10141f;
+  --ctp-surface1:  #171c2a;
+  --ctp-surface2:  #1f2535;
+  --ctp-overlay0:  #2c3548;
+  --ctp-overlay1:  #3c4860;
+  --ctp-overlay2:  #506078;
+  --ctp-text:      #a8b8d0;   /* blue-tinted label silver */
+  --ctp-subtext1:  #7890b0;
+  --ctp-subtext0:  #506080;
+  /* PowerDVD blue spectrum */
+  --ctp-mauve:     #0088e8;   /* PowerDVD blue — primary */
+  --ctp-lavender:  #00a8ff;
+  --ctp-sky:       #00ccff;   /* glow highlight */
+  --ctp-teal:      #00b8cc;
+  --ctp-blue:      #0070cc;
+  --ctp-sapphire:  #0055aa;
   --ctp-green:     #00cc66;
   --ctp-yellow:    #ccaa00;
   --ctp-peach:     #e07040;
@@ -3952,131 +3954,182 @@ input[type="range"]:hover::-webkit-slider-thumb {
   --ctp-red:       #cc2222;
 
   /* ── Semantic tokens ── */
-  --bg-app:        #141414;
-  --bg-sidebar:    #0a0a0a;
-  --bg-card:       #1c1c1c;
-  --bg-hover:      #242424;
-  --bg-player:     #000000;
-  --bg-glass:      rgba(20, 20, 20, 0.94);
-  --accent:        #00aaff;
-  --accent-dim:    rgba(0, 170, 255, 0.12);
-  --accent-glow:   rgba(0, 170, 255, 0.35);
-  --text-primary:  #b3b3b3;
-  --text-secondary:#888888;
-  --text-muted:    #888888;
-  --border:        #2a2a2a;
-  --border-subtle: #1c1c1c;
+  --bg-app:        #0a0d18;
+  --bg-sidebar:    #060810;
+  --bg-card:       #10141f;
+  --bg-hover:      #171c2a;
+  --bg-player:     #020306;
+  --bg-glass:      rgba(10, 13, 24, 0.96);
+  --accent:        #0088e8;
+  --accent-dim:    rgba(0, 136, 232, 0.14);
+  --accent-glow:   rgba(0, 136, 232, 0.40);
+  --text-primary:  #a8b8d0;
+  --text-secondary:#6880a8;
+  --text-muted:    #506080;
+  --border:        #1a2030;
+  --border-subtle: #10141e;
   --positive:      #00cc66;
   --warning:       #ccaa00;
   --danger:        #cc2222;
 }
 
-/* ── PowerDVD: Brushed aluminium chassis texture (sidebar only for perf) ── */
-[data-theme='p-dvd'] .sidebar {
-  background-image: repeating-linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.018) 0px,
-    rgba(255, 255, 255, 0.018) 1px,
-    transparent 1px,
-    transparent 3px
-  );
+/* ── App shell: very subtle navy depth gradient ── */
+[data-theme='p-dvd'] .app-shell {
+  background: linear-gradient(160deg, #0c1020 0%, #080c18 50%, #060910 100%);
 }
 
-/* Sidebar: darker than chassis, drive-bay feel */
+/* ── Sidebar: darkest navy — control panel behind the disc tray ── */
 [data-theme='p-dvd'] .sidebar {
-  background-color: #0a0a0a;
-  border-right: 1px solid #1e1e1e;
-  box-shadow: inset -2px 0 4px rgba(0, 0, 0, 0.6);
+  background: linear-gradient(180deg, #07091280 0%, #060810 40%, #050710 100%);
+  border-right: 1px solid #141824;
+  box-shadow: inset -1px 0 0 rgba(0, 136, 232, 0.08), 2px 0 12px rgba(0, 0, 0, 0.7);
 }
 
-/* ── VFD Display (Player Bar) ── */
+/* Active nav: PowerDVD blue LED strip */
+[data-theme='p-dvd'] .nav-link.active {
+  color: #00a8ff;
+}
+[data-theme='p-dvd'] .nav-link.active::before {
+  background: #0088e8;
+  box-shadow: 0 0 8px rgba(0, 136, 232, 0.7);
+}
+
+/* ── Player bar: cinema control deck — pure black + blue accent top border ── */
 [data-theme='p-dvd'] .player-bar {
-  background: #000000;
-  border-top: 2px solid #1a1a1a;
+  background: linear-gradient(180deg, #050710 0%, #020306 100%);
+  border-top: 1px solid #0a1828;
   box-shadow:
-    inset 0 1px 0 rgba(0, 170, 255, 0.06),
-    0 -3px 20px rgba(0, 0, 0, 0.8);
+    inset 0 2px 0 rgba(0, 136, 232, 0.18),
+    inset 0 1px 0 rgba(0, 200, 255, 0.08),
+    0 -4px 24px rgba(0, 0, 0, 0.9);
 }
 
-/* Track name: VFD blue glow — the key effect */
+/* Track name: PowerDVD blue LED display glow */
 [data-theme='p-dvd'] .player-track-name {
-  color: #00e5ff;
+  color: #00ccff;
   text-shadow:
-    0 0 6px rgba(0, 229, 255, 0.90),
-    0 0 14px rgba(0, 170, 255, 0.60),
-    0 0 28px rgba(0, 170, 255, 0.30);
-  letter-spacing: 0.04em;
+    0 0 5px rgba(0, 204, 255, 0.95),
+    0 0 12px rgba(0, 136, 232, 0.70),
+    0 0 24px rgba(0, 100, 200, 0.35);
+  letter-spacing: 0.03em;
 }
 
 [data-theme='p-dvd'] .player-track-artist {
-  color: #00aaff;
-  text-shadow: 0 0 6px rgba(0, 170, 255, 0.55);
+  color: #0088e8;
+  text-shadow: 0 0 6px rgba(0, 136, 232, 0.60);
   opacity: 1;
 }
 
-/* Time display: VFD blue, tabular */
 [data-theme='p-dvd'] .player-time {
-  color: #00aaff;
-  text-shadow: 0 0 5px rgba(0, 170, 255, 0.60);
+  color: #0088e8;
+  text-shadow: 0 0 5px rgba(0, 136, 232, 0.65);
 }
 
-/* ── Chrome transport buttons: silver metallic ── */
+/* ── Chrome transport buttons: silver against navy — the iconic contrast ── */
 [data-theme='p-dvd'] .player-btn,
 [data-theme='p-dvd'] .player-btn-primary {
   background: linear-gradient(170deg, #e8e8e8 0%, #ffffff 30%, #c0c0c0 70%, #989898 100%);
   color: #1a1a1a;
   border: 1px solid #707070;
   box-shadow:
-    0 3px 6px rgba(0, 0, 0, 0.7),
-    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 3px 8px rgba(0, 0, 0, 0.8),
+    0 1px 2px rgba(0, 0, 0, 0.6),
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     inset 0 -1px 0 rgba(0, 0, 0, 0.2);
 }
 
 [data-theme='p-dvd'] .player-btn:hover,
 [data-theme='p-dvd'] .player-btn-primary:hover {
-  background: linear-gradient(170deg, #f2f2f2 0%, #ffffff 30%, #d0d0d0 70%, #aaaaaa 100%);
+  background: linear-gradient(170deg, #f5f5f5 0%, #ffffff 30%, #d0d0d0 70%, #aaaaaa 100%);
   box-shadow:
-    0 4px 8px rgba(0, 0, 0, 0.7),
-    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 4px 10px rgba(0, 0, 0, 0.8),
+    0 1px 3px rgba(0, 0, 0, 0.6),
     inset 0 1px 0 rgba(255, 255, 255, 1),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+    0 0 10px rgba(0, 136, 232, 0.20);
 }
 
-/* ── Regular buttons: dark matte chassis style ── */
+/* ── Regular buttons: navy panel style ── */
 [data-theme='p-dvd'] .btn {
-  background: linear-gradient(180deg, #2a2a2a 0%, #1c1c1c 100%);
-  color: #b3b3b3;
-  border: 1px solid #383838;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 3px rgba(0, 0, 0, 0.5);
+  background: linear-gradient(180deg, #171c2a 0%, #10141f 100%);
+  color: #a8b8d0;
+  border: 1px solid #1f2a3e;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 [data-theme='p-dvd'] .btn:hover {
-  background: linear-gradient(180deg, #333333 0%, #242424 100%);
+  background: linear-gradient(180deg, #1f2535 0%, #171c2a 100%);
+  border-color: #2a3850;
 }
 
 [data-theme='p-dvd'] .btn-primary {
-  background: linear-gradient(180deg, #00bbff 0%, #0088dd 100%);
-  color: #000000;
-  border: 1px solid #0060bb;
+  background: linear-gradient(180deg, #00a8ff 0%, #0070cc 100%);
+  color: #ffffff;
+  border: 1px solid #0055aa;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    0 1px 4px rgba(0, 0, 0, 0.4),
-    0 0 8px rgba(0, 170, 255, 0.3);
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 1px 4px rgba(0, 0, 0, 0.5),
+    0 0 10px rgba(0, 136, 232, 0.35);
 }
 
-/* Active queue round buttons: dark text on VFD blue */
+/* Active queue round buttons: white on blue */
 [data-theme='p-dvd'] .queue-round-btn.active {
-  color: #000000;
+  color: #ffffff;
 }
 
-/* Cards / glass panels: chassis inset */
+/* ── Cards / panels: navy inset ── */
 [data-theme='p-dvd'] .glass,
 [data-theme='p-dvd'] .card {
-  background: rgba(28, 28, 28, 0.85);
-  border: 1px solid #2a2a2a;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 2px 6px rgba(0, 0, 0, 0.4);
+  background: rgba(16, 20, 31, 0.90);
+  border: 1px solid #1a2030;
+  box-shadow: inset 0 1px 0 rgba(0, 136, 232, 0.04), 0 2px 8px rgba(0, 0, 0, 0.5);
 }
+
+/* ── Content header: dark navy band ── */
+[data-theme='p-dvd'] .content-header {
+  background: linear-gradient(180deg, rgba(16, 20, 31, 0.80) 0%, rgba(10, 13, 24, 0.30) 100%);
+  border-bottom: 1px solid #1a2030;
+}
+
+/* ── Hover / active states: blue LED glow ── */
+[data-theme='p-dvd'] .track-row:hover,
+[data-theme='p-dvd'] .track-row.context-active {
+  background: rgba(0, 136, 232, 0.07);
+  box-shadow: inset 3px 0 0 #0088e8;
+}
+
+[data-theme='p-dvd'] .queue-item:hover,
+[data-theme='p-dvd'] .queue-item.context-active {
+  background: rgba(0, 136, 232, 0.07);
+}
+
+[data-theme='p-dvd'] .queue-item.active {
+  background: rgba(0, 136, 232, 0.12);
+  border-left: 2px solid #0088e8;
+}
+
+[data-theme='p-dvd'] .np-queue-item.active { background: rgba(0, 136, 232, 0.08); }
+[data-theme='p-dvd'] .np-queue-item-active { color: #00a8ff; }
+[data-theme='p-dvd'] .np-queue-item:hover,
+[data-theme='p-dvd'] .np-queue-item.context-active { background: rgba(0, 136, 232, 0.06); }
+
+[data-theme='p-dvd'] .np-album-track.active .np-album-track-title,
+[data-theme='p-dvd'] .np-album-track.active .np-album-track-num { color: #00a8ff; }
+
+[data-theme='p-dvd'] .artist-row:hover  { background: rgba(0, 136, 232, 0.06); box-shadow: inset 3px 0 0 #0088e8; }
+[data-theme='p-dvd'] .playlist-row:hover { background: rgba(0, 136, 232, 0.06); box-shadow: inset 3px 0 0 #0088e8; }
+
+[data-theme='p-dvd'] .settings-tab:hover   { background: rgba(0, 136, 232, 0.08); color: #00a8ff; }
+[data-theme='p-dvd'] .settings-tab.active  { background: rgba(0, 136, 232, 0.14); color: #00a8ff; border-color: #0088e8; }
+[data-theme='p-dvd'] .queue-tab-btn:hover  { background: rgba(0, 136, 232, 0.08); color: #00a8ff; }
+
+[data-theme='p-dvd'] .custom-select-trigger:hover { background: rgba(0, 136, 232, 0.08); }
+[data-theme='p-dvd'] .custom-select-option:hover  { background: rgba(0, 136, 232, 0.12); }
+
+[data-theme='p-dvd'] .artist-ext-link:hover { background: rgba(0, 136, 232, 0.10); border-color: #0088e8; }
+
+[data-theme='p-dvd'] .connection-type,
+[data-theme='p-dvd'] .connection-server { color: #4880b8; }
 
 /* ─── Vintage Tube Radio — 1950s Bakelite & Vacuum Tube ─── */
 [data-theme='vintage-tube-radio'] {
@@ -8219,6 +8272,789 @@ input[type="range"]:hover::-webkit-slider-thumb {
 [data-theme='w3-1'] .help-question:hover { color: #000080; }
 [data-theme='w3-1'] .help-item-open .help-question { color: #000080; font-weight: bold; }
 [data-theme='w3-1'] .year-toggle:hover { color: #000080; }
+
+/* ─── Ubuntu — Unity Ambiance (Classic Light) ─── */
+/* Warm human desktop: aubergine launcher + orange accent + warm off-white content */
+[data-theme='ubuntu-ambiance'] {
+  color-scheme: light;
+  --select-arrow: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%237d6e68%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
+
+  /* ── Palette — warm human spectrum ── */
+  --ctp-crust:     #1a000f;   /* panel blackout aubergine */
+  --ctp-mantle:    #2c001e;   /* Ubuntu top/bottom panel */
+  --ctp-base:      #f4efea;   /* Ambiance window warm off-white */
+  --ctp-surface0:  #ede8e2;
+  --ctp-surface1:  #e4dfd8;
+  --ctp-surface2:  #d8d0c8;
+  --ctp-overlay0:  #c0b0a0;
+  --ctp-overlay1:  #a89080;
+  --ctp-overlay2:  #907870;
+  --ctp-text:      #3d2b2b;   /* warm dark brown — human, not pure black */
+  --ctp-subtext1:  #5d4e48;
+  --ctp-subtext0:  #7d6e68;
+  /* Ubuntu color spectrum */
+  --ctp-mauve:     #e95420;   /* Ubuntu Orange — the soul of Ubuntu */
+  --ctp-lavender:  #f06030;
+  --ctp-sky:       #f07050;
+  --ctp-peach:     #e95420;
+  --ctp-teal:      #06989a;
+  --ctp-blue:      #3465a4;
+  --ctp-sapphire:  #204a87;
+  --ctp-green:     #4e9a06;   /* Ubuntu success green */
+  --ctp-yellow:    #c4a000;
+  --ctp-pink:      #cc1e4a;
+  --ctp-flamingo:  #a52828;
+  --ctp-maroon:    #800000;
+  --ctp-red:       #cc0000;
+  --ctp-rosewater: #cc4444;
+
+  /* ── Semantic tokens ── */
+  --bg-app:        #f4efea;   /* warm Ambiance window */
+  --bg-sidebar:    #3d1f3d;   /* Unity Launcher — dark aubergine */
+  --bg-card:       #ede8e2;
+  --bg-hover:      #e4ddd5;
+  --bg-player:     #2c001e;   /* Ubuntu panel — blackest aubergine */
+  --bg-glass:      rgba(244, 239, 234, 0.94);
+  --accent:        #e95420;   /* Ubuntu Orange */
+  --accent-dim:    rgba(233, 84, 32, 0.12);
+  --accent-glow:   rgba(233, 84, 32, 0.30);
+  --text-primary:  #3d2b2b;
+  --text-secondary:#5d4e48;
+  --text-muted:    #7d6e68;
+  --border:        #c8b8a8;
+  --border-subtle: #ddd5cc;
+  --positive:      #4e9a06;
+  --warning:       #c4a000;
+  --danger:        #cc0000;
+}
+
+/* ── App shell: warm Ambiance off-white ── */
+[data-theme='ubuntu-ambiance'] .app-shell {
+  background: #f4efea;
+}
+
+/* ── Sidebar: Unity Launcher dark aubergine ── */
+[data-theme='ubuntu-ambiance'] .sidebar {
+  background: linear-gradient(180deg, #3d1f3d 0%, #2e162e 100%);
+  border-right: 1px solid #1a0a1a;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.35);
+}
+
+/* Sidebar text: light on dark aubergine */
+[data-theme='ubuntu-ambiance'] .sidebar-logo-text,
+[data-theme='ubuntu-ambiance'] .nav-link,
+[data-theme='ubuntu-ambiance'] .sidebar-bottom a,
+[data-theme='ubuntu-ambiance'] .sidebar-bottom button { color: rgba(255, 255, 255, 0.72); }
+
+[data-theme='ubuntu-ambiance'] .nav-link:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #ffffff;
+}
+
+[data-theme='ubuntu-ambiance'] .nav-link.active {
+  background: rgba(233, 84, 32, 0.22);
+  color: #ffffff;
+}
+
+[data-theme='ubuntu-ambiance'] .nav-link.active::before {
+  background: #e95420;
+  box-shadow: 0 0 8px rgba(233, 84, 32, 0.60);
+}
+
+[data-theme='ubuntu-ambiance'] { --logo-color-start: #ffffff; --logo-color-end: #ffb090; }
+[data-theme='ubuntu-ambiance'] .sidebar-logo-icon { color: #e95420; }
+
+/* Sidebar version / muted labels */
+[data-theme='ubuntu-ambiance'] .sidebar-version,
+[data-theme='ubuntu-ambiance'] .update-toast { color: rgba(255, 255, 255, 0.40); }
+
+/* ── Player bar: Ubuntu panel — darkest aubergine ── */
+[data-theme='ubuntu-ambiance'] .player-bar {
+  background: linear-gradient(180deg, #2c001e 0%, #1a000f 100%);
+  border-top: 1px solid #3d0828;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 -3px 16px rgba(0, 0, 0, 0.50);
+}
+
+/* Player text: light on dark panel */
+[data-theme='ubuntu-ambiance'] .player-track-name {
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme='ubuntu-ambiance'] .player-track-artist {
+  color: rgba(255, 255, 255, 0.60);
+  opacity: 1;
+}
+
+[data-theme='ubuntu-ambiance'] .player-time { color: rgba(255, 255, 255, 0.65); }
+
+/* Transport buttons: Ubuntu Orange on dark panel */
+[data-theme='ubuntu-ambiance'] .player-btn,
+[data-theme='ubuntu-ambiance'] .player-btn-primary {
+  background: linear-gradient(180deg, #f06030 0%, #e95420 50%, #d44418 100%);
+  color: #ffffff;
+  border: 1px solid #b83010;
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.50),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.20);
+}
+
+[data-theme='ubuntu-ambiance'] .player-btn:hover,
+[data-theme='ubuntu-ambiance'] .player-btn-primary:hover {
+  background: linear-gradient(180deg, #f87040 0%, #f06030 50%, #e04828 100%);
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.50),
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+}
+
+/* ── Content area buttons: Ambiance GTK style ── */
+[data-theme='ubuntu-ambiance'] .btn {
+  background: linear-gradient(180deg, #f0ebe5 0%, #e4dfd8 100%);
+  color: #3d2b2b;
+  border: 1px solid #b8a898;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.70), 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme='ubuntu-ambiance'] .btn:hover {
+  background: linear-gradient(180deg, #f8f3ed 0%, #ede8e2 100%);
+  border-color: #a89888;
+}
+
+[data-theme='ubuntu-ambiance'] .btn-primary {
+  background: linear-gradient(180deg, #f06030 0%, #e95420 100%);
+  color: #ffffff;
+  border: 1px solid #b83010;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 1px 3px rgba(0, 0, 0, 0.25),
+    0 0 0 0px rgba(233, 84, 32, 0);
+}
+
+[data-theme='ubuntu-ambiance'] .btn-primary:hover {
+  background: linear-gradient(180deg, #f87040 0%, #f06030 100%);
+}
+
+/* ── Content header: warm Ambiance title band ── */
+[data-theme='ubuntu-ambiance'] .content-header {
+  background: linear-gradient(180deg, rgba(244, 239, 234, 1) 0%, rgba(237, 232, 226, 0.60) 100%);
+  border-bottom: 1px solid #c8b8a8;
+}
+
+/* ── Cards / panels ── */
+[data-theme='ubuntu-ambiance'] .glass,
+[data-theme='ubuntu-ambiance'] .card {
+  background: rgba(237, 232, 226, 0.88);
+  border: 1px solid #c8b8a8;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.60), 0 1px 4px rgba(0, 0, 0, 0.10);
+}
+
+/* ── Hover / active states: orange accent ── */
+[data-theme='ubuntu-ambiance'] .track-row:hover,
+[data-theme='ubuntu-ambiance'] .track-row.context-active {
+  background: rgba(233, 84, 32, 0.07);
+  box-shadow: inset 3px 0 0 #e95420;
+}
+
+[data-theme='ubuntu-ambiance'] .queue-item:hover,
+[data-theme='ubuntu-ambiance'] .queue-item.context-active {
+  background: rgba(233, 84, 32, 0.07);
+}
+
+[data-theme='ubuntu-ambiance'] .queue-item.active {
+  background: rgba(233, 84, 32, 0.12);
+  border-left: 2px solid #e95420;
+}
+
+[data-theme='ubuntu-ambiance'] .np-queue-item.active  { background: rgba(233, 84, 32, 0.08); }
+[data-theme='ubuntu-ambiance'] .np-queue-item-active  { color: #e95420; }
+[data-theme='ubuntu-ambiance'] .np-queue-item:hover,
+[data-theme='ubuntu-ambiance'] .np-queue-item.context-active { background: rgba(233, 84, 32, 0.06); }
+
+[data-theme='ubuntu-ambiance'] .np-album-track.active .np-album-track-title,
+[data-theme='ubuntu-ambiance'] .np-album-track.active .np-album-track-num { color: #e95420; }
+
+[data-theme='ubuntu-ambiance'] .artist-row:hover   { background: rgba(233, 84, 32, 0.06); box-shadow: inset 3px 0 0 #e95420; }
+[data-theme='ubuntu-ambiance'] .playlist-row:hover { background: rgba(233, 84, 32, 0.06); box-shadow: inset 3px 0 0 #e95420; }
+
+[data-theme='ubuntu-ambiance'] .settings-tab:hover  { background: rgba(233, 84, 32, 0.08); color: #e95420; }
+[data-theme='ubuntu-ambiance'] .settings-tab.active { background: rgba(233, 84, 32, 0.14); color: #e95420; border-color: #e95420; }
+[data-theme='ubuntu-ambiance'] .queue-tab-btn:hover { background: rgba(233, 84, 32, 0.08); color: #e95420; }
+
+[data-theme='ubuntu-ambiance'] .custom-select-trigger:hover { background: rgba(233, 84, 32, 0.07); }
+[data-theme='ubuntu-ambiance'] .custom-select-option:hover  { background: rgba(233, 84, 32, 0.10); }
+
+[data-theme='ubuntu-ambiance'] .artist-ext-link:hover { background: rgba(233, 84, 32, 0.09); border-color: #e95420; }
+
+/* Queue panel on dark player area */
+[data-theme='ubuntu-ambiance'] .queue-round-btn.active { color: #ffffff; }
+
+/* Connection indicators: warm muted on light bg */
+[data-theme='ubuntu-ambiance'] .connection-type,
+[data-theme='ubuntu-ambiance'] .connection-server { color: #907860; }
+
+/* ── Album chip: opaque orange pill so it reads on both dark hero and light bg ── */
+[data-theme='ubuntu-ambiance'] .badge,
+[data-theme='ubuntu-ambiance'] .album-detail-badge {
+  background: #e95420;
+  color: #ffffff;
+}
+
+/* ── Queue panel: on dark aubergine bg — all text must be light ── */
+/* Header + toolbar sit on --bg-app (light) — fine as-is */
+/* List, meta box, divider sit on --bg-sidebar (dark aubergine) */
+
+[data-theme='ubuntu-ambiance'] .queue-item-title   { color: rgba(255, 255, 255, 0.88); }
+[data-theme='ubuntu-ambiance'] .queue-item-artist,
+[data-theme='ubuntu-ambiance'] .queue-item-duration { color: rgba(255, 255, 255, 0.52); }
+
+[data-theme='ubuntu-ambiance'] .queue-item.active .queue-item-artist,
+[data-theme='ubuntu-ambiance'] .queue-item.active .queue-item-duration { color: rgba(255, 255, 255, 0.72); }
+
+[data-theme='ubuntu-ambiance'] .queue-divider span { color: rgba(255, 255, 255, 0.40) !important; }
+
+/* Meta box (current track info) on dark aubergine */
+[data-theme='ubuntu-ambiance'] .queue-current-info h3   { color: rgba(255, 255, 255, 0.92); }
+[data-theme='ubuntu-ambiance'] .queue-current-sub        { color: rgba(255, 255, 255, 0.55); }
+[data-theme='ubuntu-ambiance'] .queue-current-cover .fallback { color: rgba(255, 255, 255, 0.35); }
+
+/* Tabs sit on dark bg too */
+[data-theme='ubuntu-ambiance'] .queue-tab-btn            { color: rgba(255, 255, 255, 0.60); }
+[data-theme='ubuntu-ambiance'] .queue-tab-btn:hover      { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.90); }
+[data-theme='ubuntu-ambiance'] .queue-tab-btn.active     { color: #e95420; }
+
+/* Action buttons in header (on light --bg-app) */
+[data-theme='ubuntu-ambiance'] .queue-action-btn         { color: #7d6e68; }
+[data-theme='ubuntu-ambiance'] .queue-action-btn:hover:not(:disabled) { color: #3d2b2b; }
+
+/* ─────────────────────────────────────────── */
+
+/* ─── Windows 10 — Fluent Design Light ─── */
+/* Clean flat white + the iconic near-black taskbar + Windows blue #0078D4 */
+[data-theme='w10'] {
+  color-scheme: light;
+  --select-arrow: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23767676%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
+
+  /* ── Palette — Windows 10 neutral + Fluent blue ── */
+  --ctp-crust:     #1c1c1c;   /* taskbar near-black */
+  --ctp-mantle:    #2b2b2b;
+  --ctp-base:      #ffffff;   /* window white */
+  --ctp-surface0:  #f3f3f3;   /* nav pane / secondary bg */
+  --ctp-surface1:  #ebebeb;
+  --ctp-surface2:  #d6d6d6;   /* borders, dividers */
+  --ctp-overlay0:  #767676;   /* muted / disabled */
+  --ctp-overlay1:  #4a4a4a;
+  --ctp-overlay2:  #2b2b2b;
+  --ctp-text:      #000000;   /* primary text — true black */
+  --ctp-subtext1:  #1b1b1b;
+  --ctp-subtext0:  #5d5d5d;
+  /* Windows Fluent blue spectrum */
+  --ctp-mauve:     #0078d4;   /* Windows blue — THE accent */
+  --ctp-lavender:  #2e95d3;
+  --ctp-sky:       #cce4f7;   /* selection highlight */
+  --ctp-teal:      #008272;
+  --ctp-blue:      #0063b1;
+  --ctp-sapphire:  #003e92;
+  --ctp-green:     #107c10;
+  --ctp-yellow:    #ffb900;
+  --ctp-peach:     #d83b01;
+  --ctp-pink:      #e3008c;
+  --ctp-flamingo:  #c239b3;
+  --ctp-rosewater: #ef6950;
+  --ctp-maroon:    #a80000;
+  --ctp-red:       #d13438;
+
+  /* ── Semantic tokens ── */
+  --bg-app:        #ffffff;
+  --bg-sidebar:    #f3f3f3;
+  --bg-card:       #ffffff;
+  --bg-hover:      #e8e8e8;
+  --bg-player:     #1c1c1c;   /* taskbar */
+  --bg-glass:      rgba(255, 255, 255, 0.90);
+  --accent:        #0078d4;
+  --accent-dim:    rgba(0, 120, 212, 0.10);
+  --accent-glow:   rgba(0, 120, 212, 0.28);
+  --text-primary:  #000000;
+  --text-secondary:#1b1b1b;
+  --text-muted:    #767676;
+  --border:        #d6d6d6;
+  --border-subtle: #ebebeb;
+  --positive:      #107c10;
+  --warning:       #ffb900;
+  --danger:        #d13438;
+  --radius-sm:     2px;
+  --radius-md:     4px;
+  --radius-lg:     6px;
+  /* Waveform: Windows blue progress */
+  --waveform-played:   #0078d4;
+  --waveform-buffered: #80bbea;
+  --waveform-unplayed: #d6d6d6;
+}
+
+/* ── App shell: W10 desktop — clean off-white ── */
+[data-theme='w10'] .app-shell {
+  background: #f3f3f3;
+}
+
+/* ── Sidebar: W10 Navigation Pane — flat light gray ── */
+[data-theme='w10'] .sidebar {
+  background: #f3f3f3;
+  border-right: 1px solid #d6d6d6;
+  box-shadow: none;
+}
+
+/* Nav links: dark on light pane */
+[data-theme='w10'] .nav-link { color: #1b1b1b; }
+[data-theme='w10'] .nav-link:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #000000;
+}
+[data-theme='w10'] .nav-link.active {
+  background: rgba(0, 120, 212, 0.10);
+  color: #0078d4;
+}
+[data-theme='w10'] .nav-link.active::before {
+  background: #0078d4;
+  box-shadow: none;
+}
+
+/* ── Player bar: W10 Taskbar — near-black flat + accent stripe ── */
+[data-theme='w10'] .player-bar {
+  background: #1c1c1c;
+  border-top: 2px solid #0078d4;
+  box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.50);
+}
+
+/* Player text: white on dark taskbar */
+[data-theme='w10'] .player-track-name  { color: #ffffff; font-weight: 500; }
+[data-theme='w10'] .player-track-artist { color: rgba(255, 255, 255, 0.65); opacity: 1; }
+[data-theme='w10'] .player-time        { color: rgba(255, 255, 255, 0.60); }
+
+/* Transport: flat ghosted icons on dark bar */
+[data-theme='w10'] .player-btn {
+  color: rgba(255, 255, 255, 0.82);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+[data-theme='w10'] .player-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
+[data-theme='w10'] .player-btn-primary {
+  background: #0078d4;
+  color: #ffffff;
+  border: none;
+  box-shadow: none;
+}
+[data-theme='w10'] .player-btn-primary:hover {
+  background: #1684d8;
+  box-shadow: none;
+}
+
+/* ── Content-area buttons: W10 flat button style ── */
+[data-theme='w10'] .btn {
+  background: #ffffff;
+  color: #1b1b1b;
+  border: 1px solid #d6d6d6;
+  border-radius: 4px;
+  box-shadow: none;
+}
+[data-theme='w10'] .btn:hover {
+  background: #f3f3f3;
+  border-color: #767676;
+  box-shadow: none;
+}
+[data-theme='w10'] .btn-primary {
+  background: #0078d4;
+  color: #ffffff;
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+[data-theme='w10'] .btn-primary:hover {
+  background: #006cbd;
+  box-shadow: none;
+}
+[data-theme='w10'] .btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: #1b1b1b;
+}
+[data-theme='w10'] .btn-ghost:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: transparent;
+}
+[data-theme='w10'] .btn-surface {
+  background: #ffffff;
+  color: #1b1b1b;
+  border: 1px solid #d6d6d6;
+}
+[data-theme='w10'] .btn-surface:hover {
+  background: #f3f3f3;
+  border-color: #767676;
+}
+
+/* Cards: white, flat border, very subtle lift */
+[data-theme='w10'] .glass,
+[data-theme='w10'] .card {
+  background: #ffffff;
+  border: 1px solid #d6d6d6;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* Content header */
+[data-theme='w10'] .content-header {
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid #d6d6d6;
+}
+
+/* Album badge: Windows blue */
+[data-theme='w10'] .badge,
+[data-theme='w10'] .album-detail-badge {
+  background: #0078d4;
+  color: #ffffff;
+}
+
+/* ── Hover / active states ── */
+[data-theme='w10'] .track-row:hover,
+[data-theme='w10'] .track-row.context-active {
+  background: rgba(0, 120, 212, 0.06);
+  box-shadow: inset 3px 0 0 #0078d4;
+}
+[data-theme='w10'] .queue-item:hover,
+[data-theme='w10'] .queue-item.context-active { background: rgba(0, 120, 212, 0.07); }
+[data-theme='w10'] .queue-item.active {
+  background: rgba(0, 120, 212, 0.10);
+  border-left: 2px solid #0078d4;
+}
+[data-theme='w10'] .np-queue-item.active  { background: rgba(0, 120, 212, 0.08); }
+[data-theme='w10'] .np-queue-item-active  { color: #0078d4; }
+[data-theme='w10'] .np-queue-item:hover,
+[data-theme='w10'] .np-queue-item.context-active { background: rgba(0, 120, 212, 0.05); }
+[data-theme='w10'] .np-album-track.active .np-album-track-title,
+[data-theme='w10'] .np-album-track.active .np-album-track-num { color: #0078d4; }
+[data-theme='w10'] .artist-row:hover   { background: rgba(0, 120, 212, 0.06); box-shadow: inset 3px 0 0 #0078d4; }
+[data-theme='w10'] .playlist-row:hover { background: rgba(0, 120, 212, 0.06); box-shadow: inset 3px 0 0 #0078d4; }
+[data-theme='w10'] .settings-tab:hover  { background: rgba(0, 0, 0, 0.05); color: #0078d4; }
+[data-theme='w10'] .settings-tab.active { background: rgba(0, 120, 212, 0.10); color: #0078d4; border-color: #0078d4; }
+[data-theme='w10'] .queue-tab-btn:hover { background: rgba(0, 0, 0, 0.05); color: #0078d4; }
+[data-theme='w10'] .custom-select-trigger:hover { background: rgba(0, 0, 0, 0.05); }
+[data-theme='w10'] .custom-select-option:hover  { background: rgba(0, 120, 212, 0.08); }
+[data-theme='w10'] .artist-ext-link:hover { background: rgba(0, 120, 212, 0.08); border-color: #0078d4; }
+
+/* Connection info: readable on light sidebar */
+[data-theme='w10'] .connection-type,
+[data-theme='w10'] .connection-server { color: #5d5d5d; }
+
+/* ─────────────────────────────────────────── */
+
+/* ─── Windows Vista — Aero Glass ─── */
+/* Pure CSS glass illusion: layered gradients + strategic box-shadows, no backdrop-filter */
+[data-theme='wista'] {
+  color-scheme: light;
+  --select-arrow: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%234870a8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
+
+  /* ── Palette ── */
+  --ctp-crust:     #010308;
+  --ctp-mantle:    #050b1a;
+  --ctp-base:      #eef3fc;   /* Vista window interior — ice blue-white */
+  --ctp-surface0:  #e2ecf8;
+  --ctp-surface1:  #d5e4f5;
+  --ctp-surface2:  #c5d8f0;
+  --ctp-overlay0:  #a8c4e0;
+  --ctp-overlay1:  #88a8cc;
+  --ctp-overlay2:  #6888b0;
+  --ctp-text:      #0d1d3c;   /* deep navy — readable on ice bg */
+  --ctp-subtext1:  #2a4878;
+  --ctp-subtext0:  #4870a8;
+  /* Vista Aero blue spectrum */
+  --ctp-mauve:     #1565c8;   /* Vista Aero blue — THE accent */
+  --ctp-lavender:  #2880e0;
+  --ctp-sky:       #5aaaf8;   /* selection/highlight blue */
+  --ctp-teal:      #1890b8;
+  --ctp-blue:      #0e50a8;
+  --ctp-sapphire:  #0848a0;
+  --ctp-green:     #1a8020;
+  --ctp-yellow:    #c8980c;
+  --ctp-peach:     #d06818;
+  --ctp-pink:      #c03878;
+  --ctp-flamingo:  #a82860;
+  --ctp-rosewater: #c04848;
+  --ctp-maroon:    #903030;
+  --ctp-red:       #c02020;
+
+  /* ── Semantic tokens ── */
+  --bg-app:        #eef3fc;
+  --bg-sidebar:    #0e1e3e;   /* deep navy glass — Vista nav pane in dark mode */
+  --bg-card:       #e2ecf8;
+  --bg-hover:      rgba(21, 101, 200, 0.09);
+  --bg-player:     #050810;   /* Vista taskbar — black glass */
+  --bg-glass:      rgba(238, 243, 252, 0.94);
+  --accent:        #1565c8;
+  --accent-dim:    rgba(21, 101, 200, 0.12);
+  --accent-glow:   rgba(21, 101, 200, 0.40);
+  --text-primary:  #0d1d3c;
+  --text-secondary:#2a4878;
+  --text-muted:    #4870a8;
+  --border:        rgba(100, 160, 220, 0.45);
+  --border-subtle: rgba(140, 190, 240, 0.30);
+  --positive:      #1a8020;
+  --warning:       #c8980c;
+  --danger:        #c02020;
+  --radius-sm:     3px;
+  --radius-md:     6px;
+  --radius-lg:     10px;
+  /* Waveform: Vista blue progress bar */
+  --waveform-played:    #1565c8;
+  --waveform-buffered:  #5aaaf8;
+  --waveform-unplayed:  #c5d8f0;
+}
+
+/* ── App shell: Vista desktop — soft blue gradient ── */
+[data-theme='wista'] .app-shell {
+  background: linear-gradient(160deg, #dce8f8 0%, #e5eefa 50%, #eef3fc 100%);
+}
+
+/* ── Sidebar: Aero glass nav pane ──
+   Three layers: 1) top specular reflection, 2) deep navy base, 3) edge highlight via box-shadow */
+[data-theme='wista'] .sidebar {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 255, 255, 0.22) 0%,
+      rgba(255, 255, 255, 0.08) 20%,
+      rgba(255, 255, 255, 0.00) 55%,
+      rgba(0,  20,  60, 0.12) 100%
+    ),
+    linear-gradient(180deg, #1a3368 0%, #0e1e3e 45%, #0a1830 100%);
+  border-right: 1px solid rgba(120, 180, 255, 0.55);
+  box-shadow:
+    inset -1px 0 0 rgba(255, 255, 255, 0.28),
+    inset  1px 0 0 rgba(255, 255, 255, 0.10),
+    2px 0 18px rgba(0, 0, 0, 0.40);
+}
+
+/* Sidebar text: light on dark glass */
+[data-theme='wista'] .nav-link { color: rgba(210, 228, 255, 0.72); }
+[data-theme='wista'] .nav-link:hover {
+  background: rgba(255, 255, 255, 0.11);
+  color: #ffffff;
+}
+[data-theme='wista'] .nav-link.active {
+  background: rgba(21, 101, 200, 0.38);
+  color: #ffffff;
+}
+[data-theme='wista'] .nav-link.active::before {
+  background: #5aaaf8;
+  box-shadow: 0 0 10px rgba(90, 170, 248, 0.85);
+}
+[data-theme='wista'] .sidebar-logo-text,
+[data-theme='wista'] .sidebar-bottom a,
+[data-theme='wista'] .sidebar-bottom button { color: rgba(210, 228, 255, 0.70); }
+[data-theme='wista'] { --logo-color-start: #ffffff; --logo-color-end: #a8ccff; }
+[data-theme='wista'] .sidebar-version { color: rgba(210, 228, 255, 0.35); }
+
+/* ── Player bar: Vista Aero taskbar ──
+   Black glass + intense blue glow on top border — the most iconic Vista element */
+[data-theme='wista'] .player-bar {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 255, 255, 0.07) 0%,
+      rgba(255, 255, 255, 0.00) 18%,
+      rgba(0,   0,   0, 0.00) 82%,
+      rgba(0,   0,   0, 0.18) 100%
+    ),
+    linear-gradient(180deg, #0c1828 0%, #050810 100%);
+  border-top: 1px solid rgba(80, 155, 255, 0.70);
+  box-shadow:
+    inset 0 1px 0 rgba(140, 200, 255, 0.55),
+    inset 0 2px 0 rgba(255, 255, 255, 0.14),
+    0 -4px 24px rgba(0, 0, 0, 0.70);
+}
+
+/* Player text: white on black glass */
+[data-theme='wista'] .player-track-name {
+  color: #ffffff;
+  text-shadow: 0 0 12px rgba(100, 170, 255, 0.65), 0 1px 2px rgba(0, 0, 0, 0.60);
+  font-weight: 600;
+}
+[data-theme='wista'] .player-track-artist { color: #88b8e8; opacity: 1; }
+[data-theme='wista'] .player-time         { color: #88b8e8; }
+
+/* ── Transport buttons: Vista glass orbs ──
+   Top half: white → ice-blue reflection | Bottom half: royal blue deep — the iconic split */
+[data-theme='wista'] .player-btn,
+[data-theme='wista'] .player-btn-primary {
+  background: linear-gradient(180deg,
+    #daeeff 0%,
+    #b8d8ff 44%,
+    #3a91f8 50%,
+    #0f58d7 100%
+  );
+  color: #ffffff;
+  border: 1px solid rgba(10, 65, 180, 0.70);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    0 2px 8px rgba(0, 0, 0, 0.50),
+    0 0 0 1px rgba(80, 140, 255, 0.20);
+}
+[data-theme='wista'] .player-btn:hover,
+[data-theme='wista'] .player-btn-primary:hover {
+  background: linear-gradient(180deg,
+    #e8f4ff 0%,
+    #c8e4ff 44%,
+    #58a8ff 50%,
+    #2070e8 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.80),
+    0 3px 12px rgba(0, 0, 0, 0.50),
+    0 0 16px rgba(80, 150, 255, 0.35);
+}
+
+/* ── Content-area buttons: Vista dialog glass ── */
+[data-theme='wista'] .btn {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(238, 248, 255, 0.95) 44%,
+    rgba(195, 222, 248, 0.90) 50%,
+    rgba(168, 205, 240, 0.85) 100%
+  );
+  color: #0d1d3c;
+  border: 1px solid rgba(100, 160, 220, 0.68);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.90),
+    0 1px 3px rgba(0, 0, 0, 0.18);
+}
+[data-theme='wista'] .btn:hover {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 1.00) 0%,
+    rgba(245, 252, 255, 0.98) 44%,
+    rgba(210, 233, 255, 0.95) 50%,
+    rgba(180, 220, 252, 0.92) 100%
+  );
+  border-color: rgba(80, 140, 220, 0.80);
+}
+[data-theme='wista'] .btn-primary {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(190, 222, 255, 0.92) 44%,
+    rgba(48,  130, 240, 0.96) 50%,
+    rgba(15,   78, 210, 0.99) 100%
+  );
+  color: #ffffff;
+  border: 1px solid rgba(10, 60, 180, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 1px 4px rgba(0, 0, 0, 0.28),
+    0 0 8px rgba(21, 101, 200, 0.22);
+}
+[data-theme='wista'] .btn-primary:hover {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 1.00) 0%,
+    rgba(210, 235, 255, 0.95) 44%,
+    rgba(68,  148, 255, 0.97) 50%,
+    rgba(30,   95, 225, 1.00) 100%
+  );
+}
+
+/* ── Cards/panels: Vista frosted glass panel ── */
+[data-theme='wista'] .glass,
+[data-theme='wista'] .card {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.88) 0%,
+    rgba(225, 240, 255, 0.82) 100%
+  );
+  border: 1px solid rgba(130, 182, 232, 0.60);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 2px 8px rgba(21, 101, 200, 0.10);
+}
+
+/* ── Content header: Vista titlebar / toolbar band ── */
+[data-theme='wista'] .content-header {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(232, 245, 255, 0.72) 100%
+  );
+  border-bottom: 1px solid rgba(150, 198, 238, 0.65);
+  box-shadow: 0 1px 4px rgba(21, 101, 200, 0.10);
+}
+
+/* ── Album badge: Vista blue pill ── */
+[data-theme='wista'] .badge,
+[data-theme='wista'] .album-detail-badge {
+  background: #1565c8;
+  color: #ffffff;
+}
+
+/* ── Scrollbar: Vista light-blue style ── */
+[data-theme='wista'] ::-webkit-scrollbar-track { background: #d5e4f5; }
+[data-theme='wista'] ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #90b8e0 0%, #6898c8 100%); border-radius: 4px; }
+[data-theme='wista'] ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #a8ccf0 0%, #80a8e0 100%); }
+
+/* ── Hover / active states: Vista selection blue ── */
+[data-theme='wista'] .track-row:hover,
+[data-theme='wista'] .track-row.context-active {
+  background: rgba(21, 101, 200, 0.08);
+  box-shadow: inset 3px 0 0 #1565c8;
+}
+
+[data-theme='wista'] .queue-item:hover,
+[data-theme='wista'] .queue-item.context-active { background: rgba(90, 170, 248, 0.18); }
+
+[data-theme='wista'] .queue-item.active {
+  background: rgba(21, 101, 200, 0.28);
+  border-left: 2px solid #5aaaf8;
+}
+
+[data-theme='wista'] .np-queue-item.active  { background: rgba(21, 101, 200, 0.10); }
+[data-theme='wista'] .np-queue-item-active  { color: #1565c8; }
+[data-theme='wista'] .np-queue-item:hover,
+[data-theme='wista'] .np-queue-item.context-active { background: rgba(21, 101, 200, 0.07); }
+
+[data-theme='wista'] .np-album-track.active .np-album-track-title,
+[data-theme='wista'] .np-album-track.active .np-album-track-num { color: #1565c8; }
+
+[data-theme='wista'] .artist-row:hover   { background: rgba(21, 101, 200, 0.07); box-shadow: inset 3px 0 0 #1565c8; }
+[data-theme='wista'] .playlist-row:hover { background: rgba(21, 101, 200, 0.07); box-shadow: inset 3px 0 0 #1565c8; }
+
+[data-theme='wista'] .settings-tab:hover  { background: rgba(21, 101, 200, 0.08); color: #1565c8; }
+[data-theme='wista'] .settings-tab.active { background: rgba(21, 101, 200, 0.14); color: #1565c8; border-color: #1565c8; }
+[data-theme='wista'] .queue-tab-btn:hover { background: rgba(21, 101, 200, 0.08); color: #1565c8; }
+
+[data-theme='wista'] .custom-select-trigger:hover { background: rgba(21, 101, 200, 0.08); }
+[data-theme='wista'] .custom-select-option:hover  { background: rgba(21, 101, 200, 0.12); }
+
+[data-theme='wista'] .artist-ext-link:hover { background: rgba(21, 101, 200, 0.10); border-color: #1565c8; }
+
+/* ── Queue: dark glass sidebar → light text ── */
+[data-theme='wista'] .queue-item-title    { color: rgba(210, 228, 255, 0.90); }
+[data-theme='wista'] .queue-item-artist,
+[data-theme='wista'] .queue-item-duration { color: rgba(170, 205, 250, 0.55); }
+
+[data-theme='wista'] .queue-item.active .queue-item-artist,
+[data-theme='wista'] .queue-item.active .queue-item-duration { color: rgba(190, 218, 255, 0.75); }
+
+[data-theme='wista'] .queue-divider span  { color: rgba(180, 210, 255, 0.38) !important; }
+
+[data-theme='wista'] .queue-current-info h3 { color: rgba(220, 235, 255, 0.92); }
+[data-theme='wista'] .queue-current-sub     { color: rgba(180, 210, 252, 0.58); }
+
+[data-theme='wista'] .queue-tab-btn        { color: rgba(200, 220, 255, 0.62); }
+[data-theme='wista'] .queue-tab-btn.active { color: #5aaaf8; }
+
+[data-theme='wista'] .queue-round-btn.active { color: #050810; }
+
+/* Connection indicators: muted Vista blue on light bg */
+[data-theme='wista'] .connection-type,
+[data-theme='wista'] .connection-server { color: #6090b8; }
+
+/* ─────────────────────────────────────────── */
 
 [data-theme='aqua-quartz'] {
   color-scheme: light;
