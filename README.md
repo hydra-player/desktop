@@ -72,8 +72,8 @@ Designed specifically for users hosting their own music via Navidrome or other S
 
 ## ● Known Limitations
 
-- **Linux (Wayland — drag & drop cursor)**: On some Wayland compositors the drag cursor may show no visual indicator during DnD. This is a WebKitGTK limitation unrelated to the drop operation itself, which always works correctly.
-- **FLAC without SEEKTABLE**: FLAC files that were encoded without a SEEKTABLE index cannot be seeked. The seek silently fails; playback continues from the current position.
+
+
 
 ## 📥 Installation
 
