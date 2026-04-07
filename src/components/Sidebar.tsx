@@ -150,7 +150,7 @@ export default function Sidebar({
               aria-label={t('sidebar.libraryScope')}
               aria-expanded={libraryDropdownOpen}
               aria-haspopup="listbox"
-              data-tooltip={t('sidebar.libraryScope')}
+              data-tooltip={libraryDropdownOpen ? undefined : t('sidebar.libraryScope')}
               data-tooltip-pos="bottom"
             >
               {!libraryTriggerPlain ? (
