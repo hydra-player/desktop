@@ -392,11 +392,11 @@ export default function FullscreenPlayer({ onClose }: FullscreenPlayerProps) {
           <FsArt fetchUrl={artUrl} cacheKey={artKey} />
         </div>
 
-        {/* Artist — massive statement */}
-        <p className="fs-artist-name">{currentTrack?.artist ?? '—'}</p>
-
-        {/* Track title — accent, light weight */}
+        {/* Track title — massive statement */}
         <p className="fs-track-title">{currentTrack?.title ?? '—'}</p>
+
+        {/* Artist — secondary, below track */}
+        <p className="fs-artist-name">{currentTrack?.artist ?? '—'}</p>
 
         {/* Metadata row */}
         {metaParts.length > 0 && (
