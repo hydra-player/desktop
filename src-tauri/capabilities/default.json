@@ -34,7 +34,6 @@
     "core:window:allow-is-fullscreen",
     "core:window:allow-create",
     "core:webview:allow-create-webview-window",
-    "updater:default",
     "process:allow-restart"
   ]
 }

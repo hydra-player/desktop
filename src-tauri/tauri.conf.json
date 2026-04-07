@@ -31,14 +31,6 @@
       "csp": null
     }
   },
-  "plugins": {
-    "updater": {
-      "pubkey": "RWTgsDNd9LqppH6DMq7ypolI0bsLCNsjOvif4mrHyr4UDidkUT69IY1K",
-      "endpoints": [
-        "https://github.com/Psychotoxical/psysonic/releases/latest/download/latest.json"
-      ]
-    }
-  },
   "bundle": {
     "active": true,
     "targets": "all",

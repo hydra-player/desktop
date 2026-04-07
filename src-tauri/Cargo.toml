@@ -39,7 +39,6 @@ tokio = { version = "1", features = ["rt", "time"] }
 biquad = "0.4"
 ringbuf = "0.3"
 tauri-plugin-window-state = "2.4.1"
-tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 souvlaki = { version = "0.8", default-features = false, features = ["use_zbus"] }
 discord-rich-presence = "0.2"
