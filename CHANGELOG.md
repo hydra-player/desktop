@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Song ratings — context menu & player bar**: Songs can additionally be rated directly from the **right-click context menu** and from the **player bar** (below the artist name), with optimistic updates reflected immediately across all views.
 
-- **Skip-to-1★** *(PR [#130](https://github.com/Psychotoxical/psysonic/pull/130))*: Automatically assigns a 1-star rating when a song is manually skipped before a configurable playback threshold (default: 20 s). Can be enabled and adjusted in Settings → Ratings.
+- **Skip-to-1★** *(PR [#130](https://github.com/Psychotoxical/psysonic/pull/130))*: Automatically assigns a 1-star rating to a song after it has been manually skipped a configurable number of consecutive times. This skip count threshold can be enabled and adjusted in Settings → Ratings.
 
 - **Mix minimum rating filter** *(PR [#130](https://github.com/Psychotoxical/psysonic/pull/130))*: Random Mix and Home Quick Mix can now be filtered by minimum rating per entity type (song / album / artist). Configure thresholds in Settings → Ratings.
 
