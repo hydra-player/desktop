@@ -47,7 +47,7 @@ export default function Statistics() {
   const currentTrack = usePlayerStore(s => s.currentTrack);
 
   const topSongs = useMemo(() => {
-    const map = new Map(starredSongs.map(s => [s.id, { ...s, userRating: userRatingOverrides[s.id] ?? s.userRating }]));
+    const map = new Map<string, SubsonicSong>(starredSongs.map(s => [s.id, { ...s, userRating: userRatingOverrides[s.id] ?? s.userRating }]));
     // Songs not yet in starredSongs but rated via override (e.g. from queue or currentTrack)
     const candidates = currentTrack ? [currentTrack, ...queue] : queue;
     for (const t of candidates) {
