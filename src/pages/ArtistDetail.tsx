@@ -80,24 +80,32 @@ export default function ArtistDetail() {
 
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
     setLoading(true);
+    setInfo(null);
+    setTopSongs([]);
     setFeaturedAlbums([]);
     getArtist(id).then(artistData => {
+      if (cancelled) return;
       setArtist(artistData.artist);
       setAlbums(artistData.albums);
       setIsStarred(!!artistData.artist.starred);
-      return Promise.all([
-        getArtistInfo(id).catch(() => null),
-        getTopSongs(artistData.artist.name).catch(() => []),
-      ]);
-    }).then(([artistInfo, songsData]) => {
-      if (artistInfo !== undefined) setInfo(artistInfo as SubsonicArtistInfo | null);
-      if (songsData !== undefined) setTopSongs(songsData as SubsonicSong[]);
+      // Render the page immediately from local data
       setLoading(false);
+
+      // Fetch artist info (may trigger slow external lookup on the server)
+      // and top songs in the background — do not block rendering
+      getArtistInfo(id).then(artistInfo => {
+        if (!cancelled) setInfo(artistInfo ?? null);
+      }).catch(() => {});
+
+      getTopSongs(artistData.artist.name).then(songsData => {
+        if (!cancelled) setTopSongs(songsData ?? []);
+      }).catch(() => {});
     }).catch(err => {
-      console.error(err);
-      setLoading(false);
+      if (!cancelled) { console.error(err); setLoading(false); }
     });
+    return () => { cancelled = true; };
   }, [id]);
 
   useEffect(() => {
