@@ -218,7 +218,7 @@ export default function Albums() {
               ))}
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 14, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                   {t('albums.yearFilterLabel')}
                 </span>
                 <input
@@ -229,9 +229,9 @@ export default function Albums() {
                   placeholder={t('albums.yearFrom')}
                   value={yearFrom}
                   onChange={e => setYearFrom(e.target.value)}
-                  style={{ width: 68, padding: '4px 6px', fontSize: 12 }}
+                  style={{ width: 76, padding: 'var(--space-2) var(--space-2)' }}
                 />
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>–</span>
+                <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>–</span>
                 <input
                   className="input"
                   type="number"
@@ -240,16 +240,15 @@ export default function Albums() {
                   placeholder={t('albums.yearTo')}
                   value={yearTo}
                   onChange={e => setYearTo(e.target.value)}
-                  style={{ width: 68, padding: '4px 6px', fontSize: 12 }}
+                  style={{ width: 76, padding: 'var(--space-2) var(--space-2)' }}
                 />
                 {yearActive && (
                   <button
                     className="btn btn-ghost"
                     onClick={clearYear}
                     data-tooltip={t('albums.yearFilterClear')}
-                    style={{ padding: '4px 6px' }}
                   >
-                    <X size={13} />
+                    <X size={14} />
                   </button>
                 )}
               </div>
