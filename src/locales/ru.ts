@@ -507,6 +507,8 @@ export const ruTranslation = {
       'Отправлять на сервер, что вы сейчас слушаете. Отключите, чтобы не делиться этим.',
     lyricsServerFirst: 'Предпочитать серверные тексты',
     lyricsServerFirstDesc: 'Проверять тексты песен, предоставленные сервером (встроенные теги, sidecar-файлы) перед запросом LRCLIB. Отключите, чтобы использовать LRCLIB сначала.',
+    enableNeteaselyrics: 'Тексты Netease Cloud Music',
+    enableNeteaselyricsDesc: 'Использовать Netease Cloud Music как последний источник текстов, когда сервер и LRCLIB не находят ничего. Лучшее покрытие для азиатской и международной музыки.',
     downloadsTitle: 'Экспорт ZIP и архивы',
     downloadsFolderDesc: 'Куда сохранять альбомы в ZIP архиве на диск.',
     downloadsDefault: 'Папка «Загрузки» по умолчанию',
@@ -874,6 +876,7 @@ export const ruTranslation = {
     lyrics: 'Текст',
     lyricsLoading: 'Загрузка текста…',
     lyricsNotFound: 'Текст не найден',
+    lyricsSourceNetease: 'Источник: Netease',
   },
   songInfo: {
     title: 'О треке',

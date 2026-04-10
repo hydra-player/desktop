@@ -873,6 +873,17 @@ export default function Settings() {
                   <span className="toggle-track" />
                 </label>
               </div>
+              <div className="settings-section-divider" />
+              <div className="settings-toggle-row">
+                <div>
+                  <div style={{ fontWeight: 500 }}>{t('settings.enableNeteaselyrics')}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('settings.enableNeteaselyricsDesc')}</div>
+                </div>
+                <label className="toggle-switch" aria-label={t('settings.enableNeteaselyrics')}>
+                  <input type="checkbox" checked={auth.enableNeteaselyrics} onChange={e => auth.setEnableNeteaselyrics(e.target.checked)} />
+                  <span className="toggle-track" />
+                </label>
+              </div>
             </div>
           </section>
 

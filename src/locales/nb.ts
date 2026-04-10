@@ -483,6 +483,8 @@ export const nbTranslation = {
     nowPlayingEnabledDesc: 'Send sporet som spilles av til tjenerens live-lyttervisning. Deaktiver for å stoppe sending av avspillingsdata.',
     lyricsServerFirst: 'Foretrekk server-sangtekst',
     lyricsServerFirstDesc: 'Sjekk tjenerlevererte sangtekster (innebygde tagger, sidecar-filer) før LRCLIB. Deaktiver for å bruke LRCLIB først.',
+    enableNeteaselyrics: 'Netease Cloud Music sangtekster',
+    enableNeteaselyricsDesc: 'Bruk Netease Cloud Music som siste utvei når server og LRCLIB ikke finner noe. Best dekning for asiatisk og internasjonal musikk.',
     downloadsTitle: 'ZIP Eksport & Arkivering',
 	downloadsFolderDesc: 'Målmappe for album du laster ned som en ZIP-fil til datamaskinen din.',												  
     downloadsDefault: 'Standard nedlastingsmappe',
@@ -814,6 +816,7 @@ export const nbTranslation = {
     lyricsNotFound: 'Ingen sangtekst funnet for dette sporet',
     lyricsSourceServer: 'Kilde: Server',
     lyricsSourceLrclib: 'Kilde: LRCLIB',
+    lyricsSourceNetease: 'Kilde: Netease',
   },
   songInfo: {
     title: 'Sanginfo',

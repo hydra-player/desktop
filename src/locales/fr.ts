@@ -484,6 +484,8 @@ export const frTranslation = {
     nowPlayingEnabledDesc: 'Diffuse le titre en cours de lecture vers la vue des auditeurs en direct du serveur. Désactiver pour ne pas envoyer de données de lecture.',
     lyricsServerFirst: 'Préférer les paroles du serveur',
     lyricsServerFirstDesc: 'Consulter d\'abord les paroles fournies par le serveur (tags intégrés, fichiers sidecar) avant LRCLIB. Désactiver pour utiliser LRCLIB en priorité.',
+    enableNeteaselyrics: 'Paroles Netease Cloud Music',
+    enableNeteaselyricsDesc: 'Utiliser Netease Cloud Music en dernier recours lorsque le serveur et LRCLIB ne retournent rien. Meilleure couverture pour la musique asiatique et internationale.',
     downloadsTitle: 'Export ZIP & Archivage',
     downloadsFolderDesc: 'Dossier de destination pour les albums téléchargés en tant que fichier ZIP sur votre ordinateur.',
     downloadsDefault: 'Dossier de téléchargement par défaut',
@@ -815,6 +817,7 @@ export const frTranslation = {
     lyricsNotFound: 'Aucune parole trouvée pour ce titre',
     lyricsSourceServer: 'Source : Serveur',
     lyricsSourceLrclib: 'Source : LRCLIB',
+    lyricsSourceNetease: 'Source : Netease',
   },
   songInfo: {
     title: 'Infos du morceau',

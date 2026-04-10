@@ -855,6 +855,53 @@ async fn download_update(url: String, filename: String, app: tauri::AppHandle) -
     }
 }
 
+/// Fetches synced lyrics from Netease Cloud Music for a given artist + title.
+/// Performs a track search, then fetches the LRC string for the best match.
+/// Returns `None` if no match or no lyrics are found.
+#[tauri::command]
+async fn fetch_netease_lyrics(artist: String, title: String) -> Result<Option<String>, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let query = format!("{} {}", artist, title);
+    let params = [("s", query.as_str()), ("type", "1"), ("limit", "5")];
+    let search: serde_json::Value = client
+        .post("https://music.163.com/api/search/get")
+        .header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36")
+        .header("Referer", "https://music.163.com")
+        .form(&params)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let song_id = match search["result"]["songs"][0]["id"].as_i64() {
+        Some(id) => id,
+        None => return Ok(None),
+    };
+
+    let lyrics: serde_json::Value = client
+        .get(format!(
+            "https://music.163.com/api/song/lyric?id={}&lv=1&kv=1&tv=-1",
+            song_id
+        ))
+        .header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36")
+        .header("Referer", "https://music.163.com")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let lrc = lyrics["lrc"]["lyric"].as_str().unwrap_or("").trim().to_string();
+    Ok(if lrc.is_empty() { None } else { Some(lrc) })
+}
+
 /// Reads embedded synced / unsynced lyrics from a local audio file.
 ///
 /// Priority order:
@@ -1607,6 +1654,7 @@ pub fn run() {
             download_update,
             open_folder,
             get_embedded_lyrics,
+            fetch_netease_lyrics,
             #[cfg(target_os = "windows")]
             taskbar_win::update_taskbar_icon,
         ])

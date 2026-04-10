@@ -486,6 +486,8 @@ export const deTranslation = {
     nowPlayingEnabledDesc: 'Überträgt den aktuell gespielten Titel an die Livehörer-Ansicht des Servers. Deaktivieren, um keine Wiedergabedaten zu senden.',
     lyricsServerFirst: 'Server-Lyrics bevorzugen',
     lyricsServerFirstDesc: 'Server-seitige Lyrics (eingebettete Tags, Sidecar-Dateien) vor LRCLIB abfragen. Deaktivieren, um LRCLIB zuerst zu verwenden.',
+    enableNeteaselyrics: 'Netease Cloud Music Lyrics',
+    enableNeteaselyricsDesc: 'Netease Cloud Music als letzte Lyrics-Quelle verwenden, wenn Server und LRCLIB nichts liefern. Besonders gut für asiatische und internationale Musik.',
     downloadsTitle: 'ZIP-Export & Archivierung',
     downloadsFolderDesc: 'Zielverzeichnis für Alben, die du als ZIP-Datei auf deinen Computer herunterlädst.',
     downloadsDefault: 'Standard-Downloads-Ordner',
@@ -817,6 +819,7 @@ export const deTranslation = {
     lyricsNotFound: 'Keine Lyrics für diesen Titel gefunden',
     lyricsSourceServer: 'Quelle: Server',
     lyricsSourceLrclib: 'Quelle: LRCLIB',
+    lyricsSourceNetease: 'Quelle: Netease',
   },
   songInfo: {
     title: 'Song-Infos',

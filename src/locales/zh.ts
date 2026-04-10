@@ -480,6 +480,8 @@ export const zhTranslation = {
     nowPlayingEnabledDesc: '将当前播放的曲目广播到服务器的实时听众视图。禁用以停止发送播放数据。',
     lyricsServerFirst: '优先使用服务器歌词',
     lyricsServerFirstDesc: '先查询服务器提供的歌词（内嵌标签、sidecar 文件），再查询 LRCLIB。禁用则优先使用 LRCLIB。',
+    enableNeteaselyrics: '网易云音乐歌词',
+    enableNeteaselyricsDesc: '当服务器和 LRCLIB 均无结果时，使用网易云音乐作为最终歌词来源。对亚洲及国际音乐覆盖最佳。',
     downloadsTitle: 'ZIP 导出与归档',
     downloadsFolderDesc: '将专辑以 ZIP 文件下载到电脑时的目标文件夹。',
     downloadsDefault: '默认下载文件夹',
@@ -811,6 +813,7 @@ export const zhTranslation = {
     lyricsNotFound: '未找到此曲目的歌词',
     lyricsSourceServer: '来源：服务器',
     lyricsSourceLrclib: '来源：LRCLIB',
+    lyricsSourceNetease: '来源：网易云',
   },
   songInfo: {
     title: '歌曲信息',

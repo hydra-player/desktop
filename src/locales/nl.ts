@@ -484,6 +484,8 @@ export const nlTranslation = {
     nowPlayingEnabledDesc: 'Stuurt het huidige nummer naar de live-luisteraarsweergave van de server. Uitschakelen om geen afspeelgegevens te verzenden.',
     lyricsServerFirst: 'Server-songtekst voorrang geven',
     lyricsServerFirstDesc: 'Controleer eerst door de server geleverde songteksten (ingebedde tags, sidecar-bestanden) vóór LRCLIB. Uitschakelen om LRCLIB eerst te gebruiken.',
+    enableNeteaselyrics: 'Netease Cloud Music songteksten',
+    enableNeteaselyricsDesc: 'Gebruik Netease Cloud Music als laatste bron wanneer server en LRCLIB niets opleveren. Beste dekking voor Aziatische en internationale muziek.',
     downloadsTitle: 'ZIP-export & Archivering',
     downloadsFolderDesc: 'Doelmap voor albums die je als ZIP-bestand naar je computer downloadt.',
     downloadsDefault: 'Standaard downloadmap',
@@ -815,6 +817,7 @@ export const nlTranslation = {
     lyricsNotFound: 'Geen songtekst gevonden voor dit nummer',
     lyricsSourceServer: 'Bron: Server',
     lyricsSourceLrclib: 'Bron: LRCLIB',
+    lyricsSourceNetease: 'Bron: Netease',
   },
   songInfo: {
     title: 'Nummerinfo',

@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { fetchLyrics, parseLrc, LrcLine } from '../api/lrclib';
+import { fetchNeteaselyrics } from '../api/netease';
 import { getLyricsBySongId, SubsonicStructuredLyrics } from '../api/subsonic';
 import { useAuthStore } from '../store/authStore';
 import { useOfflineStore } from '../store/offlineStore';
 import { useHotCacheStore } from '../store/hotCacheStore';
 import type { Track } from '../store/playerStore';
 
-export type LyricsSource = 'server' | 'lrclib' | 'embedded';
+export type LyricsSource = 'server' | 'lrclib' | 'netease' | 'embedded';
 
 export interface CachedLyrics {
   syncedLines: LrcLine[] | null;
@@ -46,7 +47,8 @@ export interface UseLyricsResult {
 
 export function useLyrics(currentTrack: Track | null): UseLyricsResult {
   const cached = currentTrack ? lyricsCache.get(currentTrack.id) : undefined;
-  const lyricsServerFirst = useAuthStore(s => s.lyricsServerFirst);
+  const lyricsServerFirst    = useAuthStore(s => s.lyricsServerFirst);
+  const enableNeteaselyrics  = useAuthStore(s => s.enableNeteaselyrics);
 
   const [loading, setLoading]         = useState(!cached && !!currentTrack);
   const [syncedLines, setSyncedLines] = useState<LrcLine[] | null>(cached?.syncedLines ?? null);
@@ -142,6 +144,20 @@ export function useLyrics(currentTrack: Track | null): UseLyricsResult {
       }
     };
 
+    const fetchNetease = async (): Promise<boolean> => {
+      try {
+        const lrc = await fetchNeteaselyrics(currentTrack.artist ?? '', currentTrack.title);
+        if (!lrc) return false;
+        const lines = parseLrc(lrc);
+        const synced = lines.length > 0 ? lines : null;
+        if (!synced) return false;
+        store({ syncedLines: synced, plainLyrics: null, source: 'netease', notFound: false });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
     (async () => {
       // Embedded lyrics from local file always win (most accurate SYLT data).
       if (cancelled) return;
@@ -155,11 +171,16 @@ export function useLyrics(currentTrack: Track | null): UseLyricsResult {
       if (await first()) return;
       if (cancelled) return;
       if (await second()) return;
+      // Netease as last fallback — only when explicitly enabled
+      if (enableNeteaselyrics) {
+        if (cancelled) return;
+        if (await fetchNetease()) return;
+      }
       if (!cancelled) store({ syncedLines: null, plainLyrics: null, source: null, notFound: true });
     })();
 
     return () => { cancelled = true; };
-  }, [currentTrack?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentTrack?.id, enableNeteaselyrics]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { syncedLines, plainLyrics, source, loading, notFound };
 }

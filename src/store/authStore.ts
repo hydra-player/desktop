@@ -53,6 +53,7 @@ interface AuthState {
   useCustomTitlebar: boolean;
   nowPlayingEnabled: boolean;
   lyricsServerFirst: boolean;
+  enableNeteaselyrics: boolean;
   showFullscreenLyrics: boolean;
   showChangelogOnUpdate: boolean;
   lastSeenChangelogVersion: string;
@@ -170,6 +171,7 @@ interface AuthState {
   setUseCustomTitlebar: (v: boolean) => void;
   setNowPlayingEnabled: (v: boolean) => void;
   setLyricsServerFirst: (v: boolean) => void;
+  setEnableNeteaselyrics: (v: boolean) => void;
   setShowFullscreenLyrics: (v: boolean) => void;
   setShowChangelogOnUpdate: (v: boolean) => void;
   setLastSeenChangelogVersion: (v: string) => void;
@@ -256,6 +258,7 @@ export const useAuthStore = create<AuthState>()(
       useCustomTitlebar: false,
       nowPlayingEnabled: false,
       lyricsServerFirst: true,
+      enableNeteaselyrics: false,
       showFullscreenLyrics: true,
       showChangelogOnUpdate: true,
       lastSeenChangelogVersion: '',
@@ -364,6 +367,7 @@ export const useAuthStore = create<AuthState>()(
       setUseCustomTitlebar: (v) => set({ useCustomTitlebar: v }),
       setNowPlayingEnabled: (v) => set({ nowPlayingEnabled: v }),
       setLyricsServerFirst: (v: boolean) => set({ lyricsServerFirst: v }),
+      setEnableNeteaselyrics: (v: boolean) => set({ enableNeteaselyrics: v }),
       setShowFullscreenLyrics: (v: boolean) => set({ showFullscreenLyrics: v }),
       setShowChangelogOnUpdate: (v) => set({ showChangelogOnUpdate: v }),
       setLastSeenChangelogVersion: (v) => set({ lastSeenChangelogVersion: v }),
