@@ -100,6 +100,7 @@ const CONTRIBUTORS = [
       'Per-server music folder filter and sidebar library picker (PR #124, PR #125)',
       'Richer star ratings, skip threshold, and library filtering (PR #130)',
       'Statistics: scope album and song totals to selected music library (PR #138)',
+      'AudioMuse-AI discovery integration for Navidrome (PR #147)',
     ],
   },
   {
