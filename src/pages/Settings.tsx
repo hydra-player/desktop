@@ -7,6 +7,7 @@ import {
   Palette, Server, Plus, Trash2, Eye, EyeOff, Info, ExternalLink, Shuffle, X, Play, Type, Keyboard, ChevronDown,
   GripVertical, PanelLeft, RotateCcw, LayoutGrid, AppWindow, HardDrive, Upload, Download, Waves, Star, Clock, ZoomIn, Sparkles, AlertTriangle
 } from 'lucide-react';
+import i18n from '../i18n';
 import { exportBackup, importBackup } from '../utils/backup';
 import { showToast } from '../utils/toast';
 import { invoke } from '@tauri-apps/api/core';
@@ -1269,6 +1270,7 @@ export default function Settings() {
                   options={[
                     { value: 'en', label: t('settings.languageEn') },
                     { value: 'de', label: t('settings.languageDe') },
+                    { value: 'es', label: t('settings.languageEs') },
                     { value: 'fr', label: t('settings.languageFr') },
                     { value: 'nl', label: t('settings.languageNl') },
                     { value: 'nb', label: t('settings.languageNb') },
