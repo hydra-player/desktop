@@ -67,6 +67,9 @@ interface AuthState {
   enableNeteaselyrics: boolean;
   lyricsSources: LyricsSourceConfig[];
   showFullscreenLyrics: boolean;
+  showFsArtistPortrait: boolean;
+  /** Portrait dimming 0–100 (percent), applied as CSS rgba alpha */
+  fsPortraitDim: number;
   showChangelogOnUpdate: boolean;
   lastSeenChangelogVersion: string;
 
@@ -188,6 +191,8 @@ interface AuthState {
   setEnableNeteaselyrics: (v: boolean) => void;
   setLyricsSources: (sources: LyricsSourceConfig[]) => void;
   setShowFullscreenLyrics: (v: boolean) => void;
+  setShowFsArtistPortrait: (v: boolean) => void;
+  setFsPortraitDim: (v: number) => void;
   setShowChangelogOnUpdate: (v: boolean) => void;
   setLastSeenChangelogVersion: (v: string) => void;
   setSeekbarStyle: (v: SeekbarStyle) => void;
@@ -278,6 +283,8 @@ export const useAuthStore = create<AuthState>()(
       enableNeteaselyrics: false,
       lyricsSources: DEFAULT_LYRICS_SOURCES,
       showFullscreenLyrics: true,
+      showFsArtistPortrait: true,
+      fsPortraitDim: 28,
       showChangelogOnUpdate: true,
       lastSeenChangelogVersion: '',
       seekbarStyle: 'waveform',
@@ -396,6 +403,8 @@ export const useAuthStore = create<AuthState>()(
       setEnableNeteaselyrics: (v: boolean) => set({ enableNeteaselyrics: v }),
       setLyricsSources: (sources) => set({ lyricsSources: sources }),
       setShowFullscreenLyrics: (v: boolean) => set({ showFullscreenLyrics: v }),
+      setShowFsArtistPortrait: (v: boolean) => set({ showFsArtistPortrait: v }),
+      setFsPortraitDim: (v: number) => set({ fsPortraitDim: v }),
       setShowChangelogOnUpdate: (v) => set({ showChangelogOnUpdate: v }),
       setLastSeenChangelogVersion: (v) => set({ lastSeenChangelogVersion: v }),
 
