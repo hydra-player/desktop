@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Disc3, Users, Music4, Radio, Settings, Heart, BarChart3,
   PanelLeftClose, PanelLeft, HelpCircle, AudioLines, HardDriveDownload, Tags, ListMusic, Cast,
-  ChevronDown, Check, Music2, TrendingUp, FolderOpen, X, Wand2, ChevronRight, PlayCircle,
+  ChevronDown, Check, Music2, TrendingUp, FolderOpen, X, Wand2, ChevronRight, PlayCircle, HardDriveUpload,
 } from 'lucide-react';
 import PsysonicLogo from './PsysonicLogo';
 import PSmallLogo from './PSmallLogo';
@@ -30,7 +30,8 @@ export const ALL_NAV_ITEMS: Record<string, { icon: React.ElementType; labelKey: 
   playlists:    { icon: ListMusic,   labelKey: 'sidebar.playlists',    to: '/playlists',      section: 'library' },
   mostPlayed:   { icon: TrendingUp,  labelKey: 'sidebar.mostPlayed',   to: '/most-played',    section: 'library' },
   radio:        { icon: Cast,        labelKey: 'sidebar.radio',        to: '/radio',          section: 'library' },
-  folderBrowser: { icon: FolderOpen,  labelKey: 'sidebar.folderBrowser', to: '/folders',        section: 'library' },
+  folderBrowser: { icon: FolderOpen,      labelKey: 'sidebar.folderBrowser', to: '/folders',       section: 'library' },
+  deviceSync:    { icon: HardDriveUpload, labelKey: 'sidebar.deviceSync',    to: '/device-sync',   section: 'library' },
   statistics:   { icon: BarChart3,   labelKey: 'sidebar.statistics',   to: '/statistics',     section: 'system'  },
   help:         { icon: HelpCircle, labelKey: 'sidebar.help',         to: '/help',          section: 'system'  },
 };

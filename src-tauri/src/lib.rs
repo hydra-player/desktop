@@ -1349,6 +1349,199 @@ async fn purge_hot_cache(custom_dir: Option<String>, app: tauri::AppHandle) -> R
     Ok(())
 }
 
+// ─── Device Sync ─────────────────────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+struct TrackSyncInfo {
+    id: String,
+    url: String,
+    suffix: String,
+    artist: String,
+    album: String,
+    title: String,
+    #[serde(rename = "trackNumber")]
+    track_number: Option<u32>,
+    #[serde(rename = "discNumber")]
+    disc_number: Option<u32>,
+    year: Option<u32>,
+}
+
+#[derive(serde::Serialize)]
+struct SyncTrackResult {
+    path: String,
+    skipped: bool,
+}
+
+/// Replaces characters that are invalid in file/directory names on Windows and
+/// most Unix filesystems with an underscore. Also trims leading/trailing dots
+/// and spaces which cause issues on Windows.
+fn sanitize_path_component(s: &str) -> String {
+    const INVALID: &[char] = &['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
+    let sanitized: String = s
+        .chars()
+        .map(|c| if INVALID.contains(&c) || c.is_control() { '_' } else { c })
+        .collect();
+    sanitized.trim_matches(|c| c == '.' || c == ' ').to_string()
+}
+
+/// Evaluates `template` by substituting `{artist}`, `{album}`, `{title}`,
+/// `{track_number}`, `{disc_number}`, `{year}` with sanitized values from `track`.
+fn apply_device_sync_template(template: &str, track: &TrackSyncInfo) -> String {
+    let track_number = track.track_number
+        .map(|n| format!("{:02}", n))
+        .unwrap_or_default();
+    let disc_number = track.disc_number
+        .map(|n| n.to_string())
+        .unwrap_or_default();
+    let year = track.year
+        .map(|y| y.to_string())
+        .unwrap_or_default();
+
+    template
+        .replace("{artist}", &sanitize_path_component(&track.artist))
+        .replace("{album}", &sanitize_path_component(&track.album))
+        .replace("{title}", &sanitize_path_component(&track.title))
+        .replace("{track_number}", &track_number)
+        .replace("{disc_number}", &disc_number)
+        .replace("{year}", &year)
+}
+
+/// Downloads a single track to a USB/SD device using the configured filename template.
+/// Emits `device:sync:progress` events with `{ jobId, trackId, status, path? }`.
+#[tauri::command]
+async fn sync_track_to_device(
+    track: TrackSyncInfo,
+    dest_dir: String,
+    template: String,
+    job_id: String,
+    app: tauri::AppHandle,
+) -> Result<SyncTrackResult, String> {
+    let relative = apply_device_sync_template(&template, &track);
+    let file_name = format!("{}.{}", relative, track.suffix);
+    let dest_path = std::path::Path::new(&dest_dir).join(&file_name);
+    let path_str = dest_path.to_string_lossy().to_string();
+
+    if dest_path.exists() {
+        let _ = app.emit("device:sync:progress", serde_json::json!({
+            "jobId": job_id, "trackId": track.id, "status": "skipped", "path": path_str,
+        }));
+        return Ok(SyncTrackResult { path: path_str, skipped: true });
+    }
+
+    if let Some(parent) = dest_path.parent() {
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(300))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let response = client.get(&track.url).send().await.map_err(|e| e.to_string())?;
+    if !response.status().is_success() {
+        let msg = format!("HTTP {}", response.status().as_u16());
+        let _ = app.emit("device:sync:progress", serde_json::json!({
+            "jobId": job_id, "trackId": track.id, "status": "error", "error": msg,
+        }));
+        return Err(msg);
+    }
+
+    let part_path = dest_path.with_extension(format!("{}.part", track.suffix));
+    if let Err(e) = stream_to_file(response, &part_path).await {
+        let _ = tokio::fs::remove_file(&part_path).await;
+        let _ = app.emit("device:sync:progress", serde_json::json!({
+            "jobId": job_id, "trackId": track.id, "status": "error", "error": e,
+        }));
+        return Err(e);
+    }
+    tokio::fs::rename(&part_path, &dest_path)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let _ = app.emit("device:sync:progress", serde_json::json!({
+        "jobId": job_id, "trackId": track.id, "status": "done", "path": path_str,
+    }));
+    Ok(SyncTrackResult { path: path_str, skipped: false })
+}
+
+/// Computes the expected file paths for a batch of tracks using the given template,
+/// without downloading anything. Used by the cleanup flow to find orphans.
+#[tauri::command]
+fn compute_sync_paths(
+    tracks: Vec<TrackSyncInfo>,
+    dest_dir: String,
+    template: String,
+) -> Vec<String> {
+    tracks.iter().map(|track| {
+        let relative = apply_device_sync_template(&template, track);
+        let file_name = format!("{}.{}", relative, track.suffix);
+        std::path::Path::new(&dest_dir)
+            .join(&file_name)
+            .to_string_lossy()
+            .to_string()
+    }).collect()
+}
+
+/// Lists all files (recursively) under `dir`. Returns `"VOLUME_NOT_FOUND"` if
+/// the directory does not exist (e.g. USB was unplugged).
+#[tauri::command]
+async fn list_device_dir_files(dir: String) -> Result<Vec<String>, String> {
+    let root = std::path::PathBuf::from(&dir);
+    if !root.exists() {
+        return Err("VOLUME_NOT_FOUND".to_string());
+    }
+    let mut files = Vec::new();
+    let mut stack = vec![root];
+    while let Some(current) = stack.pop() {
+        let mut rd = match tokio::fs::read_dir(&current).await {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        while let Ok(Some(entry)) = rd.next_entry().await {
+            let path = entry.path();
+            // Skip hidden dirs (e.g. .Trash-1000, .Ventoy, .fseventsd)
+            let is_hidden = path.file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.starts_with('.'))
+                .unwrap_or(false);
+            if is_hidden { continue; }
+            if path.is_dir() {
+                stack.push(path);
+            } else {
+                files.push(path.to_string_lossy().to_string());
+            }
+        }
+    }
+    Ok(files)
+}
+
+/// Deletes a file from the device and prunes empty parent directories
+/// (up to 2 levels: album folder, then artist folder).
+#[tauri::command]
+async fn delete_device_file(path: String) -> Result<(), String> {
+    let p = std::path::PathBuf::from(&path);
+    if p.exists() {
+        tokio::fs::remove_file(&p).await.map_err(|e| e.to_string())?;
+        // Prune empty parent dirs (album → artist)
+        let mut current = p.parent().map(|d| d.to_path_buf());
+        for _ in 0..2 {
+            let Some(dir) = current else { break };
+            let is_empty = std::fs::read_dir(&dir)
+                .map(|mut rd| rd.next().is_none())
+                .unwrap_or(false);
+            if is_empty {
+                let _ = tokio::fs::remove_dir(&dir).await;
+                current = dir.parent().map(|d| d.to_path_buf());
+            } else {
+                break;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Builds and returns a new system-tray icon with all menu items and event handlers.
 /// Called from `setup()` (initial creation) and from `toggle_tray_icon` (re-creation).
 fn build_tray_icon(app: &tauri::AppHandle) -> tauri::Result<TrayIcon> {
@@ -1738,6 +1931,10 @@ pub fn run() {
             get_hot_cache_size,
             delete_hot_cache_track,
             purge_hot_cache,
+            sync_track_to_device,
+            compute_sync_paths,
+            list_device_dir_files,
+            delete_device_file,
             toggle_tray_icon,
             check_dir_accessible,
             download_zip,

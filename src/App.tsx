@@ -36,6 +36,7 @@ import Playlists from './pages/Playlists';
 import PlaylistDetail from './pages/PlaylistDetail';
 import InternetRadio from './pages/InternetRadio';
 import FolderBrowser from './pages/FolderBrowser';
+import DeviceSync from './pages/DeviceSync';
 import NowPlayingPage from './pages/NowPlaying';
 import FullscreenPlayer from './components/FullscreenPlayer';
 import ContextMenu from './components/ContextMenu';
@@ -370,6 +371,7 @@ function AppShell() {
             <Route path="/playlists/:id" element={<PlaylistDetail />} />
             <Route path="/radio" element={<InternetRadio />} />
             <Route path="/folders" element={<FolderBrowser />} />
+            <Route path="/device-sync" element={<DeviceSync />} />
           </Routes>
         </div>
       </main>
