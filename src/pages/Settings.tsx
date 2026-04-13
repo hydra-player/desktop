@@ -74,6 +74,7 @@ const CONTRIBUTORS = [
       'Click-to-seek in synced lyrics (PR #38)',
       'Volume scroll wheel on volume slider (PR #38)',
       'Lyrics line visual states: active / completed / upcoming (PR #38)',
+      'Queue auto-scroll to keep upcoming tracks in view; fixed re-renders from currentTime in QueuePanel (PR #115)',
     ],
   },
   {
@@ -108,6 +109,10 @@ const CONTRIBUTORS = [
       'Folder Browser: keyboard navigation, context menus, now-playing path emphasis, and adaptive column layout (PR #158)',
       'Infinite queue: artist-driven candidates via Top Songs + Similar Songs with random fallback (PR #163)',
       'Folder Browser: per-column filter with keyboard flow and Shift+Enter queue append (PR #165)',
+      'Keybindings: modifier + key chords for in-app shortcuts; fixed seek ±10s units (PR #167)',
+      'Statistics: genre insights scoped to music library, cached Subsonic fetches, localized duration formatting (PR #144)',
+      'Audio output device picker: clearer ALSA labels, duplicate disambiguation, system-default mark, live refresh (PR #173)',
+      'Folder Browser: arrow navigation blocked when modifier keys are held (PR #174)',
     ],
   },
   {
@@ -130,6 +135,7 @@ const CONTRIBUTORS = [
     contributions: [
       'Spanish (es) translation — 964 strings (PR #159)',
       'Column-header sorting for albums & playlists (PR #160)',
+      'Multi-select for albums, artists & playlists with bulk "Add to Playlist"; collapsible sidebar playlist section; infinite scroll on Artists page; "Remove from Playlist" in context menu (PR #168)',
     ],
   },
   {
@@ -2154,9 +2160,6 @@ export default function Settings() {
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, margin: '1rem 0 0.5rem' }}>
                 {t('settings.aboutDesc')}
               </p>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6, margin: '0.5rem 0' }}>
-                {t('settings.aboutFeatures')}
-              </p>
 
               <div className="divider" style={{ margin: '1rem 0' }} />
 
@@ -2718,7 +2721,7 @@ function ChangelogSection() {
         </label>
       </div>
       <div className="changelog-list">
-        {versions.map(({ version, date, body }) => (
+        {versions.slice(0, 3).map(({ version, date, body }) => (
           <details key={version} className="changelog-entry" open={version === appVersion}>
             <summary className="changelog-summary">
               <span className="changelog-version">v{version}</span>
