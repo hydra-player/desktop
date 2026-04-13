@@ -348,6 +348,7 @@ export const ruTranslation = {
     offlineTitle: 'Нет связи с сервером',
     offlineSubtitle: 'Сервер {{server}} недоступен. Проверьте сеть и адрес.',
     offlineModeBanner: 'Офлайн — воспроизведение из локального кэша',
+    offlineNoCacheBanner: 'Нет соединения с сервером — {{server}} недоступен',
     offlineLibraryTitle: 'Офлайн-библиотека',
     offlineLibraryEmpty:
       'Пока ничего не сохранено. Подключитесь к сети, откройте альбом и нажмите «Сохранить офлайн».',
@@ -360,6 +361,7 @@ export const ruTranslation = {
     offlineFilterPlaylists: 'Плейлисты',
     offlineFilterArtists: 'Дискографии',
     retry: 'Повторить',
+    serverSettings: 'Настройки сервера',
     lastfmConnected: 'Last.fm: @{{user}}',
     lastfmSessionInvalid: 'Сессия недействительна — подключите снова',
   },

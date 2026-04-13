@@ -45,7 +45,6 @@ import { DragDropProvider } from './contexts/DragDropContext';
 import TooltipPortal from './components/TooltipPortal';
 import ConnectionIndicator from './components/ConnectionIndicator';
 import LastfmIndicator from './components/LastfmIndicator';
-import OfflineOverlay from './components/OfflineOverlay';
 import OfflineBanner from './components/OfflineBanner';
 import OfflineLibrary from './pages/OfflineLibrary';
 import Genres from './pages/Genres';
@@ -341,17 +340,10 @@ function AppShell() {
             {isQueueVisible ? <PanelRightClose size={18} /> : <PanelRight size={18} />}
           </button>
         </header>
-        {connStatus === 'disconnected' && hasOfflineContent && (
-          <OfflineBanner onRetry={connRetry} isChecking={connRetrying} />
+        {connStatus === 'disconnected' && (
+          <OfflineBanner onRetry={connRetry} isChecking={connRetrying} showSettingsLink={!hasOfflineContent} serverName={serverName} />
         )}
         <div className="content-body" style={{ padding: 0, position: 'relative' }}>
-          {connStatus === 'disconnected' && !hasOfflineContent && (
-            <OfflineOverlay
-              serverName={serverName}
-              onRetry={connRetry}
-              isChecking={connRetrying}
-            />
-          )}
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/albums" element={<Albums />} />
