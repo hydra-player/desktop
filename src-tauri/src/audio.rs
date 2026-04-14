@@ -1473,7 +1473,7 @@ pub struct AudioEngine {
     pub eq_gains: Arc<[AtomicU32; 10]>,
     pub eq_enabled: Arc<AtomicBool>,
     pub eq_pre_gain: Arc<AtomicU32>,
-    pub preloaded: Arc<Mutex<Option<PreloadedTrack>>>,
+    pub(crate) preloaded: Arc<Mutex<Option<PreloadedTrack>>>,
     pub crossfade_enabled: Arc<AtomicBool>,
     pub crossfade_secs: Arc<AtomicU32>,
     pub fading_out_sink: Arc<Mutex<Option<Sink>>>,
@@ -1482,7 +1482,7 @@ pub struct AudioEngine {
     pub gapless_enabled: Arc<AtomicBool>,
     /// Info about the next-up chained track (gapless mode).
     /// The progress task reads this when `current_source_done` fires.
-    pub chained_info: Arc<Mutex<Option<ChainedInfo>>>,
+    pub(crate) chained_info: Arc<Mutex<Option<ChainedInfo>>>,
     /// Atomic sample counter — incremented by CountingSource in the audio thread.
     /// Progress task reads this for drift-free position tracking.
     pub samples_played: Arc<AtomicU64>,
@@ -1495,7 +1495,7 @@ pub struct AudioEngine {
     pub gapless_switch_at: Arc<AtomicU64>,
     /// Active radio session state.  None for regular (non-radio) tracks.
     /// Dropping the value aborts the HTTP download task via RadioLiveState::Drop.
-    pub radio_state: Mutex<Option<RadioLiveState>>,
+    pub(crate) radio_state: Mutex<Option<RadioLiveState>>,
 }
 
 pub struct AudioCurrent {

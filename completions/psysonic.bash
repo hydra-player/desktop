@@ -3,6 +3,14 @@
 # Optional: jq + prior `psysonic --player audio-device list` for device name completion.
 #
 # Uses no `mapfile` so bash 3.2 (macOS default) works.
+#
+# compopt is bash-only (programmable completion). Guard so sourcing this file
+# under zsh or plain sh does not print "command not found: compopt".
+
+_psysonic_compopt() {
+  command -v compopt &>/dev/null || return 0
+  compopt "$@" 2>/dev/null || return 0
+}
 
 _psysonic_compreply_from_compgen() {
   # $1 = compgen -W word list, $2 = current word
@@ -33,6 +41,16 @@ _psysonic_library_json() {
   [[ -r $f ]] && printf '%s' "$f"
 }
 
+_psysonic_snapshot_json() {
+  local f
+  if [[ -n ${XDG_RUNTIME_DIR:-} ]]; then
+    f="$XDG_RUNTIME_DIR/psysonic-cli-snapshot.json"
+    [[ -r $f ]] && { printf '%s' "$f"; return; }
+  fi
+  f="${TMPDIR:-/tmp}/psysonic-cli-snapshot.json"
+  [[ -r $f ]] && printf '%s' "$f"
+}
+
 _psysonic_complete() {
   local cur
   cur="${COMP_WORDS[COMP_CWORD]}"
@@ -58,7 +76,7 @@ _psysonic_complete() {
   local n=${#sub[@]}
 
   if (( n == 0 )); then
-    _psysonic_compreply_from_compgen 'next prev play pause seek volume audio-device library mix' "$cur"
+    _psysonic_compreply_from_compgen 'next prev play pause stop seek volume shuffle repeat mute unmute star unstar rating reload audio-device library server search mix' "$cur"
     return
   fi
 
@@ -78,7 +96,7 @@ _psysonic_complete() {
         while IFS= read -r line; do
           [[ -n $line ]] && COMPREPLY+=("$line")
         done < <(compgen -W 'default' -- "$cur")
-        ((${#COMPREPLY[@]})) && compopt -o filenames 2>/dev/null
+        ((${#COMPREPLY[@]})) && _psysonic_compopt -o filenames
       fi
       ;;
     library)
@@ -96,14 +114,52 @@ _psysonic_complete() {
         while IFS= read -r line; do
           [[ -n $line ]] && COMPREPLY+=("$line")
         done < <(compgen -W 'all' -- "$cur")
-        ((${#COMPREPLY[@]})) && compopt -o filenames 2>/dev/null
+        ((${#COMPREPLY[@]})) && _psysonic_compopt -o filenames
       fi
       ;;
     mix)
       (( n == 1 )) && _psysonic_compreply_from_compgen 'append new' "$cur"
       ;;
+    server)
+      if (( n == 1 )); then
+        _psysonic_compreply_from_compgen 'list set' "$cur"
+      elif [[ ${sub[1]} == set ]] && (( n == 2 )); then
+        COMPREPLY=()
+        local jf sid
+        jf="$(_psysonic_snapshot_json)"
+        if [[ -n $jf ]] && command -v jq &>/dev/null; then
+          while IFS= read -r sid; do
+            [[ -n $sid && $sid == "$cur"* ]] && COMPREPLY+=("$sid")
+          done < <(jq -r '.servers[]? | select(.id != null) | .id | tostring' "$jf" 2>/dev/null)
+        fi
+        ((${#COMPREPLY[@]})) && _psysonic_compopt -o filenames
+      fi
+      ;;
+    search)
+      if (( n == 1 )); then
+        _psysonic_compreply_from_compgen 'track album artist' "$cur"
+      elif (( n >= 2 )); then
+        _psysonic_compopt -o default
+        COMPREPLY=()
+      fi
+      ;;
+    repeat)
+      (( n == 1 )) && _psysonic_compreply_from_compgen 'off all one' "$cur"
+      ;;
+    rating)
+      (( n == 1 )) && _psysonic_compreply_from_compgen '0 1 2 3 4 5' "$cur"
+      ;;
     seek|volume)
-      (( n == 1 )) && compopt -o default && COMPREPLY=()
+      if (( n == 1 )); then
+        _psysonic_compopt -o default
+        COMPREPLY=()
+      fi
+      ;;
+    play)
+      if (( n == 1 )); then
+        _psysonic_compopt -o default
+        COMPREPLY=()
+      fi
       ;;
   esac
 }

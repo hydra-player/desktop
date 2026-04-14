@@ -12,13 +12,37 @@ use serde_json::Value;
 use tauri::{AppHandle, Emitter, Runtime};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RepeatCliMode {
+    Off,
+    All,
+    One,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SearchCliScope {
+    Track,
+    Album,
+    Artist,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PlayerCliCmd {
     Next,
     Prev,
     Play,
+    PlayOpaqueId(String),
     Pause,
+    Stop,
     Seek { delta_secs: i32 },
     Volume { percent: u8 },
+    ShuffleQueue,
+    Repeat(RepeatCliMode),
+    Mute,
+    Unmute,
+    StarCurrent,
+    UnstarCurrent,
+    Rating { stars: u8 },
+    ReloadPlayer,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,6 +61,12 @@ pub enum CliCommand {
     /// `"all"` or a music-folder id from `library list`.
     LibrarySet(String),
     Mix(MixCliMode),
+    ServerList,
+    ServerSet(String),
+    Search {
+        scope: SearchCliScope,
+        query: String,
+    },
 }
 
 pub fn wants_version(args: &[String]) -> bool {
@@ -63,7 +93,7 @@ pub fn wants_quiet(args: &[String]) -> bool {
         .any(|a| a == "--quiet" || a == "-q")
 }
 
-/// Machine-readable output for `--json` with `audio-device list` or `library list`.
+/// Machine-readable output for `--json` with list/search commands (`audio-device`, `library`, `server`, `search`).
 pub fn wants_cli_json_output(args: &[String]) -> bool {
     args.iter().skip(1).any(|a| a == "--json")
 }
@@ -98,6 +128,24 @@ pub fn cli_library_response_path() -> PathBuf {
         }
     }
     std::env::temp_dir().join("psysonic-cli-library.json")
+}
+
+pub fn cli_server_list_path() -> PathBuf {
+    if let Ok(dir) = std::env::var("XDG_RUNTIME_DIR") {
+        if !dir.is_empty() {
+            return PathBuf::from(dir).join("psysonic-cli-servers.json");
+        }
+    }
+    std::env::temp_dir().join("psysonic-cli-servers.json")
+}
+
+pub fn cli_search_response_path() -> PathBuf {
+    if let Ok(dir) = std::env::var("XDG_RUNTIME_DIR") {
+        if !dir.is_empty() {
+            return PathBuf::from(dir).join("psysonic-cli-search.json");
+        }
+    }
+    std::env::temp_dir().join("psysonic-cli-search.json")
 }
 
 /// `psysonic completions …` — returns exit code when this argv should not start the GUI.
@@ -186,18 +234,32 @@ pub fn print_help(program: &str) {
     eprintln!("  Windows / macOS: handled via single-instance (a helper process may run briefly).\n");
     eprintln!("  Global flags (place before --player when needed):");
     eprintln!("    --quiet | -q     Suppress \"OK: …\" lines (stderr errors are always shown).");
-    eprintln!("    --json           With `audio-device list` or `library list`: JSON on stdout.");
+    eprintln!("    --json           With `audio-device list`, `library list`, `server list`, or `search`: JSON on stdout.");
     eprintln!("    Use  {program} -q --player seek -5  so the seek delta is not parsed as a flag.\n");
     eprintln!("  Playback");
-    eprintln!("    {program} [--quiet|-q] --player next | prev | play | pause");
+    eprintln!("    {program} [--quiet|-q] --player next | prev | play | pause | stop");
+    eprintln!("    {program} [--quiet|-q] --player play <id>   Track, album, or artist id (artist → shuffled library).");
     eprintln!("    {program} [--quiet|-q] --player seek <seconds>      Integer delta, e.g. 15 or -10");
-    eprintln!("    {program} [--quiet|-q] --player volume <0-100>     Absolute volume percent.\n");
+    eprintln!("    {program} [--quiet|-q] --player volume <0-100>     Absolute volume percent.");
+    eprintln!("    {program} [--quiet|-q] --player shuffle         Shuffle the current queue.");
+    eprintln!("    {program} [--quiet|-q] --player repeat off|all|one");
+    eprintln!("    {program} [--quiet|-q] --player mute | unmute");
+    eprintln!("    {program} [--quiet|-q] --player star | unstar     Current track (Subsonic star).");
+    eprintln!("    {program} [--quiet|-q] --player rating <0-5>     Set song rating (0 clears).");
+    eprintln!("    {program} [--quiet|-q] --player reload          Restart audio for the current track or reload server queue.\n");
     eprintln!("  Audio output");
     eprintln!("    {program} [--json] --player audio-device list");
     eprintln!("    {program} --player audio-device set <device-id|default>\n");
     eprintln!("  Music library (Subsonic music folders for the active server)");
     eprintln!("    {program} [--json] --player library list");
     eprintln!("    {program} --player library set all | <folder-id>\n");
+    eprintln!("  Servers (saved profiles — same as the in-app server switcher)");
+    eprintln!("    {program} [--json] --player server list");
+    eprintln!("    {program} --player server set <server-id>\n");
+    eprintln!("  Search (active server; respects library folder filter)");
+    eprintln!("    {program} [--json] --player search track <query…>");
+    eprintln!("    {program} [--json] --player search album <query…>");
+    eprintln!("    {program} [--json] --player search artist <query…>\n");
     eprintln!("  Instant mix (from the track that is currently loaded)");
     eprintln!("    {program} --player mix append");
     eprintln!("    {program} --player mix new\n");
@@ -273,6 +335,186 @@ pub fn write_library_cli_response(payload: &Value) -> Result<(), String> {
     std::fs::write(&tmp, &data).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+pub fn write_server_list_cli_response(payload: &Value) -> Result<(), String> {
+    let path = cli_server_list_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let data = serde_json::to_string_pretty(payload).map_err(|e| e.to_string())?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, &data).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn write_search_cli_response(payload: &Value) -> Result<(), String> {
+    let path = cli_search_response_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let data = serde_json::to_string_pretty(payload).map_err(|e| e.to_string())?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, &data).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Wait for `psysonic-cli-servers.json` after `cli:server-list`.
+fn read_server_list_cli_response_blocking(max_wait: Duration) -> String {
+    let path = cli_server_list_path();
+    let deadline = Instant::now() + max_wait;
+    loop {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            let trimmed = text.trim();
+            if let Ok(v) = serde_json::from_str::<Value>(trimmed) {
+                if v.get("servers").and_then(|x| x.as_array()).is_some() {
+                    return text;
+                }
+            }
+        }
+        if Instant::now() >= deadline {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(40));
+    }
+    std::fs::read_to_string(&path).unwrap_or_else(|_| "{}".into())
+}
+
+pub fn print_server_list_cli_stdout(text: &str, json_out: bool) {
+    if json_out {
+        println!("{}", text.trim());
+        return;
+    }
+    if let Ok(v) = serde_json::from_str::<Value>(text) {
+        print_server_list_human(&v);
+    } else {
+        println!("{}", text.trim());
+    }
+}
+
+fn print_server_list_human(v: &Value) {
+    if let Some(sid) = v.get("active_server_id").and_then(|x| x.as_str()) {
+        println!("active_server_id: {sid}");
+    } else {
+        println!("active_server_id: (none)");
+    }
+    println!("servers:");
+    if let Some(Value::Array(rows)) = v.get("servers") {
+        if rows.is_empty() {
+            println!("  (none)");
+            return;
+        }
+        for row in rows {
+            let id = row.get("id").and_then(|x| x.as_str()).unwrap_or("?");
+            let name = row.get("name").and_then(|x| x.as_str()).unwrap_or("?");
+            println!("  - {id}\t{name}");
+        }
+    } else {
+        println!("  (invalid JSON: missing servers array)");
+    }
+}
+
+/// Wait for `psysonic-cli-search.json` after `cli:search`.
+fn read_search_cli_response_blocking(max_wait: Duration) -> String {
+    let path = cli_search_response_path();
+    let deadline = Instant::now() + max_wait;
+    loop {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            let trimmed = text.trim();
+            if let Ok(v) = serde_json::from_str::<Value>(trimmed) {
+                let ready = v.get("ready").and_then(|x| x.as_bool()) == Some(true);
+                let has_err = v.get("error").and_then(|x| x.as_str()).is_some_and(|s| !s.is_empty());
+                if ready || has_err {
+                    return text;
+                }
+            }
+        }
+        if Instant::now() >= deadline {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(40));
+    }
+    std::fs::read_to_string(&path).unwrap_or_else(|_| "{}".into())
+}
+
+pub fn print_search_cli_stdout(text: &str, json_out: bool) {
+    if json_out {
+        println!("{}", text.trim());
+        return;
+    }
+    if let Ok(v) = serde_json::from_str::<Value>(text) {
+        print_search_human(&v);
+    } else {
+        println!("{}", text.trim());
+    }
+}
+
+fn print_search_human(v: &Value) {
+    if let Some(err) = v.get("error").and_then(|x| x.as_str()) {
+        if !err.is_empty() {
+            println!("error: {err}");
+            return;
+        }
+    }
+    let scope = v.get("scope").and_then(|x| x.as_str()).unwrap_or("?");
+    let query = v.get("query").and_then(|x| x.as_str()).unwrap_or("");
+    println!("scope: {scope}");
+    println!("query: {query}");
+    match scope {
+        "track" => {
+            println!("songs:");
+            if let Some(Value::Array(rows)) = v.get("songs") {
+                if rows.is_empty() {
+                    println!("  (none)");
+                    return;
+                }
+                for row in rows {
+                    let id = row.get("id").and_then(|x| x.as_str()).unwrap_or("?");
+                    let title = row.get("title").and_then(|x| x.as_str()).unwrap_or("?");
+                    let artist = row.get("artist").and_then(|x| x.as_str()).unwrap_or("?");
+                    println!("  - {id}\t{artist} — {title}");
+                }
+            } else {
+                println!("  (missing songs array)");
+            }
+        }
+        "album" => {
+            println!("albums:");
+            if let Some(Value::Array(rows)) = v.get("albums") {
+                if rows.is_empty() {
+                    println!("  (none)");
+                    return;
+                }
+                for row in rows {
+                    let id = row.get("id").and_then(|x| x.as_str()).unwrap_or("?");
+                    let name = row.get("name").and_then(|x| x.as_str()).unwrap_or("?");
+                    let artist = row.get("artist").and_then(|x| x.as_str()).unwrap_or("?");
+                    println!("  - {id}\t{artist} — {name}");
+                }
+            } else {
+                println!("  (missing albums array)");
+            }
+        }
+        "artist" => {
+            println!("artists:");
+            if let Some(Value::Array(rows)) = v.get("artists") {
+                if rows.is_empty() {
+                    println!("  (none)");
+                    return;
+                }
+                for row in rows {
+                    let id = row.get("id").and_then(|x| x.as_str()).unwrap_or("?");
+                    let name = row.get("name").and_then(|x| x.as_str()).unwrap_or("?");
+                    println!("  - {id}\t{name}");
+                }
+            } else {
+                println!("  (missing artists array)");
+            }
+        }
+        _ => println!("(unknown scope)"),
+    }
 }
 
 fn tauri_identifier() -> &'static str {
@@ -439,9 +681,25 @@ fn print_info_human(v: &Value) {
         "volume",
         "queue_index",
         "queue_length",
+        "repeat_mode",
+        "current_track_user_rating",
+        "current_track_starred",
     ] {
         if let Some(val) = o.get(key) {
             println!("  {key}: {}", value_inline(val));
+        }
+    }
+
+    println!("=== servers (saved) ===");
+    match o.get("servers").and_then(|x| x.as_array()) {
+        None => println!("(none)"),
+        Some(rows) if rows.is_empty() => println!("(none)"),
+        Some(rows) => {
+            for row in rows {
+                let id = row.get("id").and_then(|x| x.as_str()).unwrap_or("?");
+                let name = row.get("name").and_then(|x| x.as_str()).unwrap_or("?");
+                println!("  - {id}\t{name}");
+            }
         }
     }
 
@@ -481,13 +739,50 @@ fn value_inline(v: &Value) -> String {
     }
 }
 
+fn parse_repeat_mode(arg: &str) -> Option<RepeatCliMode> {
+    match arg {
+        "off" => Some(RepeatCliMode::Off),
+        "all" => Some(RepeatCliMode::All),
+        "one" => Some(RepeatCliMode::One),
+        _ => None,
+    }
+}
+
 fn parse_player_cli_at(args: &[String], pos: usize) -> Option<PlayerCliCmd> {
     let verb = args.get(pos + 1)?.as_str();
     match verb {
         "next" => Some(PlayerCliCmd::Next),
         "prev" => Some(PlayerCliCmd::Prev),
-        "play" => Some(PlayerCliCmd::Play),
+        "play" => match args.get(pos + 2).map(|s| s.as_str()) {
+            None => Some(PlayerCliCmd::Play),
+            Some(flag) if flag.starts_with('-') => None,
+            Some(extra) => {
+                if extra.is_empty() {
+                    return None;
+                }
+                Some(PlayerCliCmd::PlayOpaqueId(extra.to_string()))
+            }
+        },
         "pause" => Some(PlayerCliCmd::Pause),
+        "stop" => Some(PlayerCliCmd::Stop),
+        "shuffle" => Some(PlayerCliCmd::ShuffleQueue),
+        "repeat" => {
+            let m = parse_repeat_mode(args.get(pos + 2)?.as_str())?;
+            Some(PlayerCliCmd::Repeat(m))
+        }
+        "mute" => Some(PlayerCliCmd::Mute),
+        "unmute" => Some(PlayerCliCmd::Unmute),
+        "star" => Some(PlayerCliCmd::StarCurrent),
+        "unstar" => Some(PlayerCliCmd::UnstarCurrent),
+        "rating" => {
+            let raw = args.get(pos + 2)?;
+            let n: u8 = raw.parse().ok()?;
+            if n > 5 {
+                return None;
+            }
+            Some(PlayerCliCmd::Rating { stars: n })
+        }
+        "reload" => Some(PlayerCliCmd::ReloadPlayer),
         "seek" => {
             let raw = args.get(pos + 2)?;
             let delta_secs: i32 = raw.parse().ok()?;
@@ -546,6 +841,35 @@ pub fn parse_cli_command(args: &[String]) -> Option<CliCommand> {
                 }
                 _ => None,
             }
+        }
+        "server" => {
+            let sub = args.get(pos + 2)?.as_str();
+            match sub {
+                "list" => Some(CliCommand::ServerList),
+                "set" => {
+                    let id = args.get(pos + 3)?;
+                    if id.is_empty() {
+                        return None;
+                    }
+                    Some(CliCommand::ServerSet(id.clone()))
+                }
+                _ => None,
+            }
+        }
+        "search" => {
+            let scope_raw = args.get(pos + 2)?.as_str();
+            let scope = match scope_raw {
+                "track" => SearchCliScope::Track,
+                "album" => SearchCliScope::Album,
+                "artist" => SearchCliScope::Artist,
+                _ => return None,
+            };
+            let tail = args.get(pos + 3..)?;
+            let query = tail.join(" ").trim().to_string();
+            if query.is_empty() {
+                return None;
+            }
+            Some(CliCommand::Search { scope, query })
         }
         _ => parse_player_cli_at(args, pos).map(CliCommand::Player),
     }
@@ -630,6 +954,26 @@ pub fn handle_cli_on_primary_instance<R: Runtime>(app: &AppHandle<R>, argv: &[St
             let _ = app.emit("cli:library-set", folder.clone());
             true
         }
+        Some(CliCommand::ServerList) => {
+            let _ = app.emit("cli:server-list", ());
+            true
+        }
+        Some(CliCommand::ServerSet(id)) => {
+            let _ = app.emit("cli:server-set", id.clone());
+            true
+        }
+        Some(CliCommand::Search { scope, query }) => {
+            let scope_s = match scope {
+                SearchCliScope::Track => "track",
+                SearchCliScope::Album => "album",
+                SearchCliScope::Artist => "artist",
+            };
+            let _ = app.emit(
+                "cli:search",
+                serde_json::json!({ "scope": scope_s, "query": query }),
+            );
+            true
+        }
         None => false,
     }
 }
@@ -678,12 +1022,36 @@ pub fn spawn_deferred_cli_argv_handler<R: Runtime>(app: &AppHandle<R>) {
                 let _ = handle.emit("cli:instant-mix", s);
             }
             CliCommand::LibraryList => {
+                let _ = std::fs::remove_file(cli_library_response_path());
                 let _ = handle.emit("cli:library-list", ());
                 let text = read_library_cli_response_blocking(Duration::from_secs(3));
                 print_library_cli_stdout(&text, json_out);
             }
             CliCommand::LibrarySet(folder) => {
                 let _ = handle.emit("cli:library-set", folder.clone());
+            }
+            CliCommand::ServerList => {
+                let _ = std::fs::remove_file(cli_server_list_path());
+                let _ = handle.emit("cli:server-list", ());
+                let text = read_server_list_cli_response_blocking(Duration::from_secs(3));
+                print_server_list_cli_stdout(&text, json_out);
+            }
+            CliCommand::ServerSet(id) => {
+                let _ = handle.emit("cli:server-set", id.clone());
+            }
+            CliCommand::Search { scope, query } => {
+                let _ = std::fs::remove_file(cli_search_response_path());
+                let scope_s = match scope {
+                    SearchCliScope::Track => "track",
+                    SearchCliScope::Album => "album",
+                    SearchCliScope::Artist => "artist",
+                };
+                let _ = handle.emit(
+                    "cli:search",
+                    serde_json::json!({ "scope": scope_s, "query": query }),
+                );
+                let text = read_search_cli_response_blocking(Duration::from_secs(12));
+                print_search_cli_stdout(&text, json_out);
             }
         }
         if !quiet {
@@ -694,7 +1062,7 @@ pub fn spawn_deferred_cli_argv_handler<R: Runtime>(app: &AppHandle<R>) {
 
 pub fn describe_cli_command(cmd: &CliCommand) -> String {
     match cmd {
-        CliCommand::Player(c) => describe_player_cli_cmd(*c),
+        CliCommand::Player(c) => describe_player_cli_cmd(c),
         CliCommand::AudioDeviceList => "audio-device list".into(),
         CliCommand::AudioDeviceSet(None) => "audio-device set default".into(),
         CliCommand::AudioDeviceSet(Some(s)) => format!("audio-device set {s}"),
@@ -703,17 +1071,41 @@ pub fn describe_cli_command(cmd: &CliCommand) -> String {
         CliCommand::LibraryList => "library list".into(),
         CliCommand::LibrarySet(s) if s == "all" => "library set all".into(),
         CliCommand::LibrarySet(s) => format!("library set {s}"),
+        CliCommand::ServerList => "server list".into(),
+        CliCommand::ServerSet(s) => format!("server set {s}"),
+        CliCommand::Search { scope, query } => {
+            let sc = match scope {
+                SearchCliScope::Track => "track",
+                SearchCliScope::Album => "album",
+                SearchCliScope::Artist => "artist",
+            };
+            format!("search {sc} {query}")
+        }
     }
 }
 
-pub fn describe_player_cli_cmd(cmd: PlayerCliCmd) -> String {
+pub fn describe_player_cli_cmd(cmd: &PlayerCliCmd) -> String {
     match cmd {
         PlayerCliCmd::Next => "next track".into(),
         PlayerCliCmd::Prev => "previous track".into(),
         PlayerCliCmd::Play => "play".into(),
+        PlayerCliCmd::PlayOpaqueId(id) => format!("play {id}"),
         PlayerCliCmd::Pause => "pause".into(),
+        PlayerCliCmd::Stop => "stop".into(),
         PlayerCliCmd::Seek { delta_secs } => format!("seek {delta_secs:+} s"),
         PlayerCliCmd::Volume { percent } => format!("volume {percent}%"),
+        PlayerCliCmd::ShuffleQueue => "shuffle".into(),
+        PlayerCliCmd::Repeat(m) => match m {
+            RepeatCliMode::Off => "repeat off".into(),
+            RepeatCliMode::All => "repeat all".into(),
+            RepeatCliMode::One => "repeat one".into(),
+        },
+        PlayerCliCmd::Mute => "mute".into(),
+        PlayerCliCmd::Unmute => "unmute".into(),
+        PlayerCliCmd::StarCurrent => "star".into(),
+        PlayerCliCmd::UnstarCurrent => "unstar".into(),
+        PlayerCliCmd::Rating { stars } => format!("rating {stars}"),
+        PlayerCliCmd::ReloadPlayer => "reload".into(),
     }
 }
 
@@ -728,14 +1120,49 @@ pub fn emit_player_cli_cmd<R: Runtime>(app: &AppHandle<R>, cmd: PlayerCliCmd) {
         PlayerCliCmd::Play => {
             let _ = app.emit("media:play", ());
         }
+        PlayerCliCmd::PlayOpaqueId(id) => {
+            let _ = app.emit("cli:play-id", id);
+        }
         PlayerCliCmd::Pause => {
             let _ = app.emit("media:pause", ());
+        }
+        PlayerCliCmd::Stop => {
+            let _ = app.emit("media:stop", ());
         }
         PlayerCliCmd::Seek { delta_secs } => {
             let _ = app.emit("media:seek-relative", delta_secs);
         }
         PlayerCliCmd::Volume { percent } => {
             let _ = app.emit("media:set-volume", percent);
+        }
+        PlayerCliCmd::ShuffleQueue => {
+            let _ = app.emit("cli:shuffle-queue", ());
+        }
+        PlayerCliCmd::Repeat(mode) => {
+            let s = match mode {
+                RepeatCliMode::Off => "off",
+                RepeatCliMode::All => "all",
+                RepeatCliMode::One => "one",
+            };
+            let _ = app.emit("cli:set-repeat", s);
+        }
+        PlayerCliCmd::Mute => {
+            let _ = app.emit("cli:mute", ());
+        }
+        PlayerCliCmd::Unmute => {
+            let _ = app.emit("cli:unmute", ());
+        }
+        PlayerCliCmd::StarCurrent => {
+            let _ = app.emit("cli:star-current", true);
+        }
+        PlayerCliCmd::UnstarCurrent => {
+            let _ = app.emit("cli:star-current", false);
+        }
+        PlayerCliCmd::Rating { stars } => {
+            let _ = app.emit("cli:set-rating-current", stars);
+        }
+        PlayerCliCmd::ReloadPlayer => {
+            let _ = app.emit("cli:reload-player", ());
         }
     }
 }
@@ -771,6 +1198,12 @@ pub fn linux_try_forward_player_cli_secondary(args: &[String]) -> Result<LinuxPl
         Some(CliCommand::LibraryList) => {
             let _ = std::fs::remove_file(cli_library_response_path());
         }
+        Some(CliCommand::ServerList) => {
+            let _ = std::fs::remove_file(cli_server_list_path());
+        }
+        Some(CliCommand::Search { .. }) => {
+            let _ = std::fs::remove_file(cli_search_response_path());
+        }
         _ => {}
     }
 
@@ -802,6 +1235,22 @@ pub fn linux_try_forward_player_cli_secondary(args: &[String]) -> Result<LinuxPl
         print_library_cli_stdout(&text, json_out);
         if !wants_quiet(args) {
             println!("OK: library list");
+        }
+    } else if let Some(CliCommand::ServerList) = parse_cli_command(args) {
+        let json_out = wants_cli_json_output(args);
+        let text = read_server_list_cli_response_blocking(Duration::from_secs(3));
+        print_server_list_cli_stdout(&text, json_out);
+        if !wants_quiet(args) {
+            println!("OK: server list");
+        }
+    } else if let Some(CliCommand::Search { .. }) = parse_cli_command(args) {
+        let json_out = wants_cli_json_output(args);
+        let text = read_search_cli_response_blocking(Duration::from_secs(12));
+        print_search_cli_stdout(&text, json_out);
+        if !wants_quiet(args) {
+            if let Some(cmd) = parse_cli_command(args) {
+                println!("OK: {}", describe_cli_command(&cmd));
+            }
         }
     } else if !wants_quiet(args) {
         if let Some(cmd) = parse_cli_command(args) {

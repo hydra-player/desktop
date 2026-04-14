@@ -58,6 +58,18 @@ fn cli_publish_library_list(payload: serde_json::Value) -> Result<(), String> {
     crate::cli::write_library_cli_response(&payload)
 }
 
+/// Writes `psysonic-cli-servers.json` for `psysonic --player server list`.
+#[tauri::command]
+fn cli_publish_server_list(payload: serde_json::Value) -> Result<(), String> {
+    crate::cli::write_server_list_cli_response(&payload)
+}
+
+/// Writes `psysonic-cli-search.json` for `psysonic --player search …`.
+#[tauri::command]
+fn cli_publish_search_results(payload: serde_json::Value) -> Result<(), String> {
+    crate::cli::write_search_cli_response(&payload)
+}
+
 /// Toggle native window decorations at runtime (Linux custom title bar opt-out).
 #[tauri::command]
 fn set_window_decorations(enabled: bool, app_handle: tauri::AppHandle) {
@@ -2109,6 +2121,30 @@ fn build_tray_icon(app: &tauri::AppHandle) -> tauri::Result<TrayIcon> {
         .build(app)
 }
 
+/// Creates the tray icon, or `None` if the OS cannot host one.
+///
+/// On Linux, `libayatana-appindicator3` / `libappindicator3` may be absent (minimal
+/// installs, wrong `LD_LIBRARY_PATH`). The `tray-icon` stack can **panic** on `dlopen`
+/// failure instead of returning `Err`, so we catch unwind and keep the app running
+/// (e.g. cold start with `--player` still works without tray libraries).
+fn try_build_tray_icon(app: &tauri::AppHandle) -> Option<TrayIcon> {
+    let app = app.clone();
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| build_tray_icon(&app))) {
+        Ok(Ok(tray)) => Some(tray),
+        Ok(Err(e)) => {
+            eprintln!("[Psysonic] System tray unavailable: {e}");
+            None
+        }
+        Err(_) => {
+            eprintln!(
+                "[Psysonic] System tray unavailable — missing libayatana-appindicator3 or libappindicator3 \
+                 (install the distro package or set LD_LIBRARY_PATH)"
+            );
+            None
+        }
+    }
+}
+
 /// Show (`true`) or fully remove (`false`) the system-tray icon.
 ///
 /// The command is strictly idempotent:
@@ -2132,7 +2168,12 @@ fn toggle_tray_icon(
         if guard.is_some() {
             return Ok(());
         }
-        *guard = Some(build_tray_icon(&app).map_err(|e| e.to_string())?);
+        let Some(tray) = try_build_tray_icon(&app) else {
+            return Err(
+                "Tray icon could not be created (missing system libraries on Linux).".into(),
+            );
+        };
+        *guard = Some(tray);
     } else if let Some(tray) = guard.take() {
         // Hide synchronously before dropping so the OS processes the removal
         // before any subsequent show=true call can create a new icon.
@@ -2267,11 +2308,13 @@ pub fn run() {
             }
 
             // ── System tray ───────────────────────────────────────────────
-            // Always build on startup; the frontend calls toggle_tray_icon(false)
+            // Always build on startup when possible; the frontend calls toggle_tray_icon(false)
             // immediately after load if the user has disabled the tray icon.
+            // May be skipped if Ayatana/AppIndicator libraries are missing (no panic).
             {
-                let tray = build_tray_icon(app.handle())?;
-                *app.state::<TrayState>().lock().unwrap() = Some(tray);
+                if let Some(tray) = try_build_tray_icon(app.handle()) {
+                    *app.state::<TrayState>().lock().unwrap() = Some(tray);
+                }
             }
 
             // ── MPRIS2 / OS media controls via souvlaki ──────────────────
@@ -2415,6 +2458,8 @@ pub fn run() {
             exit_app,
             cli_publish_player_snapshot,
             cli_publish_library_list,
+            cli_publish_server_list,
+            cli_publish_search_results,
             set_window_decorations,
             no_compositing_mode,
             is_tiling_wm_cmd,
