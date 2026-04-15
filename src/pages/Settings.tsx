@@ -31,7 +31,7 @@ import { useGlobalShortcutsStore, GlobalAction, buildGlobalShortcut, formatGloba
 import { useSidebarStore, DEFAULT_SIDEBAR_ITEMS, SidebarItemConfig } from '../store/sidebarStore';
 import { useHomeStore, HomeSectionId } from '../store/homeStore';
 import { useDragDrop, useDragSource } from '../contexts/DragDropContext';
-import { ALL_NAV_ITEMS } from '../components/Sidebar';
+import { ALL_NAV_ITEMS } from '../config/navItems';
 import { pingWithCredentials, scheduleInstantMixProbeForServer } from '../api/subsonic';
 import { switchActiveServer } from '../utils/switchActiveServer';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
@@ -2577,8 +2577,15 @@ function SidebarCustomizer() {
   const dropTargetRef = useRef<DropTarget>(null);
   const itemsRef = useRef(items);
   itemsRef.current = items;
+  const randomNavMode = useAuthStore(s => s.randomNavMode);
+  const setRandomNavMode = useAuthStore(s => s.setRandomNavMode);
 
-  const libraryItems = items.filter(cfg => ALL_NAV_ITEMS[cfg.id]?.section === 'library');
+  const libraryItems = items.filter(cfg => {
+    if (!ALL_NAV_ITEMS[cfg.id] || ALL_NAV_ITEMS[cfg.id].section !== 'library') return false;
+    if (randomNavMode === 'hub' && (cfg.id === 'randomMix' || cfg.id === 'randomAlbums')) return false;
+    if (randomNavMode === 'separate' && cfg.id === 'randomPicker') return false;
+    return true;
+  });
   const systemItems  = items.filter(cfg => ALL_NAV_ITEMS[cfg.id]?.section === 'system');
 
   useEffect(() => {
@@ -2608,10 +2615,13 @@ function SidebarCustomizer() {
       const [moved] = sectionItems.splice(fromIdx, 1);
       sectionItems.splice(insertBefore > fromIdx ? insertBefore - 1 : insertBefore, 0, moved);
 
-      // Merge reordered section back into flat items array
+      // Merge reordered section back into flat items array.
+      // Only update positions of the *visible* items (same filter as libraryItems/systemItems)
+      // so hidden entries like randomMix/randomAlbums are never overwritten with undefined.
       const all = [...itemsRef.current];
+      const visibleIds = new Set(sectionItems.map(c => c.id));
       const positions = all.map((cfg, i) => ({ cfg, i }))
-        .filter(({ cfg }) => ALL_NAV_ITEMS[cfg.id]?.section === fromSection)
+        .filter(({ cfg }) => visibleIds.has(cfg.id))
         .map(({ i }) => i);
       positions.forEach((pos, i) => { all[pos] = sectionItems[i]; });
       setItems(all);
@@ -2676,6 +2686,22 @@ function SidebarCustomizer() {
         >
           <RotateCcw size={14} />
         </button>
+      </div>
+      <div className="settings-card" style={{ marginBottom: '1rem' }}>
+        <div className="settings-toggle-row">
+          <div>
+            <div style={{ fontWeight: 500 }}>{t('settings.randomNavSplitTitle')}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('settings.randomNavSplitDesc')}</div>
+          </div>
+          <label className="toggle-switch" aria-label={t('settings.randomNavSplitTitle')}>
+            <input
+              type="checkbox"
+              checked={randomNavMode === 'separate'}
+              onChange={e => setRandomNavMode(e.target.checked ? 'separate' : 'hub')}
+            />
+            <span className="toggle-track" />
+          </label>
+        </div>
       </div>
       <div ref={containerRef} onMouseMove={handleMouseMove} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {/* Library block */}

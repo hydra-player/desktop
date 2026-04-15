@@ -13,6 +13,8 @@ export const DEFAULT_SIDEBAR_ITEMS: SidebarItemConfig[] = [
   { id: 'newReleases',   visible: true },
   { id: 'allAlbums',     visible: true },
   { id: 'randomPicker',  visible: true },
+  { id: 'randomMix',     visible: true },
+  { id: 'randomAlbums',  visible: true },
   { id: 'artists',       visible: true },
   { id: 'genres',        visible: true },
   { id: 'favorites',     visible: true },
@@ -49,11 +51,11 @@ export const useSidebarStore = create<SidebarStore>()(
       name: 'psysonic_sidebar',
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        const known = new Set(state.items.map(i => i.id));
+        // Sanitize: remove any null/corrupted entries that may have been persisted
+        const safe = (state.items ?? []).filter((i): i is SidebarItemConfig => i != null && typeof i.id === 'string');
+        const known = new Set(safe.map(i => i.id));
         const missing = DEFAULT_SIDEBAR_ITEMS.filter(i => !known.has(i.id));
-        if (missing.length > 0) {
-          state.items = [...state.items, ...missing];
-        }
+        state.items = missing.length > 0 ? [...safe, ...missing] : safe;
       },
     }
   )

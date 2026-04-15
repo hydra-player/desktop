@@ -577,6 +577,8 @@ export const zhTranslation = {
     sidebarReset: '重置为默认',
     sidebarDrag: '拖动以重新排序',
     sidebarFixed: '始终显示',
+    randomNavSplitTitle: '拆分混音导航',
+    randomNavSplitDesc: '在侧边栏中将"随机混音"和"随机专辑"显示为独立条目，而非"创建混音"合并入口。',
     tabInput: '输入',
     tabServer: '服务器',
     tabSystem: '系统',

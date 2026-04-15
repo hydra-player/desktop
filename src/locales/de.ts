@@ -584,6 +584,8 @@ export const deTranslation = {
     sidebarReset: 'Zurücksetzen',
     sidebarDrag: 'Ziehen zum Umsortieren',
     sidebarFixed: 'Immer sichtbar',
+    randomNavSplitTitle: 'Mix-Navigation aufteilen',
+    randomNavSplitDesc: '"Zufallsmix" und "Zufallsalben" als separate Sidebar-Einträge statt als "Mix erstellen"-Hub anzeigen.',
     tabInput: 'Eingabe',
     tabServer: 'Server',
     shortcutsReset: 'Auf Standard zurücksetzen',

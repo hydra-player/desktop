@@ -9,33 +9,15 @@ import { useSidebarStore } from '../store/sidebarStore';
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
-  Disc3, Users, Music4, Radio, Settings, Heart, BarChart3,
-  PanelLeftClose, PanelLeft, HelpCircle, AudioLines, HardDriveDownload, Tags, ListMusic, Cast,
-  ChevronDown, Check, Music2, TrendingUp, FolderOpen, X, Wand2, ChevronRight, PlayCircle, HardDriveUpload,
+  Settings,
+  PanelLeftClose, PanelLeft, AudioLines, HardDriveDownload, HardDriveUpload,
+  ChevronDown, Check, Music2, X, ChevronRight, PlayCircle,
 } from 'lucide-react';
 import PsysonicLogo from './PsysonicLogo';
 import PSmallLogo from './PSmallLogo';
 import { getPlaylists } from '../api/subsonic';
 import { usePlaylistStore } from '../store/playlistStore';
-
-// All configurable nav items — order and visibility controlled by sidebarStore.
-// Exported so Settings can render the same item metadata.
-export const ALL_NAV_ITEMS: Record<string, { icon: React.ElementType; labelKey: string; to: string; section: 'library' | 'system' }> = {
-  mainstage:    { icon: Disc3,      labelKey: 'sidebar.mainstage',    to: '/',              section: 'library' },
-  newReleases:  { icon: Radio,      labelKey: 'sidebar.newReleases',  to: '/new-releases',  section: 'library' },
-  allAlbums:    { icon: Music4,     labelKey: 'sidebar.allAlbums',    to: '/albums',        section: 'library' },
-  randomPicker: { icon: Wand2,      labelKey: 'sidebar.randomPicker', to: '/random',        section: 'library' },
-  artists:      { icon: Users,      labelKey: 'sidebar.artists',      to: '/artists',       section: 'library' },
-  genres:       { icon: Tags,       labelKey: 'sidebar.genres',       to: '/genres',        section: 'library' },
-  favorites:    { icon: Heart,       labelKey: 'sidebar.favorites',    to: '/favorites',      section: 'library' },
-  playlists:    { icon: ListMusic,   labelKey: 'sidebar.playlists',    to: '/playlists',      section: 'library' },
-  mostPlayed:   { icon: TrendingUp,  labelKey: 'sidebar.mostPlayed',   to: '/most-played',    section: 'library' },
-  radio:        { icon: Cast,        labelKey: 'sidebar.radio',        to: '/radio',          section: 'library' },
-  folderBrowser: { icon: FolderOpen,      labelKey: 'sidebar.folderBrowser', to: '/folders',       section: 'library' },
-  deviceSync:    { icon: HardDriveUpload, labelKey: 'sidebar.deviceSync',    to: '/device-sync',   section: 'library' },
-  statistics:   { icon: BarChart3,   labelKey: 'sidebar.statistics',   to: '/statistics',     section: 'system'  },
-  help:         { icon: HelpCircle, labelKey: 'sidebar.help',         to: '/help',          section: 'system'  },
-};
+import { ALL_NAV_ITEMS } from '../config/navItems';
 
 
 export default function Sidebar({
@@ -65,6 +47,7 @@ export default function Sidebar({
   const setMusicLibraryFilter = useAuthStore(s => s.setMusicLibraryFilter);
   const hasOfflineContent = Object.values(offlineAlbums).some(a => a.serverId === serverId);
   const sidebarItems = useSidebarStore(s => s.items);
+  const randomNavMode = useAuthStore(s => s.randomNavMode);
   const [libraryDropdownOpen, setLibraryDropdownOpen] = useState(false);
   const [playlistsExpanded, setPlaylistsExpanded] = useState(false);
   const playlistsRaw = usePlaylistStore(s => s.playlists);
@@ -139,10 +122,16 @@ export default function Sidebar({
 
   // Resolve ordered, visible items per section from store config
   const visibleLibrary = sidebarItems
-    .filter(cfg => cfg.visible && ALL_NAV_ITEMS[cfg.id]?.section === 'library')
+    .filter(cfg => {
+      if (cfg == null || !cfg.visible || ALL_NAV_ITEMS[cfg.id]?.section !== 'library') return false;
+      // Hide mode-inactive mix entries so the active mode controls what's shown
+      if (randomNavMode === 'hub' && (cfg.id === 'randomMix' || cfg.id === 'randomAlbums')) return false;
+      if (randomNavMode === 'separate' && cfg.id === 'randomPicker') return false;
+      return true;
+    })
     .map(cfg => ALL_NAV_ITEMS[cfg.id]);
   const visibleSystem = sidebarItems
-    .filter(cfg => cfg.visible && ALL_NAV_ITEMS[cfg.id]?.section === 'system')
+    .filter(cfg => cfg != null && cfg.visible && ALL_NAV_ITEMS[cfg.id]?.section === 'system')
     .map(cfg => ALL_NAV_ITEMS[cfg.id]);
 
 

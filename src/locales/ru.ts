@@ -607,6 +607,8 @@ export const ruTranslation = {
     sidebarReset: 'Сбросить порядок',
     sidebarDrag: 'Перетащите для порядка',
     sidebarFixed: 'Всегда показывать',
+    randomNavSplitTitle: 'Разделить навигацию микса',
+    randomNavSplitDesc: 'Показывать «Случайный микс» и «Случайные альбомы» как отдельные пункты боковой панели вместо хаба «Собрать микс».',
     tabInput: 'Ввод',
     tabServer: 'Сервер',
     tabSystem: 'Система',

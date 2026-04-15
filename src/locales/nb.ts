@@ -581,6 +581,8 @@ export const nbTranslation = {
     sidebarReset: 'Tilbakestill til standard',
     sidebarDrag: 'Dra for å endre rekkefølge',
     sidebarFixed: 'Alltid synlig',
+    randomNavSplitTitle: 'Del Mix-navigasjon',
+    randomNavSplitDesc: 'Vis "Tilfeldig miks" og "Tilfeldige album" som separate sidefeltsoppføringer i stedet for "Lag en miks"-huben.',
     tabShortcuts: 'Snarveier',
     tabServer: 'Tjener',
     tabSystem: 'System',

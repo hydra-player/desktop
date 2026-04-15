@@ -582,6 +582,8 @@ export const frTranslation = {
     sidebarReset: 'Réinitialiser',
     sidebarDrag: 'Glisser pour réorganiser',
     sidebarFixed: 'Toujours visible',
+    randomNavSplitTitle: 'Diviser la navigation Mix',
+    randomNavSplitDesc: 'Afficher "Mix Aléatoire" et "Albums Aléatoires" comme entrées séparées dans la barre latérale plutôt que le hub "Créer un Mix".',
     tabInput: 'Entrée',
     tabServer: 'Serveur',
     shortcutsReset: 'Réinitialiser',

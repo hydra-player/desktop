@@ -212,6 +212,11 @@ interface AuthState {
   setMixMinRatingArtist: (v: number) => void;
   setMusicFolders: (folders: Array<{ id: string; name: string }>) => void;
   setMusicLibraryFilter: (folderId: 'all' | string) => void;
+
+  /** Navigation style for Mix pages: single hub ('hub') or separate sidebar entries ('separate'). */
+  randomNavMode: 'hub' | 'separate';
+  setRandomNavMode: (v: 'hub' | 'separate') => void;
+
   logout: () => void;
 
   // Derived
@@ -304,6 +309,7 @@ export const useAuthStore = create<AuthState>()(
       mixMinRatingSong: 0,
       mixMinRatingAlbum: 0,
       mixMinRatingArtist: 0,
+      randomNavMode: 'hub',
       musicFolders: [],
       musicLibraryFilterByServer: {},
       musicLibraryFilterVersion: 0,
@@ -457,6 +463,7 @@ export const useAuthStore = create<AuthState>()(
       setMixMinRatingSong: (v) => set({ mixMinRatingSong: clampMixFilterMinStars(v) }),
       setMixMinRatingAlbum: (v) => set({ mixMinRatingAlbum: clampMixFilterMinStars(v) }),
       setMixMinRatingArtist: (v) => set({ mixMinRatingArtist: clampMixFilterMinStars(v) }),
+      setRandomNavMode: (v) => set({ randomNavMode: v }),
 
       setMusicFolders: (folders) => {
         const sid = get().activeServerId;

@@ -586,6 +586,8 @@ export const enTranslation = {
     sidebarReset: 'Reset to default',
     sidebarDrag: 'Drag to reorder',
     sidebarFixed: 'Always visible',
+    randomNavSplitTitle: 'Split Mix navigation',
+    randomNavSplitDesc: 'Show "Random Mix" and "Random Albums" as separate sidebar entries instead of the "Build a Mix" hub.',
     tabInput: 'Input',
     tabServer: 'Server',
     tabSystem: 'System',

@@ -587,6 +587,8 @@ export const esTranslation = {
     sidebarReset: 'Restablecer a predeterminado',
     sidebarDrag: 'Arrastra para reordenar',
     sidebarFixed: 'Siempre visible',
+    randomNavSplitTitle: 'Dividir navegación Mix',
+    randomNavSplitDesc: 'Mostrar "Mezcla Aleatoria" y "Álbumes Aleatorios" como entradas separadas en la barra lateral en lugar del hub "Crear Mezcla".',
     tabInput: 'Entrada',
     tabServer: 'Servidor',
     tabSystem: 'Sistema',

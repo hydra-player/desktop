@@ -581,6 +581,8 @@ export const nlTranslation = {
     sidebarReset: 'Standaard herstellen',
     sidebarDrag: 'Slepen om te herordenen',
     sidebarFixed: 'Altijd zichtbaar',
+    randomNavSplitTitle: 'Mix-navigatie splitsen',
+    randomNavSplitDesc: 'Toon "Willekeurige mix" en "Willekeurige albums" als afzonderlijke zijbalkitems in plaats van de "Mix samenstellen"-hub.',
     tabInput: 'Invoer',
     tabServer: 'Server',
     shortcutsReset: 'Standaard herstellen',
