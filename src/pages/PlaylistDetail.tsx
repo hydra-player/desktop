@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronLeft, Play, ListPlus, Trash2, Search, X, Loader2, Plus, GripVertical, Star, RefreshCw, Shuffle, Heart, HardDriveDownload, Check, Pencil, Globe, Lock, Camera, Download } from 'lucide-react';
+import { ChevronDown, ChevronLeft, Play, ListPlus, Trash2, Search, X, Loader2, Plus, GripVertical, Star, RefreshCw, Shuffle, Heart, HardDriveDownload, Check, Pencil, Globe, Lock, Camera, Download, FileUp } from 'lucide-react';
 import { useTracklistColumns, type ColDef } from '../utils/useTracklistColumns';
 import { AddToPlaylistSubmenu } from '../components/ContextMenu';
 import {
@@ -18,6 +19,8 @@ import { useThemeStore } from '../store/themeStore';
 import { useDownloadModalStore } from '../store/downloadModalStore';
 import { invoke } from '@tauri-apps/api/core';
 import { join } from '@tauri-apps/api/path';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { readTextFile } from '@tauri-apps/plugin-fs';
 import { useZipDownloadStore } from '../store/zipDownloadStore';
 import { useDragDrop } from '../contexts/DragDropContext';
 import CachedImage, { useCachedUrl } from '../components/CachedImage';
@@ -26,6 +29,7 @@ import { useTranslation } from 'react-i18next';
 import { showToast } from '../utils/toast';
 import { formatHumanHoursMinutes } from '../utils/formatHumanDuration';
 import StarRating from '../components/StarRating';
+import Papa from 'papaparse';
 
 function sanitizeFilename(name: string): string {
   return name
@@ -51,6 +55,148 @@ function codecLabel(song: SubsonicSong, showBitrate: boolean): string {
   if (song.suffix) parts.push(song.suffix.toUpperCase());
   if (showBitrate && song.bitRate) parts.push(`${song.bitRate} kbps`);
   return parts.join(' · ');
+}
+
+// ── CSV Import helpers ──────────────────────────────────────────────────────
+interface SpotifyCsvTrack {
+  trackName: string;
+  artistName: string;
+  artistNames: string[];  // Array de todos los artistas para mejor matching
+  albumName: string;
+  isrc?: string;
+}
+
+// Mapeo de headers a campos canónicos (soporta inglés y español)
+const HEADER_MAPPINGS: Record<string, string> = {
+  // Track name
+  'track name': 'trackName',
+  'track name(s)': 'trackName',
+  'track': 'trackName',
+  'name': 'trackName',
+  'nombre de la cancion': 'trackName',
+  'nombre de cancion': 'trackName',
+  'nombre de la canci\u00f3n': 'trackName',
+  'nombre cancion': 'trackName',
+  't\u00edtulo': 'trackName',
+  'titulo': 'trackName',
+  // Artist name
+  'artist name': 'artistName',
+  'artist name(s)': 'artistName',
+  'artists name': 'artistName',
+  'artists name(s)': 'artistName',
+  'artist': 'artistName',
+  'artists': 'artistName',
+  'nombre del artista': 'artistName',
+  'nombres del artista': 'artistName',
+  'nombre artista': 'artistName',
+  'artista': 'artistName',
+  // Album name
+  'album name': 'albumName',
+  'album name(s)': 'albumName',
+  'album': 'albumName',
+  'nombre del album': 'albumName',
+  'nombre del \u00e1lbum': 'albumName',
+  'nombre album': 'albumName',
+  // ISRC
+  'isrc': 'isrc',
+  'isrc code': 'isrc',
+  'codigo isrc': 'isrc',
+  'c\u00f3digo isrc': 'isrc',
+};
+
+function normalizeHeader(header: string): string {
+  return header
+    .toLowerCase()
+    .replace(/\(s\)/g, '')
+    .replace(/[()]/g, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+function findColumnField(header: string): string | undefined {
+  const normalized = normalizeHeader(header);
+  return HEADER_MAPPINGS[normalized];
+}
+
+function parseArtists(artistField: string): string[] {
+  // Spotify usa comas en formato extendido, punto y coma en formato simple
+  const separator = artistField.includes(';') ? ';' : ',';
+  return artistField
+    .split(separator)
+    .map(a => a.trim())
+    .filter(a => a.length > 0);
+}
+
+function extractFeaturedArtists(title: string): string[] {
+  const patterns = [
+    /\(feat\.?\s+([^)]+)\)/i,
+    /\(ft\.?\s+([^)]+)\)/i,
+    /\(featuring\s+([^)]+)\)/i,
+    /\(with\s+([^)]+)\)/i,
+  ];
+  for (const regex of patterns) {
+    const match = title.match(regex);
+    if (match) {
+      return match[1].split(/,|\sand\s|\s&\s/).map(s => s.trim()).filter(Boolean);
+    }
+  }
+  return [];
+}
+
+function parseSpotifyCsv(csvContent: string): SpotifyCsvTrack[] {
+  // Strip BOM y parsear con Papa Parse
+  const cleanContent = csvContent.replace(/^\uFEFF/, '');
+
+  const parseResult = Papa.parse(cleanContent, {
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: (header: string) => {
+      const field = findColumnField(header);
+      return field || header;
+    },
+  });
+
+  if (parseResult.errors.length > 0) {
+    console.warn('CSV parse warnings:', parseResult.errors);
+  }
+
+  const data = parseResult.data as Record<string, string>[];
+
+  // Verificar columnas requeridas
+  if (!data.length || !data[0].trackName || !data[0].artistName) {
+    console.error('CSV columns not found. Available headers:', Object.keys(data[0] || {}));
+    return [];
+  }
+
+  console.log('CSV parsed with Papa Parse:', {
+    rows: data.length,
+    sample: data[0],
+  });
+
+  const tracks: SpotifyCsvTrack[] = [];
+  for (const row of data) {
+    const trackName = row.trackName?.trim();
+    const artistField = row.artistName?.trim() || '';
+
+    if (!trackName || !artistField) continue;
+
+    // Parsear múltiples artistas del campo + extraer colaboradores del título
+    const artistNames = parseArtists(artistField);
+    const featuredArtists = extractFeaturedArtists(trackName);
+    const allArtists = [...new Set([...artistNames, ...featuredArtists])];
+    const primaryArtist = allArtists[0] || '';
+
+    tracks.push({
+      trackName,
+      artistName: primaryArtist,
+      artistNames: allArtists,
+      albumName: row.albumName?.trim() || '',
+      isrc: row.isrc?.trim() || undefined,
+    });
+  }
+
+  return tracks;
 }
 
 // ── Column configuration ──────────────────────────────────────────────────────
@@ -130,6 +276,17 @@ export default function PlaylistDetail() {
   const zipDownloads = useZipDownloadStore(s => s.downloads);
   const [zipDownloadId, setZipDownloadId] = useState<string | null>(null);
   const activeZip = zipDownloadId ? zipDownloads.find(d => d.id === zipDownloadId) : undefined;
+
+  // ── CSV Import ───────────────────────────────────────────────────
+  const [csvImporting, setCsvImporting] = useState(false);
+  const [csvImportReport, setCsvImportReport] = useState<{
+    added: number;
+    notFound: SpotifyCsvTrack[];
+    duplicates: number;
+    duplicateTracks: SpotifyCsvTrack[];
+    total: number;
+    searchErrors?: SpotifyCsvTrack[];
+  } | null>(null);
 
   // ── Bulk select ───────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -347,6 +504,337 @@ export default function PlaylistDetail() {
     } catch (e) {
       fail(downloadId);
       console.error('ZIP download failed:', e);
+    }
+  };
+
+  // ── CSV Import ──────────────────────────────────────────────
+  // Normalizar strings para matching: quita tildes, caracteres especiales, lowercase, trim
+  const normalizeForMatching = (s: string): string =>
+    s.toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[ø]/gi, 'o')
+      .replace(/[æ]/gi, 'ae')
+      .trim();
+
+  // Limpia sufijos comunes de títulos (remasterizados, en vivo, ediciones, etc.)
+  const cleanTrackTitle = (title: string): string => {
+    const suffixes = [
+      // Remastered variants
+      /\s*-\s*remasterizado$/i,
+      /\s*-\s*remaster$/i,
+      /\s*-\s*remastered$/i,
+      /\s*\(remasterizado\)$/i,
+      /\s*\(remaster\)$/i,
+      /\s*\(remastered\)$/i,
+      /\s*\[remasterizado\]$/i,
+      /\s*\[remaster\]$/i,
+      /\s*\[remastered\]$/i,
+      /\s*-\s*remasterizado\s+\d{4}$/i,
+      /\s*-\s*remastered\s+\d{4}$/i,
+      /\s*\(\d{4}\s+remaster\)$/i,
+      /\s*\(\d{4}\s+remastered\)$/i,
+      // Live variants
+      /\s*-\s*en vivo$/i,
+      /\s*-\s*live$/i,
+      /\s*-\s*version en vivo$/i,
+      /\s*-\s*studio version$/i,
+      /\s*-\s*version de estudio$/i,
+      /\s*\(en vivo\)$/i,
+      /\s*\(live\)$/i,
+      /\s*\(live .*\)$/i,
+      /\s*\[en vivo\]$/i,
+      /\s*\[live\]$/i,
+      /\s*\[live .*\]$/i,
+      /\s*-\s*live at.*$/i,
+      /\s*\(live at.*\)$/i,
+      // Version/Edition variants
+      /\s*-\s*version$/i,
+      /\s*-\s*versión$/i,
+      /\s*\(version\)$/i,
+      /\s*\(versión\)$/i,
+      /\s*\[version\]$/i,
+      /\s*\[versión\]$/i,
+      /\s*-\s*album version$/i,
+      /\s*\(album version\)$/i,
+      /\s*\[album version\]$/i,
+      // Radio/Edit variants
+      /\s*-\s*radio edit$/i,
+      /\s*-\s*radio version$/i,
+      /\s*\(radio edit\)$/i,
+      /\s*\(radio version\)$/i,
+      /\s*\[radio edit\]$/i,
+      /\s*\[radio version\]$/i,
+      /\s*-\s*edit$/i,
+      /\s*\(edit\)$/i,
+      /\s*\[edit\]$/i,
+      // Acoustic/Instrumental variants
+      /\s*-\s*acoustic$/i,
+      /\s*-\s*acústico$/i,
+      /\s*\(acoustic\)$/i,
+      /\s*\(acústico\)$/i,
+      /\s*\[acoustic\]$/i,
+      /\s*\[acústico\]$/i,
+      /\s*-\s*instrumental$/i,
+      /\s*\(instrumental\)$/i,
+      /\s*\[instrumental\]$/i,
+      // Featuring/Feat/Ft/With variants
+      /\s*\(feat\.?\s+.*\)$/i,
+      /\s*\[feat\.?\s+.*\]$/i,
+      /\s*-\s*feat\.?\s+.*$/i,
+      /\s*\(featuring\s+.*\)$/i,
+      /\s*\[featuring\s+.*\]$/i,
+      /\s*\(ft\.?\s+.*\)$/i,
+      /\s*\[ft\.?\s+.*\]$/i,
+      /\s*-\s*ft\.?\s+.*$/i,
+      /\s*\(with\s+.*\)$/i,
+      /\s*\[with\s+.*\]$/i,
+      /\s*-\s*with\s+.*$/i,
+      /\s*ft\.?\s+.*$/i,
+      // Explicit/Clean tags
+      /\s*\(explicit\)$/i,
+      /\s*\[explicit\]$/i,
+      /\s*\(clean\)$/i,
+      /\s*\[clean\]$/i,
+      // Mono/Stereo
+      /\s*\(mono\)$/i,
+      /\s*\[mono\]$/i,
+      /\s*\(stereo\)$/i,
+      /\s*\[stereo\]$/i,
+      // Deluxe/Special editions
+      /\s*-\s*deluxe$/i,
+      /\s*\(deluxe\)$/i,
+      /\s*\[deluxe\]$/i,
+      /\s*-\s*special edition$/i,
+      /\s*\(special edition\)$/i,
+      /\s*\[special edition\]$/i,
+      // Year in parentheses (common in remasters)
+      /\s*\(\d{4}\)$/i,
+    ];
+    let cleaned = title.trim();
+    // Aplicar patrones múltiples veces para casos anidados
+    for (let i = 0; i < 3; i++) {
+      const previous = cleaned;
+      for (const regex of suffixes) {
+        cleaned = cleaned.replace(regex, '');
+      }
+      cleaned = cleaned.trim();
+      if (previous === cleaned) break; // No más cambios
+    }
+    return cleaned;
+  };
+
+  // Distancia de Levenshtein para scoring de similitud
+  const levenshtein = (a: string, b: string): number => {
+    const matrix: number[][] = [];
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        matrix[i][j] = b[i - 1] === a[j - 1]
+          ? matrix[i - 1][j - 1]
+          : Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
+      }
+    }
+    return matrix[b.length][a.length];
+  };
+
+  const similarityScore = (a: string, b: string): number => {
+    const maxLen = Math.max(a.length, b.length);
+    if (maxLen === 0) return 1;
+    // Usar strings normalizados (sin tildes) para comparación
+    const dist = levenshtein(normalizeForMatching(a), normalizeForMatching(b));
+    return 1 - dist / maxLen;
+  };
+
+  // Procesa búsquedas en batches para no saturar el servidor
+  const processBatch = async <T, R>(
+    items: T[],
+    batchSize: number,
+    processor: (item: T) => Promise<R | null>
+  ): Promise<(R | null)[]> => {
+    const results: (R | null)[] = [];
+    for (let i = 0; i < items.length; i += batchSize) {
+      const batch = items.slice(i, i + batchSize);
+      const batchResults = await Promise.all(batch.map(processor));
+      results.push(...batchResults);
+    }
+    return results;
+  };
+
+  const handleImportCsv = async () => {
+    if (!id || csvImporting) return;
+
+    try {
+      const selected = await openDialog({
+        filters: [{ name: 'CSV Files', extensions: ['csv'] }],
+        multiple: false,
+        title: 'Import Spotify Playlist CSV',
+      });
+
+      if (!selected || typeof selected !== 'string') return;
+
+      setCsvImporting(true);
+      const content = await readTextFile(selected);
+      const csvTracks = parseSpotifyCsv(content);
+
+      if (csvTracks.length === 0) {
+        showToast('No valid tracks found in CSV file', 3000, 'error');
+        setCsvImporting(false);
+        return;
+      }
+
+      const existingIds = new Set(songs.map(s => s.id));
+      const addedSongs: SubsonicSong[] = [];
+      const notFound: SpotifyCsvTrack[] = [];
+      const searchErrors: SpotifyCsvTrack[] = [];
+      const duplicateTracks: SpotifyCsvTrack[] = [];
+      let duplicateCount = 0;
+
+      // Procesar en batches de 10 para balance velocidad/servidor
+      await processBatch(csvTracks, 10, async (track) => {
+        try {
+          // Retry: 2 intentos en caso de error de red
+          let searchResult;
+          let attempts = 0;
+          const maxAttempts = 2;
+
+          while (attempts < maxAttempts) {
+            try {
+              searchResult = await search(track.trackName, { songCount: 40, artistCount: 0, albumCount: 0 });
+              break;
+            } catch (err) {
+              attempts++;
+              if (attempts >= maxAttempts) throw err;
+              // Esperar 500ms antes de reintentar
+              await new Promise(r => setTimeout(r, 500));
+            }
+          }
+
+          if (!searchResult || searchResult.songs.length === 0) {
+            notFound.push(track);
+            return null;
+          }
+
+          // Scoring de confianza para cada resultado
+          // Limpiar título del CSV para comparación justa
+          const cleanCsvTitle = cleanTrackTitle(track.trackName);
+
+          const scoredMatches = searchResult.songs.map(s => {
+            // Vía rápida ISRC: si ambos tienen ISRC y coinciden, score perfecto
+            if (track.isrc && s.isrc && track.isrc.toUpperCase() === s.isrc.toUpperCase()) {
+              return { song: s, score: 1.0, titleScore: 1.0, artistScore: 1.0, isrcMatch: true };
+            }
+
+            // Limpiar título del resultado también
+            const cleanResultTitle = cleanTrackTitle(s.title);
+
+            const titleScore = similarityScore(cleanResultTitle, cleanCsvTitle);
+            // Scoring de artista: máximo score contra cualquiera de los artistas del CSV
+            const artistScore = s.artist
+              ? Math.max(...track.artistNames.map(csvArtist =>
+                  similarityScore(s.artist || '', csvArtist)
+                ))
+              : 0;
+            // Si no hay álbum en CSV o en local, usar 1.0 (neutral) para no penalizar
+            const albumScore = (s.album && track.albumName)
+              ? similarityScore(s.album, track.albumName)
+              : 1.0;
+
+            // Peso dinámico: títulos específicos (>4 palabras) → más peso al título
+            const titleWords = cleanCsvTitle.split(/\s+/).length;
+            const isSpecificTitle = titleWords > 4;
+            const titleWeight = isSpecificTitle ? 0.55 : 0.4;
+            const artistWeight = isSpecificTitle ? 0.25 : 0.4;
+
+            const totalScore = artistScore * artistWeight + titleScore * titleWeight + albumScore * 0.2;
+
+            return { song: s, score: totalScore, titleScore, artistScore, albumScore, isrcMatch: false };
+          }).sort((a, b) => b.score - a.score);
+
+          // Solo aceptar si el score es >= 0.7 (70% de confianza)
+          const bestMatch = scoredMatches[0];
+
+          if (bestMatch.score < 0.7) {
+            notFound.push({ ...track, albumName: `${track.albumName} (score: ${bestMatch.score.toFixed(2)})` });
+            return null;
+          }
+
+          // Check duplicados
+          if (existingIds.has(bestMatch.song.id)) {
+            duplicateCount++;
+            duplicateTracks.push(track);
+            return null;
+          }
+
+          // Check duplicados en los que ya vamos a agregar
+          if (addedSongs.some(s => s.id === bestMatch.song.id)) {
+            duplicateCount++;
+            duplicateTracks.push(track);
+            return null;
+          }
+
+          addedSongs.push(bestMatch.song);
+          existingIds.add(bestMatch.song.id);
+          return bestMatch.song;
+        } catch {
+          // Error de red/timeout - separar de "no encontrado"
+          searchErrors.push(track);
+          return null;
+        }
+      });
+
+      if (addedSongs.length > 0) {
+        const next = [...songs, ...addedSongs];
+        setSongs(next);
+        await savePlaylist(next);
+      }
+
+      // Auto-show report if there are not found tracks, duplicates, or search errors
+      if (notFound.length > 0 || duplicateCount > 0 || searchErrors.length > 0) {
+        // Small delay to let the toast appear first
+        setTimeout(() => {
+          setCsvImportReport({
+            added: addedSongs.length,
+            notFound,
+            duplicates: duplicateCount,
+            duplicateTracks,
+            total: csvTracks.length,
+            searchErrors,
+          });
+        }, 500);
+      }
+
+      const errorMsg = searchErrors.length > 0
+        ? ` (${searchErrors.length} network errors - may retry)`
+        : '';
+
+      // Determinar tipo de toast según resultados:
+      // - success: todas las canciones fueron añadidas correctamente
+      // - warning: al menos una añadida, pero algunas no se encontraron/duplicadas
+      // - error: ninguna añadida (todas duplicadas o no encontradas)
+      const hasAdded = addedSongs.length > 0;
+      const hasIssues = notFound.length > 0 || duplicateCount > 0 || searchErrors.length > 0;
+
+      let toastVariant: 'success' | 'warning' | 'error';
+      if (hasAdded && !hasIssues) {
+        toastVariant = 'success';
+      } else if (hasAdded && hasIssues) {
+        toastVariant = 'warning';
+      } else {
+        toastVariant = 'error';
+      }
+
+      showToast(
+        `${addedSongs.length} added, ${notFound.length} not found, ${duplicateCount} duplicates${errorMsg}`,
+        5000,
+        toastVariant
+      );
+    } catch (err) {
+      console.error('CSV import failed:', err);
+      showToast('Failed to import CSV file', 3000, 'error');
+    } finally {
+      setCsvImporting(false);
     }
   };
 
@@ -651,6 +1139,15 @@ export default function PlaylistDetail() {
                   onClick={() => { setSearchOpen(v => !v); setSearchQuery(''); setSearchResults([]); setSelectedSearchIds(new Set()); setSearchPlPickerOpen(false); }}
                 >
                   <Search size={16} /> {t('playlists.addSongs')}
+                </button>
+                <button
+                  className="btn btn-ghost"
+                  onClick={handleImportCsv}
+                  disabled={csvImporting}
+                  data-tooltip={t('playlists.importCSVTooltip')}
+                >
+                  {csvImporting ? <Loader2 size={16} className="spin-slow" /> : <FileUp size={16} />}
+                  {t('playlists.importCSV')}
                 </button>
                 {/* search close resets selection */}
                 {songs.length > 0 && id && (
@@ -1187,6 +1684,14 @@ export default function PlaylistDetail() {
           onSave={handleSaveMeta}
         />
       )}
+
+      {csvImportReport && (
+        <CsvImportReportModal
+          report={csvImportReport}
+          playlistName={playlist?.name || 'Unknown Playlist'}
+          onClose={() => setCsvImportReport(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1323,14 +1828,10 @@ function PlaylistEditModal({
           </div>
         </div>
 
-        <div className="playlist-edit-footer">
-          <label className="toggle-label" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
-            <label className="toggle-switch" style={{ marginBottom: 0 }}>
-              <input type="checkbox" checked={isPublic} onChange={e => setIsPublic(e.target.checked)} />
-              <span className="toggle-track" />
-            </label>
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t('playlists.editPublic')}</span>
-          </label>
+        <div className="modal-actions">
+          <button className="btn btn-surface" onClick={onClose}>
+            {t('playlists.editCancel')}
+          </button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving || !name.trim()}>
             {saving ? <Loader2 size={14} className="spin-slow" /> : null}
             {t('playlists.editSave')}
@@ -1338,5 +1839,176 @@ function PlaylistEditModal({
         </div>
       </div>
     </div>
+  );
+}
+
+// ── CSV Import Report Modal ───────────────────────────────────────────────────
+
+interface CsvReportModalProps {
+  report: {
+    added: number;
+    notFound: SpotifyCsvTrack[];
+    duplicates: number;
+    duplicateTracks: SpotifyCsvTrack[];
+    total: number;
+    searchErrors?: SpotifyCsvTrack[];
+  };
+  playlistName: string;
+  onClose: () => void;
+}
+
+function CsvImportReportModal({ report, playlistName, onClose }: CsvReportModalProps) {
+  const { t } = useTranslation();
+  const handleOverlayClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) onClose();
+  };
+
+  const downloadReport = () => {
+    try {
+      const content = [
+        'CSV Import Report',
+        `Playlist: ${playlistName}`,
+        `Date: ${new Date().toLocaleString()}`,
+        `Total: ${report.total}, Added: ${report.added}, Duplicates: ${report.duplicates}, Not Found: ${report.notFound.length}${report.searchErrors ? `, Network Errors: ${report.searchErrors.length}` : ''}`,
+        '',
+        ...(report.duplicateTracks.length > 0 ? ['Duplicate Tracks (skipped):', ...report.duplicateTracks.map(t => `- ${t.trackName} by ${t.artistName}${t.albumName ? ` (${t.albumName})` : ''}`), ''] : []),
+        ...(report.notFound.length > 0 ? ['Not Found Tracks:', ...report.notFound.map(t => `- ${t.trackName} by ${t.artistName}${t.albumName ? ` (${t.albumName})` : ''}`), ''] : []),
+        ...(report.searchErrors && report.searchErrors.length > 0 ? ['Network Error Tracks (may retry):', ...report.searchErrors.map(t => `- ${t.trackName} by ${t.artistName}`), ''] : []),
+      ].join('\n');
+
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+
+      // Nombre detallado: playlist + fecha-hora-segundos
+      const timestamp = new Date().toISOString()
+        .replace(/[:.]/g, '-')
+        .slice(0, 19);
+      const safePlaylistName = playlistName.replace(/[/\\?%*:|"<>]/g, '-').substring(0, 50);
+      a.download = `import-report-${safePlaylistName}-${timestamp}.txt`;
+
+      a.href = url;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      showToast('Report downloaded successfully', 3000, 'info');
+    } catch (err) {
+      console.error('Failed to download report:', err);
+      showToast('Failed to download report', 3000, 'error');
+    }
+  };
+
+  return createPortal(
+    <div
+      className="modal-overlay modal-overlay--csv"
+      onClick={handleOverlayClick}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 99999,
+      }}
+    >
+      <div
+        className="modal-content"
+        style={{
+          maxWidth: 500,
+          maxHeight: '80vh',
+          width: '90%',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <button className="btn btn-ghost modal-close" onClick={onClose} style={{ position: 'absolute', top: 16, right: 16 }}>
+          <X size={18} />
+        </button>
+
+        <h2 className="modal-title" style={{ fontSize: 20, marginBottom: 16 }}>{t('playlists.csvImportReport')}</h2>
+
+        <div style={{ display: 'grid', gridTemplateColumns: report.searchErrors && report.searchErrors.length > 0 ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)', gap: 12, marginBottom: 20, textAlign: 'center' }}>
+          <div style={{ padding: 12, background: 'var(--surface)', borderRadius: 8 }}>
+            <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text)' }}>{report.total}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('playlists.csvImportTotal')}</div>
+          </div>
+          <div style={{ padding: 12, background: 'var(--surface)', borderRadius: 8 }}>
+            <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--accent)' }}>{report.added}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('playlists.csvImportAdded')}</div>
+          </div>
+          <div style={{ padding: 12, background: 'var(--surface)', borderRadius: 8 }}>
+            <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-muted)' }}>{report.duplicates}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('playlists.csvImportDuplicates')}</div>
+          </div>
+          <div style={{ padding: 12, background: 'var(--surface)', borderRadius: 8 }}>
+            <div style={{ fontSize: 24, fontWeight: 700, color: report.notFound.length > 0 ? '#ff6b6b' : 'var(--text-muted)' }}>{report.notFound.length}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('playlists.csvImportNotFound')}</div>
+          </div>
+          {report.searchErrors && report.searchErrors.length > 0 && (
+            <div style={{ padding: 12, background: 'var(--surface)', borderRadius: 8 }}>
+              <div style={{ fontSize: 24, fontWeight: 700, color: '#ffa500' }}>{report.searchErrors.length}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('playlists.csvImportNetworkErrors')}</div>
+            </div>
+          )}
+        </div>
+
+        {report.duplicateTracks.length > 0 && (
+          <>
+            <h3 style={{ fontSize: 14, marginBottom: 8, color: 'var(--text-muted)' }}>{t('playlists.csvImportDuplicatesTitle')}</h3>
+            <div style={{ overflowY: 'auto', maxHeight: 150, marginBottom: 16, border: '1px solid var(--surface)', borderRadius: 8 }}>
+              {report.duplicateTracks.map((track, i) => (
+                <div key={i} style={{ padding: '8px 12px', borderBottom: '1px solid var(--surface)', fontSize: 13 }}>
+                  <div style={{ fontWeight: 500 }}>{track.trackName}</div>
+                  <div style={{ color: 'var(--text-muted)' }}>{track.artistName}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {report.notFound.length > 0 && (
+          <>
+            <h3 style={{ fontSize: 14, marginBottom: 8, color: 'var(--text-muted)' }}>{t('playlists.csvImportNotFoundTitle')}</h3>
+            <div style={{ overflowY: 'auto', maxHeight: 200, marginBottom: 16, border: '1px solid var(--surface)', borderRadius: 8 }}>
+              {report.notFound.map((track, i) => (
+                <div key={i} style={{ padding: '8px 12px', borderBottom: '1px solid var(--surface)', fontSize: 13 }}>
+                  <div style={{ fontWeight: 500 }}>{track.trackName}</div>
+                  <div style={{ color: 'var(--text-muted)' }}>{track.artistName}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {report.searchErrors && report.searchErrors.length > 0 && (
+          <>
+            <h3 style={{ fontSize: 14, marginBottom: 8, color: '#ffa500' }}>{t('playlists.csvImportNetworkErrorsTitle')}</h3>
+            <div style={{ overflowY: 'auto', maxHeight: 150, marginBottom: 16, border: '1px solid var(--surface)', borderRadius: 8 }}>
+              {report.searchErrors.map((track, i) => (
+                <div key={i} style={{ padding: '8px 12px', borderBottom: '1px solid var(--surface)', fontSize: 13 }}>
+                  <div style={{ fontWeight: 500 }}>{track.trackName}</div>
+                  <div style={{ color: 'var(--text-muted)' }}>{track.artistName}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className="modal-actions" style={{ marginTop: 'auto' }}>
+          <button className="btn btn-surface" onClick={downloadReport}>
+            <Download size={14} /> {t('playlists.csvImportDownloadReport')}
+          </button>
+          <button className="btn btn-primary" onClick={onClose}>
+            {t('playlists.csvImportClose')}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
