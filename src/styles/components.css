@@ -1984,6 +1984,16 @@
   box-shadow: var(--shadow-lg);
 }
 
+/* Modal CSV Import - siempre centrado */
+.modal-overlay--csv {
+  position: fixed !important;
+  inset: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding-top: 0 !important;
+}
+
 .modal-close {
   position: absolute;
   top: var(--space-4);

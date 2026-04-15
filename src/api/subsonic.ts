@@ -110,6 +110,8 @@ export interface SubsonicSong {
   genre?: string;
   path?: string;
   albumArtist?: string;
+  /** ISRC code when available (e.g., Navidrome) */
+  isrc?: string;
   replayGain?: {
     trackGain?: number;
     albumGain?: number;
