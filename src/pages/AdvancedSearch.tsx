@@ -136,10 +136,6 @@ export default function AdvancedSearch() {
     runSearch({ query, genre, yearFrom, yearTo, resultType });
   };
 
-  const total = results
-    ? results.artists.length + results.albums.length + results.songs.length
-    : 0;
-
   const typeOptions: { id: ResultType; label: string }[] = [
     { id: 'all',     label: t('search.advancedAll') },
     { id: 'artists', label: t('search.artists') },
