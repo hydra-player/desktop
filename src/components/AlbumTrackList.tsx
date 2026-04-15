@@ -533,7 +533,7 @@ export default function AlbumTrackList({
 
   return (
     <>
-      {/* Column visibility picker - fuera del tracklist para evitar overflow cutoff */}
+      {/* Column visibility picker - outside .tracklist to avoid overflow cutoff */}
       <div className="tracklist-col-picker-wrapper" ref={pickerRef}>
         <div className="tracklist-col-picker">
           <button
