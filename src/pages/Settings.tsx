@@ -1812,6 +1812,8 @@ export default function Settings() {
                     { id: 'lexend',            label: 'Lexend' },
                     { id: 'geist',             label: 'Geist' },
                     { id: 'jetbrains-mono',    label: 'JetBrains Mono' },
+                    { id: 'golos-text',        label: 'Golos Text' },
+                    { id: 'unbounded',         label: 'Unbounded' },
                   ] as { id: FontId; label: string }[]).find(f => f.id === fontStore.font)?.label ?? fontStore.font
                 }</span>
                 <ChevronDown size={14} style={{ color: 'var(--text-muted)', transform: fontPickerOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
@@ -1832,6 +1834,8 @@ export default function Settings() {
                       { id: 'lexend',            label: 'Lexend',            stack: "'Lexend Variable', sans-serif" },
                       { id: 'geist',             label: 'Geist',             stack: "'Geist Variable', sans-serif" },
                       { id: 'jetbrains-mono',    label: 'JetBrains Mono',    stack: "'JetBrains Mono Variable', monospace" },
+                      { id: 'golos-text',        label: 'Golos Text',        stack: "'Golos Text Variable', sans-serif" },
+                      { id: 'unbounded',         label: 'Unbounded',         stack: "'Unbounded Variable', sans-serif" },
                     ] as { id: FontId; label: string; stack: string }[]
                   ).map(f => (
                     <button
