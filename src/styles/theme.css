@@ -555,22 +555,31 @@
 /* ─── Classic Winamp — Winamp 2.x Base Skin ─── */
 [data-theme='wnamp'] {
   color-scheme: dark;
-  --select-arrow: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23c8c8d0%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
+  --select-arrow: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23d4d4dc%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
 
-  /* ── Palette ── */
+  /* ── Palette ──
+     Contrast audit (vs. --bg-app #2b2b3a, L≈0.025):
+       text-primary   9.6:1  AAA ✓ (raised from 8.5:1)
+       text-secondary 5.5:1  AA  ✓
+       text-muted     4.7:1  AA  ✓ (was 5.6:1 but BRIGHTER than secondary — hierarchy fixed)
+       accent (gold)  8.4:1  AAA ✓
+       positive       6.6:1  AA+ ✓
+       danger         4.9:1  AA  ✓ (raised from 2.46:1 — was below AA)
+     Column grip + border-subtle raised from 1.0:1 / 1.19:1 — see overrides.
+  */
   --ctp-crust: #000000;
   --ctp-mantle: #1e1e28;
   --ctp-base: #2b2b3a;
   --ctp-surface0: #353545;
-  --ctp-surface1: #404055;
-  --ctp-surface2: #4e4e65;
-  --ctp-overlay0: #5a5a75;
-  --ctp-overlay1: #6e6e88;
-  --ctp-overlay2: #8a8a96;
-  --ctp-text: #c8c8d0;
-  --ctp-subtext1: #a0a0ac;
+  --ctp-surface1: #4a4a60;         /* raised from #404055 for visible borders/grips */
+  --ctp-surface2: #5a5a78;
+  --ctp-overlay0: #7676a0;         /* raised from #5a5a75 */
+  --ctp-overlay1: #8a8a96;
+  --ctp-overlay2: #a4a4b4;
+  --ctp-text: #d4d4dc;             /* raised from #c8c8d0 for 9.6:1 */
+  --ctp-subtext1: #b4b4c0;
   --ctp-subtext0: #8a8a96;
-  /* Winamp orange accent + iconic green glow */
+  /* Winamp iconic LCD green + gold accent */
   --ctp-mauve: #d4cc46;
   --ctp-lavender: #e0d860;
   --ctp-green: #00ff00;
@@ -583,28 +592,54 @@
   --ctp-rosewater: #c88080;
   --ctp-yellow: #e8c050;
   --ctp-peach: #d08840;
-  --ctp-maroon: #a03030;
-  --ctp-red: #c03030;
+  --ctp-maroon: #ff6b6b;           /* raised from #a03030 — AA compliant */
+  --ctp-red: #ff6b6b;              /* raised from #c03030 — 4.9:1 AA ✓ */
 
   /* ── Semantic tokens ── */
   --bg-app: #2b2b3a;
   --bg-sidebar: #1e1e28;
   --bg-card: #353545;
-  --bg-hover: #404055;
+  --bg-hover: #484860;             /* raised from #404055 — 1.6:1 vs card, spürbarer Hover */
   --bg-player: #000000;
-  --bg-glass: rgba(43, 43, 58, 0.90);
+  --bg-glass: rgba(43, 43, 58, 0.92);
   --accent: #d4cc46;
-  --accent-dim: rgba(212, 204, 70, 0.15);
-  --accent-glow: rgba(212, 204, 70, 0.35);
+  --accent-dim: rgba(212, 204, 70, 0.18);
+  --accent-glow: rgba(212, 204, 70, 0.40);
   --volume-accent: #de9b35;
-  --text-primary: #c8c8d0;
-  --text-secondary: #a0a0ac;
-  --text-muted: #a0a0bc;
-  --border: #5a5a75;
-  --border-subtle: #353545;
+  --text-primary: #d4d4dc;
+  --text-secondary: #b4b4c0;       /* raised from #a0a0ac for better AA margin */
+  --text-muted: #949ab0;           /* 4.7:1 AA ✓, now DIMMER than secondary (hierarchy fixed) */
+  --border: #7676a0;               /* 2.7:1 vs bg-card — visible (was 1.79:1) */
+  --border-subtle: #484860;        /* 1.5:1 — was #353545 identical with bg-card (1.0:1!) */
   --positive: #00cc66;
   --warning: #d4cc46;
-  --danger: #c03030;
+  --danger: #ff6b6b;               /* 4.9:1 AA ✓, was #c03030 (2.46:1 FAIL) */
+  --waveform-played:   #d4cc46;
+  --waveform-buffered: #8a8a96;
+  --waveform-unplayed: #4a4a60;
+}
+
+/* ─── wnamp — component-level overrides ──────────────────────────────── */
+
+/* Column resize grip — was surface1 on bg-card = 1.19:1 (invisible) */
+[data-theme='wnamp'] .col-resize-handle::after {
+  background: var(--ctp-overlay1); /* #8a8a96 → 3.4:1 on bg-card */
+  width: 2px;
+}
+
+/* Focus ring — keyboard navigation, accent gold for visibility */
+[data-theme='wnamp'] *:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Scrollbar thumb — explicit contrast */
+[data-theme='wnamp'] ::-webkit-scrollbar-thumb {
+  background: var(--ctp-overlay0);
+}
+[data-theme='wnamp'] *:hover::-webkit-scrollbar-thumb,
+[data-theme='wnamp'] .is-scrolling::-webkit-scrollbar-thumb {
+  background: var(--ctp-overlay2);
 }
 
 /* ── Classic Winamp: LCD display + bevel buttons ── */
@@ -9988,7 +10023,16 @@ input[type="range"]:hover::-webkit-slider-thumb {
   --ctp-red: #cc0000;
   --ctp-rosewater: #cc4444;
 
-  /* ── Semantic tokens ── */
+  /* ── Semantic tokens ──
+     Contrast audit (vs. --bg-app #f4efea, L≈0.868):
+       text-primary   11.7:1 AAA ✓
+       text-secondary  7.0:1 AAA ✓
+       text-muted      5.4:1 AA  ✓ (raised from 4.4:1 — was below AA)
+       positive        4.7:1 AA  ✓ (raised from 3.1:1)
+       warning         5.4:1 AA  ✓ (raised from 2.2:1 — was below all thresholds)
+       danger          5.2:1 AA  ✓
+       accent (orange) 3.2:1 UI  ✓ (Ubuntu brand, text-on-orange needs dark fg)
+  */
   --bg-app: #f4efea;
   /* warm Ambiance window */
   --bg-sidebar: #3d1f3d;
@@ -9999,17 +10043,45 @@ input[type="range"]:hover::-webkit-slider-thumb {
   /* Ubuntu panel — blackest aubergine */
   --bg-glass: rgba(244, 239, 234, 0.94);
   --accent: #e95420;
-  /* Ubuntu Orange */
+  /* Ubuntu Orange — brand identity, 3.2:1 UI-pass (prefer dark fg on orange) */
   --accent-dim: rgba(233, 84, 32, 0.12);
   --accent-glow: rgba(233, 84, 32, 0.30);
   --text-primary: #3d2b2b;
   --text-secondary: #5d4e48;
-  --text-muted: #7d6e68;
-  --border: #c8b8a8;
-  --border-subtle: #ddd5cc;
-  --positive: #4e9a06;
-  --warning: #c4a000;
-  --danger: #cc0000;
+  --text-muted: #6a5a53;     /* 5.4:1 AA ✓, was #7d6e68 at 4.4:1 (below AA) */
+  --border: #a89080;         /* 2.5:1, consistent with Ubuntu Warm Grey */
+  --border-subtle: #c8bbac;  /* ~1.7:1 structural but perceptible */
+  --positive: #2e7a00;       /* 4.7:1 AA ✓, darkened from #4e9a06 (3.1:1) */
+  --warning: #855900;        /* 5.4:1 AA ✓, warm amber matching palette, was #c4a000 (2.2:1) */
+  --danger: #cc0000;         /* 5.2:1 AA ✓ */
+  --waveform-played:   #e95420;
+  --waveform-buffered: #a89080;
+  --waveform-unplayed: #d8d0c8;
+}
+
+/* ─── Ubuntu Ambiance — component-level overrides ─────────────────────── */
+
+/* Column resize grip — was #e4dfd8 on #ede8e2 = 1.08:1 (invisible)
+   Use the warm grey overlay tone, 2.5:1 — works for a light theme grip. */
+[data-theme='ubuntu-ambiance'] .col-resize-handle::after {
+  background: #a89080;
+  width: 2px;
+}
+
+/* Focus ring — keyboard navigation, Ubuntu Orange at AAA against light bg
+   for the outline itself (not text, so 3:1 UI threshold applies). */
+[data-theme='ubuntu-ambiance'] *:focus-visible {
+  outline: 2px solid #e95420;
+  outline-offset: 2px;
+}
+
+/* Scrollbar thumb — visible against warm off-white */
+[data-theme='ubuntu-ambiance'] ::-webkit-scrollbar-thumb {
+  background: #a89080;
+}
+[data-theme='ubuntu-ambiance'] *:hover::-webkit-scrollbar-thumb,
+[data-theme='ubuntu-ambiance'] .is-scrolling::-webkit-scrollbar-thumb {
+  background: #7d6e68;
 }
 
 /* ── App shell: warm Ambiance off-white ── */
@@ -12431,19 +12503,27 @@ input[type="range"]:hover::-webkit-slider-thumb {
    W11 — Windows 11 Fluent Design, dark mode, Mica material
    ═══════════════════════════════════════════════════════════════════ */
 [data-theme='w11'] {
-  /* Catppuccin-compatible palette — Fluent dark neutrals */
+  /* Catppuccin-compatible palette — Fluent v2 dark neutrals
+     Values aligned with Microsoft's actual Windows 11 Dark Mode tokens:
+       text primary    #ffffff (was #f3f3f3 — now matches W11 true white)
+       text secondary  #cfcfcf (was #9a9a9a — W11 Text Secondary Dark, 9.6:1)
+       text tertiary   #a0a0a0 (was #797979 — W11 Text Tertiary Dark, 6.3:1)
+       control strong  rgba(255,255,255,0.40) (was 0.18 — perceptible structural borders)
+       accent fill     #0078d4 kept (for buttons with white text, 4.3:1 AA)
+       accent text     via .w11-link helper → #60cdff (Fluent Accent Text Dark)
+       danger dark     #ff99a4 (Fluent Critical Foreground Dark, 8:1 AAA) */
   --ctp-base: #202020;
   --ctp-mantle: #1c1c1c;
   --ctp-crust: #181818;
   --ctp-surface0: #2c2c2c;
-  --ctp-surface1: #363636;
-  --ctp-surface2: #404040;
-  --ctp-overlay0: #797979;
-  --ctp-overlay1: #8a8a8a;
-  --ctp-overlay2: #9a9a9a;
-  --ctp-subtext0: #ababab;
-  --ctp-subtext1: #bebebe;
-  --ctp-text: #f3f3f3;
+  --ctp-surface1: #3b3b3b;    /* raised from #363636 for grip/border perceptibility */
+  --ctp-surface2: #454545;
+  --ctp-overlay0: #868686;    /* raised from #797979 */
+  --ctp-overlay1: #a0a0a0;
+  --ctp-overlay2: #b4b4b4;
+  --ctp-subtext0: #cfcfcf;
+  --ctp-subtext1: #e4e4e4;
+  --ctp-text: #ffffff;
   --ctp-lavender: #6ccbf8;
   --ctp-blue: #0078d4;
   --ctp-sapphire: #0067c0;
@@ -12452,8 +12532,8 @@ input[type="range"]:hover::-webkit-slider-thumb {
   --ctp-green: #6ccb5f;
   --ctp-yellow: #f9f1a5;
   --ctp-peach: #f7630c;
-  --ctp-maroon: #e81123;
-  --ctp-red: #e81123;
+  --ctp-maroon: #ff99a4;     /* Fluent Critical Foreground Dark */
+  --ctp-red: #ff99a4;
   --ctp-mauve: #8764b8;
   --ctp-pink: #b146c2;
   --ctp-flamingo: #e3008c;
@@ -12464,30 +12544,37 @@ input[type="range"]:hover::-webkit-slider-thumb {
   --bg-sidebar: #2b2b2b;
   --bg-player: #1c1c1c;
   --bg-card: #2c2c2c;
-  --bg-card-hover: #363636;
+  --bg-card-hover: #3b3b3b;
   --bg-input: #2c2c2c;
   --bg-overlay: rgba(32, 32, 32, 0.92);
-  --bg-selection: rgba(0, 120, 212, 0.25);
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-default: rgba(255, 255, 255, 0.10);
-  --border-strong: rgba(255, 255, 255, 0.18);
-  --text-primary: #f3f3f3;
-  --text-secondary: #9a9a9a;
-  --text-muted: #797979;
-  --text-disabled: #4a4a4a;
-  --accent: #0078d4;
-  --accent-hover: #1086e0;
-  --accent-glow: rgba(0, 120, 212, 0.30);
-  --accent-subtle: rgba(0, 120, 212, 0.15);
-  --danger: #e81123;
-  --success: #6ccb5f;
-  --warning: #f7630c;
-  --nav-active-bg: rgba(0, 120, 212, 0.18);
-  --nav-active-text: #f3f3f3;
-  --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+  --bg-selection: rgba(0, 120, 212, 0.30);
+  /* Borders — raised to match Fluent v2 Stroke Control tokens */
+  --bg-glass:        rgba(32, 32, 32, 0.92);
+  --border-subtle:   rgba(255, 255, 255, 0.08);  /* Stroke Divider Dark */
+  --border-default:  rgba(255, 255, 255, 0.18);  /* Stroke Control Default Dark */
+  --border-strong:   rgba(255, 255, 255, 0.40);  /* Stroke Control Strong Dark */
+  --border:          rgba(255, 255, 255, 0.18);
+  --text-primary:   #ffffff;     /* 15.9:1 — AAA ✓ (W11 true white) */
+  --text-secondary: #cfcfcf;     /* 9.6:1 — AAA ✓ (raised from 5.8:1) */
+  --text-muted:     #a0a0a0;     /* 6.3:1 — AAA near-miss (raised from 4.0:1 below AA) */
+  --text-disabled:  #5a5a5a;
+  --accent:         #0078d4;     /* W11 brand blue — kept for button fills (white text 4.3:1 AA) */
+  --accent-hover:   #1086e0;
+  --accent-text:    #60cdff;     /* Fluent Accent Text Dark — 7.2:1 AAA ✓ for link/text usage */
+  --accent-glow:    rgba(0, 120, 212, 0.30);
+  --accent-subtle:  rgba(0, 120, 212, 0.15);
+  --accent-dim:     rgba(0, 120, 212, 0.18);
+  --danger:         #ff99a4;     /* Fluent Critical Foreground Dark — 8.0:1 AAA ✓ */
+  --positive:       #6ccb5f;     /* W11 Success — 7.8:1 AAA ✓ */
+  --success:        #6ccb5f;
+  --warning:        #fce100;     /* W11 Caution Dark (brighter yellow) — 13.2:1 AAA ✓ */
+  --volume-accent:  #0078d4;
+  --nav-active-bg:  rgba(0, 120, 212, 0.22);
+  --nav-active-text: #ffffff;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.28);
   --scrollbar-track: transparent;
-  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.50);
-  --shadow-player: 0 -1px 0 rgba(255, 255, 255, 0.06);
+  --shadow-card:   0 2px 8px rgba(0, 0, 0, 0.50);
+  --shadow-player: 0 -1px 0 rgba(255, 255, 255, 0.08);
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
@@ -12497,30 +12584,68 @@ input[type="range"]:hover::-webkit-slider-thumb {
   --space-4: 16px;
   --space-5: 20px;
   --space-6: 24px;
+  --waveform-played:    #60cdff;  /* Accent Text Dark — visible on dark bg */
+  --waveform-buffered:  #868686;
+  --waveform-unplayed:  #3b3b3b;
 }
 
-/* Track name — clean white, no glow (Fluent is minimal) */
+/* ─── Windows 11 Dark — component overrides ─────────────────────────────
+   Raise column grip + structural borders to perceptible contrasts that
+   match Fluent v2 Stroke tokens, and hand-tune a handful of elements
+   that hardcode the old accent.                                        */
+
+/* Column resize grip — was #363636 on #2c2c2c = 1.16:1 (invisible) */
+[data-theme='w11'] .col-resize-handle::after {
+  background: var(--ctp-overlay1);  /* #a0a0a0 → 6.3:1 on bg-card */
+  width: 2px;
+}
+
+/* Focus ring — Fluent keyboard focus indicator */
+[data-theme='w11'] *:focus-visible {
+  outline: 2px solid var(--accent-text);  /* #60cdff — high contrast */
+  outline-offset: 2px;
+}
+
+/* Scrollbar thumb — Fluent neutral, perceptible against dark surfaces */
+[data-theme='w11'] ::-webkit-scrollbar-thumb {
+  background: var(--ctp-overlay0);
+}
+[data-theme='w11'] *:hover::-webkit-scrollbar-thumb,
+[data-theme='w11'] .is-scrolling::-webkit-scrollbar-thumb {
+  background: var(--ctp-overlay2);
+}
+
+/* Connection indicators inherit secondary colour (readability improved via
+   raised --text-secondary). No background box (they're inline spans). */
+[data-theme='w11'] .connection-type {
+  color: var(--text-primary);
+}
+[data-theme='w11'] .connection-server {
+  color: var(--text-secondary);
+}
+
+/* Track name — pure white (Fluent is minimal, uses true white not off-white) */
 [data-theme='w11'] .player-track-name,
 [data-theme='w11'] .queue-track-title {
-  color: #f3f3f3;
+  color: #ffffff;
 }
 
-/* Sidebar — Mica-like: very slightly lighter than app bg, clean border */
+/* Sidebar — Mica-like: very slightly lighter than app bg, Fluent Divider Dark */
 [data-theme='w11'] .sidebar {
   background-color: #2b2b2b;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 /* Nav active — Fluent accent fill, rounded */
 [data-theme='w11'] .sidebar-nav-item.active {
-  background: rgba(0, 120, 212, 0.20);
+  background: rgba(0, 120, 212, 0.22);
   border-left: 3px solid #0078d4;
 }
 
-/* Player bar — taskbar-inspired: very dark, hairline top border */
+/* Player bar — taskbar-inspired: very dark, Fluent Divider Dark */
 [data-theme='w11'] .player-bar {
   background-color: #1c1c1c;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: none;
 }
 
@@ -12533,14 +12658,9 @@ input[type="range"]:hover::-webkit-slider-thumb {
 [data-theme='w11'] .album-card:hover,
 [data-theme='w11'] .artist-card:hover {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
-/* Connection indicators */
-[data-theme='w11'] .connection-type,
-[data-theme='w11'] .connection-server {
-  color: #797979;
-}
 
 /* ── Barb & Ken (Games) ─────────────────────────────────────── */
 [data-theme='barb-and-ken'] {
@@ -13657,6 +13777,16 @@ input[type="range"]:hover::-webkit-slider-thumb {
   --ctp-maroon: #801808;
   --ctp-red: #A82000;
 
+  /* ── Semantic tokens ──
+     Contrast audit (vs. --bg-app #F0DFB0, L≈0.746):
+       text-primary   12.9:1 AAA ✓
+       text-secondary  6.7:1 AA+ ✓
+       text-muted      4.6:1 AA  ✓ (was 3.05:1 — below AA)
+       positive        5.5:1 AA  ✓ (was 3.97:1)
+       warning         5.8:1 AA  ✓ (was 3.62:1 — was below AA)
+       danger          5.5:1 AA  ✓
+       accent (gold)   1.98:1 UI (Pharaoh brand, never as body text)
+  */
   --bg-app: #F0DFB0;
   /* sun-bleached sandstone */
   --bg-sidebar: #0A2035;
@@ -13667,18 +13797,18 @@ input[type="range"]:hover::-webkit-slider-thumb {
   /* deep night Nile */
   --bg-glass: rgba(240, 223, 176, 0.94);
   --accent: #C8960C;
-  /* pharaoh gold */
-  --accent-dim: rgba(200, 150, 12, 0.13);
-  --accent-glow: rgba(200, 150, 12, 0.30);
+  /* pharaoh gold — brand identity, 1.98:1 UI-pass only (never as body text) */
+  --accent-dim: rgba(200, 150, 12, 0.16);
+  --accent-glow: rgba(200, 150, 12, 0.35);
   --text-primary: #2A1808;
   --text-secondary: #6A4018;
-  --text-muted: #A07830;
-  --border: rgba(42, 24, 8, 0.14);
-  --border-subtle: rgba(42, 24, 8, 0.08);
-  --border-dropdown: rgba(200, 128, 10, 0.28);
+  --text-muted: #805810;     /* 4.6:1 AA ✓, deepened from #A07830 (3.05:1 below AA) */
+  --border: rgba(42, 24, 8, 0.38);         /* ~2.3:1 visible structural line (was 1.33:1) */
+  --border-subtle: rgba(42, 24, 8, 0.20);  /* ~1.5:1 subtle but perceptible (was 1.19:1) */
+  --border-dropdown: rgba(200, 128, 10, 0.40);
   --shadow-dropdown: rgba(24, 14, 4, 0.22);
-  --positive: #507820;
-  --warning: #C05010;
+  --positive: #3E6018;       /* 5.5:1 AA ✓, deeper olive (was #507820 at 3.97:1) */
+  --warning: #A04008;        /* 5.8:1 AA ✓, deeper burnt-orange (was #C05010 at 3.62:1) */
   --danger: #A82000;
   --radius-sm: 2px;
   --radius-md: 4px;
@@ -13686,8 +13816,8 @@ input[type="range"]:hover::-webkit-slider-thumb {
 
   --waveform-played: #2E7BB8;
   /* Nile azure — the sky */
-  --waveform-buffered: rgba(46, 123, 184, 0.20);
-  --waveform-unplayed: rgba(42, 24, 8, 0.10);
+  --waveform-buffered: rgba(46, 123, 184, 0.32);
+  --waveform-unplayed: rgba(42, 24, 8, 0.22);
 
   /* Logo — Nile blue → pharaoh gold */
   --logo-color-start: #2E7BB8;
@@ -13976,6 +14106,19 @@ input[type="range"]:hover::-webkit-slider-thumb {
 
 [data-theme='powerslave'] ::-webkit-scrollbar-thumb:hover {
   background: #C8800A;
+}
+
+/* Column resize grip — was surface1 (#DEC880) on bg-card = 1.41:1 (invisible)
+   Use the deeper temple-shadow overlay1 tone for strong legibility. */
+[data-theme='powerslave'] .col-resize-handle::after {
+  background: #806020;            /* 5.0:1 on bg-card — visible dark grip */
+  width: 2px;
+}
+
+/* Focus ring — pharaoh gold accent with strong outline for keyboard nav */
+[data-theme='powerslave'] *:focus-visible {
+  outline: 2px solid #C8800A;
+  outline-offset: 2px;
 }
 
 /* ─── Nightfox ─── */
@@ -14354,14 +14497,28 @@ input[type="range"]:hover::-webkit-slider-thumb {
   color-scheme: dark;
   --select-arrow: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23f8f8f2%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
 
+  /* ── Palette: official Dracula (draculatheme.com) preserved verbatim.
+     Contrast audit (vs. --bg-app #282a36, L≈0.024):
+       text-primary   13.4:1 AAA ✓ (official Foreground)
+       text-secondary 10.8:1 AAA ✓
+       text-muted      4.9:1 AA  ✓ (lifted from Comment #6272a4 at 2.99:1 — below all thresholds)
+       accent          5.9:1 AA  ✓ (Purple)
+       positive       10.4:1 AAA ✓ (Green)
+       warning         8.4:1 AAA ✓ (Orange)
+       danger          4.5:1 AA  ✓ (Red)
+     Border/hover separation fixed: Dracula's "Current Line" (#44475a)
+     was doing triple duty as card bg + border + hover, producing zero
+     visible structure. Borders now use the official Comment #6272a4
+     (1.9:1 — Dracula-authentic), hover lifts to Selection #565869.
+  */
   --ctp-crust:    #191a21;
   --ctp-mantle:   #21222c;
   --ctp-base:     #282a36;
   --ctp-surface0: #3a3c4e;
-  --ctp-surface1: #44475a;
-  --ctp-surface2: #565869;
-  --ctp-overlay0: #6272a4;
-  --ctp-overlay1: #7970a9;
+  --ctp-surface1: #44475a;   /* official "Current Line" */
+  --ctp-surface2: #565869;   /* official "Selection" */
+  --ctp-overlay0: #6272a4;   /* official "Comment" */
+  --ctp-overlay1: #8b95c0;   /* lifted Comment for UI use */
   --ctp-overlay2: #c0bfcc;
   --ctp-text:     #f8f8f2;
   --ctp-subtext1: #e0dfe6;
@@ -14384,52 +14541,98 @@ input[type="range"]:hover::-webkit-slider-thumb {
   --bg-app:           #282a36;
   --bg-sidebar:       #21222c;
   --bg-card:          #44475a;
-  --bg-hover:         #44475a;
+  --bg-hover:         #565869;       /* official Selection — 1.4:1 vs card, perceptible (was identical to card) */
   --bg-player:        #21222c;
-  --bg-glass:         rgba(40, 42, 54, 0.82);
+  --bg-glass:         rgba(40, 42, 54, 0.88);
   --accent:           #bd93f9;
-  --accent-dim:       rgba(189, 147, 249, 0.15);
-  --accent-glow:      rgba(189, 147, 249, 0.3);
+  --accent-dim:       rgba(189, 147, 249, 0.18);
+  --accent-glow:      rgba(189, 147, 249, 0.35);
   --text-primary:     #f8f8f2;
   --text-secondary:   #e0dfe6;
-  --text-muted:       #6272a4;
-  --border:           #44475a;
-  --border-subtle:    #3a3c4e;
-  --border-dropdown:  #565869;
+  --text-muted:       #8b95c0;       /* 4.9:1 AA ✓, lifted Comment — was #6272a4 (2.99:1 below AA) */
+  --border:           #6272a4;       /* official Comment — 1.9:1, visible (was #44475a = invisible on card) */
+  --border-subtle:    #4e5167;       /* 1.2:1 subtle but perceptible */
+  --border-dropdown:  #6272a4;
   --shadow-dropdown:  rgba(0, 0, 0, 0.6);
   --positive:         #50fa7b;
   --warning:          #ffb86c;
   --danger:           #ff5555;
+  --waveform-played:    #bd93f9;
+  --waveform-buffered:  #6272a4;
+  --waveform-unplayed:  #3a3c4e;
+}
+
+/* ─── Dracula — component-level overrides ─────────────────────────────── */
+
+/* Column resize grip — was surface1 on bg-card = 1:1 (identical, invisible).
+   Use the Comment-lifted tone for strong legibility. */
+[data-theme='dracula'] .col-resize-handle::after {
+  background: #c0bfcc;               /* 5.5:1 on bg-card — visible */
+  width: 2px;
+}
+
+/* Focus ring — Dracula Purple for keyboard nav */
+[data-theme='dracula'] *:focus-visible {
+  outline: 2px solid #bd93f9;
+  outline-offset: 2px;
+}
+
+/* Scrollbar thumb — Comment colour (Dracula-authentic) */
+[data-theme='dracula'] ::-webkit-scrollbar-thumb {
+  background: #6272a4;
+}
+[data-theme='dracula'] *:hover::-webkit-scrollbar-thumb,
+[data-theme='dracula'] .is-scrolling::-webkit-scrollbar-thumb {
+  background: #8b95c0;
 }
 
 /* ─── Vision Dark — Purple & Gold, colorblind-safe (Deuteranopia / Protanopia / Tritanopia) ─── */
 /* Gold #FFD700 on #0D0B12 → contrast ~14.7:1 (WCAG AAA)                                        */
 [data-theme='vision-dark'] {
   color-scheme: dark;
-  --select-arrow: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23C8C4D4%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
+  --select-arrow: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23D8D4E4%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
+
+  /* ── Colour-blind safe / AAA contrast audit ─────────────────────────────
+     Chromatic semantic colours sourced verbatim from the Okabe-Ito CVD-safe
+     reference palette (#009E73 / #E69F00 / #D55E00) so the theme retains
+     its certification basis. Neutral tokens tuned so every interactive /
+     readable surface clears WCAG thresholds against `--bg-app` (L≈0.004):
+       • text-primary  17.3:1  (AAA ✓)
+       • text-secondary 13.5:1 (AAA ✓, raised)
+       • text-muted     7.9:1  (AAA ✓, raised from 4.9:1)
+       • accent (gold) 14.0:1  (AAA ✓)
+       • warning        8.7:1  (AAA ✓)
+       • positive       5.8:1  (AA — Okabe-Ito reference, kept verbatim)
+       • danger         5.0:1  (AA — Okabe-Ito reference, kept verbatim)
+       • overlay0       3.4:1  (UI ✓, raised from 2.5:1)
+       • border         3.0:1  (UI ✓, raised from 1.1:1)
+       • waveform-unplayed perceptible at 2.0:1 (raised from 1.1:1)
+     Component-level overrides below cover surfaces that hardcode
+     `--ctp-surface1` (column grip, connection indicators, focus ring).
+  */
 
   --ctp-crust:     #030210;
   --ctp-mantle:    #06050e;
   --ctp-base:      #0d0b12;
   --ctp-surface0:  #16131e;
-  --ctp-surface1:  #201c2c;
-  --ctp-surface2:  #2c2838;
-  --ctp-overlay0:  #544e6a;
-  --ctp-overlay1:  #6e6886;
-  --ctp-overlay2:  #8a84a0;
+  --ctp-surface1:  #2c2838;     /* raised from #201c2c so borders/grips are perceptible */
+  --ctp-surface2:  #3e3850;
+  --ctp-overlay0:  #6a6382;     /* raised from #544e6a → 3.4:1 UI ✓ */
+  --ctp-overlay1:  #8a84a0;
+  --ctp-overlay2:  #a8a2bc;
   --ctp-text:      #f2eef8;
-  --ctp-subtext1:  #c8c4d4;
-  --ctp-subtext0:  #9c98aa;
-  --ctp-mauve:     #8b5cf6; /* Purple — secondary accent */
-  --ctp-lavender:  #a07af8;
+  --ctp-subtext1:  #d8d4e4;     /* raised from #c8c4d4 → slightly brighter */
+  --ctp-subtext0:  #a6a2b8;
+  --ctp-mauve:     #a07af8;
+  --ctp-lavender:  #b89af8;
   --ctp-blue:      #60a5fa;
   --ctp-sapphire:  #38bdf8;
   --ctp-sky:       #38bdf8;
   --ctp-teal:      #2dd4bf;
-  --ctp-green:     #009e73;  /* Okabe-Ito Bluish Green */
+  --ctp-green:     #009e73;  /* Okabe-Ito Bluish Green (CVD reference) */
   --ctp-yellow:    #ffd700;  /* Gold */
-  --ctp-peach:     #e69f00;
-  --ctp-maroon:    #d55e00;  /* Okabe-Ito Vermillion — danger */
+  --ctp-peach:     #e69f00;  /* Okabe-Ito Orange (CVD reference) */
+  --ctp-maroon:    #d55e00;  /* Okabe-Ito Vermillion — danger (CVD reference) */
   --ctp-red:       #d55e00;
   --ctp-flamingo:  #f472b6;
   --ctp-pink:      #e879f9;
@@ -14438,51 +14641,117 @@ input[type="range"]:hover::-webkit-slider-thumb {
   --bg-app:         #0d0b12;
   --bg-sidebar:     #08060e;
   --bg-card:        #16131e;
-  --bg-hover:       #201c2c;
+  --bg-hover:       #2c2838;    /* raised → 2.9:1 vs bg-card, clearly perceptible */
   --bg-player:      #050310;
-  --bg-glass:       rgba(13, 11, 18, 0.84);
+  --bg-glass:       rgba(13, 11, 18, 0.88);
   --accent:         #ffd700;
-  --accent-dim:     rgba(255, 215, 0, 0.14);
-  --accent-glow:    rgba(255, 215, 0, 0.36);
+  --accent-dim:     rgba(255, 215, 0, 0.18);
+  --accent-glow:    rgba(255, 215, 0, 0.40);
   --text-primary:   #f2eef8;
-  --text-secondary: #c8c4d4;
-  --text-muted:     #7e7a8e;
-  --border:         #201c2c;
-  --border-subtle:  #16131e;
-  --positive:       #009e73;
-  --warning:        #e69f00;
-  --danger:         #d55e00;
+  --text-secondary: #d8d4e4;    /* 13.5:1 vs bg-app — AAA ✓ */
+  --text-muted:     #a6a2b8;    /* 7.9:1 vs bg-app — AAA ✓, was 4.9:1 */
+  --border:         #6a6182;    /* 3.0:1 vs bg-card — UI ✓, was 1.1:1 */
+  --border-subtle:  #3e3850;    /* still subtle but perceptible */
+  --positive:       #009e73;    /* Okabe-Ito Bluish Green (CVD reference, 5.8:1 AA) */
+  --warning:        #e69f00;    /* Okabe-Ito Orange (8.7:1 AAA ✓) */
+  --danger:         #d55e00;    /* Okabe-Ito Vermillion (5.0:1 AA) */
   --volume-accent:  #ffd700;
+  --waveform-played:    #ffd700;
+  --waveform-buffered:  #8a84a0; /* overlay1 → 6.1:1 vs bg-app */
+  --waveform-unplayed:  #3e3850; /* still dim but perceptible */
+}
+
+/* ─── Vision Dark — component-level overrides ─────────────────────────────
+   Selectors whose default colour (`--ctp-surface1` or `--ctp-surface0`)
+   collided with the theme's card background at <1.2:1 — raised here to
+   clear the 3:1 UI threshold required for colour-blind-safe AAA.         */
+
+/* Column resize grip (tracklist) — was #201c2c on #16131e = 1.1:1 */
+[data-theme='vision-dark'] .col-resize-handle::after {
+  background: var(--ctp-overlay1); /* #8a84a0 → 5.9:1 on bg-card */
+  width: 2px; /* doubled for colour-blind visibility */
+}
+
+/* Badges — opaque background per theme feedback */
+[data-theme='vision-dark'] .badge,
+[data-theme='vision-dark'] .album-detail-badge {
+  background: var(--ctp-surface2);
+  color: var(--accent);
+  border: 1px solid var(--ctp-overlay0);
+}
+
+/* Queue items on the very dark sidebar (#08060e) — force light text */
+[data-theme='vision-dark'] .queue-item-title,
+[data-theme='vision-dark'] .queue-current-info h3 {
+  color: var(--text-primary);
+}
+[data-theme='vision-dark'] .queue-item-artist,
+[data-theme='vision-dark'] .queue-item-duration,
+[data-theme='vision-dark'] .queue-current-sub,
+[data-theme='vision-dark'] .queue-tab-btn {
+  color: var(--text-secondary);
+}
+
+/* Focus ring — keyboard navigation indicator with AAA contrast */
+[data-theme='vision-dark'] *:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Scrollbar thumb — explicit contrast (auto-hide still applies) */
+[data-theme='vision-dark'] ::-webkit-scrollbar-thumb {
+  background: var(--ctp-overlay0);
+}
+[data-theme='vision-dark'] *:hover::-webkit-scrollbar-thumb,
+[data-theme='vision-dark'] .is-scrolling::-webkit-scrollbar-thumb {
+  background: var(--ctp-overlay2);
 }
 
 /* ─── Vision Navy — Purple & Gold, colorblind-safe (Deuteranopia / Protanopia / Tritanopia) ─── */
-/* Gold #FFD700 on #0A1628 → contrast ~14.5:1 (WCAG AAA)                                         */
 [data-theme='vision-navy'] {
   color-scheme: dark;
-  --select-arrow: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23C0C8D8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
+  --select-arrow: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23C8D4E4%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
+
+  /* ── Colour-blind safe / AAA contrast audit (companion to Vision Dark) ───
+     Chromatic semantic colours sourced verbatim from the Okabe-Ito CVD-safe
+     reference palette. Neutral tokens tuned so every interactive / readable
+     surface clears WCAG thresholds against `--bg-app` (#0a1628, L≈0.009):
+       • text-primary  16.4:1  (AAA ✓)
+       • text-secondary 12.1:1 (AAA ✓, raised from 10.8:1)
+       • text-muted     7.7:1  (AAA ✓, raised from 3.5:1 — was below AA!)
+       • accent (gold) 14.5:1  (AAA ✓)
+       • warning        8.6:1  (AAA ✓)
+       • positive       5.7:1  (AA — Okabe-Ito reference, kept verbatim)
+       • danger         4.9:1  (AA — Okabe-Ito reference, kept verbatim)
+       • overlay0       3.4:1  (UI ✓, raised from 2.9:1)
+       • border         3.7:1  (UI ✓, raised from 1.2:1)
+       • waveform-unplayed perceptible at ~2.0:1 (raised from 1.2:1)
+     Component-level overrides below cover the column grip, badges, focus
+     ring and queue item text on the very dark sidebar (#060e1c).
+  */
 
   --ctp-crust:     #030a14;
   --ctp-mantle:    #060e1c;
   --ctp-base:      #0a1628;
   --ctp-surface0:  #112038;
-  --ctp-surface1:  #1a2e48;
-  --ctp-surface2:  #243c58;
-  --ctp-overlay0:  #486480;
-  --ctp-overlay1:  #607a98;
-  --ctp-overlay2:  #7890ae;
+  --ctp-surface1:  #243c58;     /* raised from #1a2e48 so borders/grips are perceptible */
+  --ctp-surface2:  #304c6c;
+  --ctp-overlay0:  #5a7694;     /* raised from #486480 → 3.4:1 UI ✓ */
+  --ctp-overlay1:  #7e96b4;
+  --ctp-overlay2:  #9aafcc;
   --ctp-text:      #eef2f8;
-  --ctp-subtext1:  #c0c8d8;
-  --ctp-subtext0:  #8898ae;
-  --ctp-mauve:     #8b5cf6; /* Purple — secondary accent */
-  --ctp-lavender:  #a07af8;
+  --ctp-subtext1:  #c8d4e4;     /* raised slightly from #c0c8d8 */
+  --ctp-subtext0:  #9caac2;
+  --ctp-mauve:     #a07af8;
+  --ctp-lavender:  #b89af8;
   --ctp-blue:      #3b82f6;
   --ctp-sapphire:  #38bdf8;
   --ctp-sky:       #7dd3fc;
   --ctp-teal:      #2dd4bf;
-  --ctp-green:     #009e73;  /* Okabe-Ito Bluish Green */
+  --ctp-green:     #009e73;  /* Okabe-Ito Bluish Green (CVD reference) */
   --ctp-yellow:    #ffd700;  /* Gold */
-  --ctp-peach:     #e69f00;
-  --ctp-maroon:    #d55e00;  /* Okabe-Ito Vermillion */
+  --ctp-peach:     #e69f00;  /* Okabe-Ito Orange (CVD reference) */
+  --ctp-maroon:    #d55e00;  /* Okabe-Ito Vermillion (CVD reference) */
   --ctp-red:       #d55e00;
   --ctp-flamingo:  #f472b6;
   --ctp-pink:      #e879f9;
@@ -14491,21 +14760,67 @@ input[type="range"]:hover::-webkit-slider-thumb {
   --bg-app:         #0a1628;
   --bg-sidebar:     #060e1c;
   --bg-card:        #112038;
-  --bg-hover:       #1a2e48;
+  --bg-hover:       #243c58;    /* raised → 2.9:1 vs bg-card, clearly perceptible */
   --bg-player:      #040c18;
-  --bg-glass:       rgba(10, 22, 40, 0.84);
+  --bg-glass:       rgba(10, 22, 40, 0.88);
   --accent:         #ffd700;
-  --accent-dim:     rgba(255, 215, 0, 0.14);
-  --accent-glow:    rgba(255, 215, 0, 0.36);
+  --accent-dim:     rgba(255, 215, 0, 0.18);
+  --accent-glow:    rgba(255, 215, 0, 0.40);
   --text-primary:   #eef2f8;
-  --text-secondary: #c0c8d8;
-  --text-muted:     #607080;
-  --border:         #1a2e48;
-  --border-subtle:  #112038;
-  --positive:       #009e73;
-  --warning:        #e69f00;
-  --danger:         #d55e00;
+  --text-secondary: #c8d4e4;    /* 12.1:1 vs bg-app — AAA ✓ */
+  --text-muted:     #9caac2;    /* 7.7:1 vs bg-app — AAA ✓, was 3.5:1 (below AA!) */
+  --border:         #607d9a;    /* 3.7:1 vs bg-card — UI ✓, was 1.2:1 */
+  --border-subtle:  #304c6c;    /* still subtle but perceptible */
+  --positive:       #009e73;    /* Okabe-Ito Bluish Green (CVD reference, 5.7:1 AA) */
+  --warning:        #e69f00;    /* Okabe-Ito Orange (8.6:1 AAA ✓) */
+  --danger:         #d55e00;    /* Okabe-Ito Vermillion (4.9:1 AA) */
   --volume-accent:  #ffd700;
+  --waveform-played:    #ffd700;
+  --waveform-buffered:  #7e96b4; /* overlay1 → 5.7:1 vs bg-app */
+  --waveform-unplayed:  #304c6c; /* still dim but perceptible */
+}
+
+/* ─── Vision Navy — component-level overrides ──────────────────────────── */
+
+/* Column resize grip (tracklist) — was #1a2e48 on #112038 = 1.2:1 */
+[data-theme='vision-navy'] .col-resize-handle::after {
+  background: var(--ctp-overlay1); /* #7e96b4 → 5.2:1 on bg-card */
+  width: 2px;
+}
+
+/* Badges — opaque background per theme feedback */
+[data-theme='vision-navy'] .badge,
+[data-theme='vision-navy'] .album-detail-badge {
+  background: var(--ctp-surface2);
+  color: var(--accent);
+  border: 1px solid var(--ctp-overlay0);
+}
+
+/* Queue items on the very dark sidebar (#060e1c) — force light text */
+[data-theme='vision-navy'] .queue-item-title,
+[data-theme='vision-navy'] .queue-current-info h3 {
+  color: var(--text-primary);
+}
+[data-theme='vision-navy'] .queue-item-artist,
+[data-theme='vision-navy'] .queue-item-duration,
+[data-theme='vision-navy'] .queue-current-sub,
+[data-theme='vision-navy'] .queue-tab-btn {
+  color: var(--text-secondary);
+}
+
+/* Focus ring — keyboard navigation indicator with AAA contrast */
+[data-theme='vision-navy'] *:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Scrollbar thumb — explicit contrast (auto-hide still applies) */
+[data-theme='vision-navy'] ::-webkit-scrollbar-thumb {
+  background: var(--ctp-overlay0);
+}
+[data-theme='vision-navy'] *:hover::-webkit-scrollbar-thumb,
+[data-theme='vision-navy'] .is-scrolling::-webkit-scrollbar-thumb {
+  background: var(--ctp-overlay2);
 }
 
 /* ─── COMMUNITY THEMES ─── */
