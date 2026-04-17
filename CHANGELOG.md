@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+> **⚠️ Note for Windows users:** This is the last release with an unsigned Windows installer. We are waiting for our code signing certificate and hope it will arrive within the next few days. The installer does not contain a virus — any warnings from Windows SmartScreen or antivirus software are false positives. If you'd like to help cover the certificate costs, you can do so at [ko-fi.com/psychotoxic](https://ko-fi.com/psychotoxic) — completely voluntary, no pressure at all.
+
+## [1.34.12] - 2026-04-17
+
+### Added
+
+- **Playback source indicator in Queue** *(contributed by [@cucadmuh](https://github.com/cucadmuh), PR [#201](https://github.com/Psychotoxical/psysonic/pull/201))*: The current-track tech strip in the Queue panel now shows a **source badge** indicating how the track was loaded: `stream` (live from server), `preloaded` (buffered before playback), or `cache` (served from local hot cache). Preload tracking is wired through the Rust audio engine so the badge reflects actual playback origin, not just current state.
+
+- **ReplayGain metadata in Queue tech strip** *(Issue [#195](https://github.com/Psychotoxical/psysonic/issues/195), contributed by [@cucadmuh](https://github.com/cucadmuh), PR [#196](https://github.com/Psychotoxical/psysonic/pull/196))*: The current-track tech strip now shows track and album ReplayGain values alongside bitrate and format when the file contains gain tags.
+
+- **Discord Rich Presence enhancements** *(contributed by [@kveld9](https://github.com/kveld9), PR [#198](https://github.com/Psychotoxical/psysonic/pull/198))*: Discord Rich Presence received several improvements: dead/unused fields removed, the `{paused}` placeholder that Discord does not support was dropped, and a `timeChanged` invoke loop that fired redundantly on every progress tick was eliminated. The DRP timer is now accurate and stable.
+
+- **Context menu in Search results** *(contributed by [@kveld9](https://github.com/kveld9), PR [#191](https://github.com/Psychotoxical/psysonic/pull/191))*: Song rows in the Search panel now support the full right-click context menu (Play, Queue, Playlist, etc.) — previously search results were click-only with no context actions.
+
+- **Spotify CSV playlist import** *(contributed by [@kveld9](https://github.com/kveld9), PR [#190](https://github.com/Psychotoxical/psysonic/pull/190))*: Playlists exported from Spotify as CSV can now be imported directly into Psysonic. Tracks are matched by ISRC when available, with title/artist fallback. Unmatched tracks are listed in a report after import. Duplicate checking is done before writing.
+
+- **CLI completions and expanded player controls** *(contributed by [@cucadmuh](https://github.com/cucadmuh), PR [#187](https://github.com/Psychotoxical/psysonic/pull/187))*: The `psysonic` CLI gains shell completions for bash/fish/zsh/elvish, new subcommands for library browsing and audio device listing, a server switcher command, and an opaque play-ID scheme for stable track references. The tray icon on Linux no longer requires `libayatana-appindicator` / `libindicator` — it falls back gracefully when the library is absent.
+
+- **Albums and Playlists header redesign** *(contributed by [@kveld9](https://github.com/kveld9), PR [#186](https://github.com/Psychotoxical/psysonic/pull/186))*: The header sections on the Albums and Playlists pages have been redesigned for a cleaner, more consistent layout.
+
+- **Favorites page redesign** *(contributed by [@kveld9](https://github.com/kveld9), PR [#184](https://github.com/Psychotoxical/psysonic/pull/184))*: The Favorites page has been overhauled with sortable columns, a gender filter, an age range filter, and additional metadata columns.
+
+- **Split Mix navigation mode** *(by [@Psychotoxical](https://github.com/Psychotoxical))*: A new toggle in Settings switches the Mix section between a single **Build a Mix** hub entry and **two separate sidebar entries** — Random Mix and Random Albums — for users who prefer direct access. Navigation items are now defined in `src/config/navItems.ts`; the toggle is stored as `randomNavMode` in authStore.
+
+- **Device Sync improvements** *(by [@Psychotoxical](https://github.com/Psychotoxical))*: Device Sync received several updates: a JSON manifest is now written to the device root on every sync (and read back automatically when the device is mounted); a **Cancel** button interrupts a running sync cleanly; a font picker was added to the sync page; sync status display was fixed; and the filename template builder now works correctly on all platforms.
+
+- **Radio — ICY StreamTitle forwarded to MPRIS** *(by [@Psychotoxical](https://github.com/Psychotoxical))*: While playing internet radio, the current song title parsed from ICY `StreamTitle` metadata is now forwarded to MPRIS `xesam:title` on Linux so that the track name appears in desktop notification shells and media controls.
+
+- **Help page — expanded coverage** *(by [@Psychotoxical](https://github.com/Psychotoxical))*: Added missing help sections covering Device Sync, Internet Radio, CLI usage, Playlists, Infinite Queue, Lyrics sources, Audio device selection, Backup & Restore, and Now Playing details.
+
+- **Tracklist column reset and privacy policy** *(by [@Psychotoxical](https://github.com/Psychotoxical))*: A reset button in the tracklist column picker restores the default column set. The Device Sync page received a cross-platform filename template fix. A privacy policy page was added documenting data usage for Last.fm, LRCLIB, NetEase, and Discord.
+
+### Fixed
+
+- **Streaming playback stability** *(contributed by [@cucadmuh](https://github.com/cucadmuh), PR [#200](https://github.com/Psychotoxical/psysonic/pull/200))*: Several edge cases in the Rust audio engine around stream start, mid-track seeking, and track transitions were hardened. Cache promotion (moving a preloaded track into the hot cache) is now safer under concurrent access. Stream decoder errors during transitions no longer leave the engine in a stuck state.
+
+- **CSV import reliability** *(contributed by [@kveld9](https://github.com/kveld9), PR [#199](https://github.com/Psychotoxical/psysonic/pull/199))*: The CSV import pipeline now guards the `ISRC` field type before calling `toUpperCase`, preventing a crash on rows with numeric or null ISRC values. The playlist public/private toggle in the edit modal (accidentally removed during a post-merge fix) is restored.
+
+- **Tracklist column picker** *(contributed by [@kveld9](https://github.com/kveld9), PR [#188](https://github.com/Psychotoxical/psysonic/pull/188) and PR [#192](https://github.com/Psychotoxical/psysonic/pull/192))*: Fixed a column picker overflow where the dropdown was clipped by the tracklist container. Also fixed column toggle state and alignment issues in the picker UI. An `overflow-x: visible` regression introduced in PR #188 was subsequently reverted.
+
+- **macOS — spurious microphone permission prompt** *(by [@Psychotoxical](https://github.com/Psychotoxical))*: Removed `NSMicrophoneUsageDescription` from `Info.plist`. It was inherited from an earlier Tauri template but Psysonic never uses the microphone; its presence caused macOS to show a permission dialog on first launch.
+
+- **Device Sync — auto-import and disconnect cleanup** *(by [@Psychotoxical](https://github.com/Psychotoxical))*: The sync manifest is now automatically imported when the Device Sync page is opened if a device with a manifest is already mounted. The sync file list is cleared when the device is disconnected.
+
+- **Audio — streaming decoder log labels** *(contributed by [@cucadmuh](https://github.com/cucadmuh), PR [#201](https://github.com/Psychotoxical/psysonic/pull/201))*: Rust log lines from the streaming decoder are now tagged with the source type, making it easier to distinguish stream vs. local decode paths in debug output.
+
+- **Theme — Latte and GTA readability** *(by [@Psychotoxical](https://github.com/Psychotoxical))*: Improved contrast and text readability in the Catppuccin Latte and GTA themes.
+
+- **i18n — missing `common.play` key** *(by [@Psychotoxical](https://github.com/Psychotoxical))*: Added the `common.play` translation key to all 8 locales; it was missing after PR #186 which introduced its usage.
+
+### Removed
+
+- **Waveform seekbar — realtime waveform style** *(by [@Psychotoxical](https://github.com/Psychotoxical))*: The `realtime_waveform` CSS class and its associated style block were removed. This style was applied during live streaming and produced a low-quality rendering mode that was no longer needed after the streaming architecture improvements.
+
+---
+
+*Thank you to everyone who contributed to this release:*
+*[@cucadmuh](https://github.com/cucadmuh) for the playback source indicator, ReplayGain in the tech strip, streaming stability hardening, and CLI improvements — four substantial PRs.*
+*[@kveld9](https://github.com/kveld9) for the CSV import, search context menu, Discord RP enhancements, Favorites redesign, and header redesign — a very productive cycle.*
+
+---
+
 ## [1.34.11] - 2026-04-14
 
 ### Added
