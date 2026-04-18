@@ -8,6 +8,7 @@ import {
   type SubsonicServerIdentity,
 } from '../utils/subsonicServerIdentity';
 import { usePlayerStore } from './playerStore';
+import { IS_LINUX } from '../utils/platform';
 
 export interface ServerProfile {
   id: string;
@@ -640,12 +641,14 @@ export const useAuthStore = create<AuthState>()(
         // explicit toggle in Settings may turn it off (persisted in psysonic-auth).
         const wheelSmoothMigrationKey = 'psysonic-linux-webkit-smooth-v1';
         let wheelSmoothOneTime: { linuxWebkitKineticScroll?: boolean } = {};
-        try {
-          if (!localStorage.getItem(wheelSmoothMigrationKey)) {
-            wheelSmoothOneTime = { linuxWebkitKineticScroll: true };
-            localStorage.setItem(wheelSmoothMigrationKey, '1');
-          }
-        } catch { /* ignore */ }
+        if (IS_LINUX) {
+          try {
+            if (!localStorage.getItem(wheelSmoothMigrationKey)) {
+              wheelSmoothOneTime = { linuxWebkitKineticScroll: true };
+              localStorage.setItem(wheelSmoothMigrationKey, '1');
+            }
+          } catch { /* ignore */ }
+        }
 
         useAuthStore.setState({
           mixMinRatingSong: clampMixFilterMinStars(state.mixMinRatingSong as number),
