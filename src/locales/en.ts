@@ -376,6 +376,7 @@ export const enTranslation = {
     downloadZip: 'Download (ZIP)',
     back: 'Back',
     cancel: 'Cancel',
+    close: 'Close',
     save: 'Save',
     delete: 'Delete',
     use: 'Use',

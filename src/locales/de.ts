@@ -375,6 +375,7 @@ export const deTranslation = {
     downloadZip: 'Download (ZIP)',
     back: 'Zurück',
     cancel: 'Abbrechen',
+    close: 'Schließen',
     save: 'Speichern',
     delete: 'Löschen',
     use: 'Verwenden',
