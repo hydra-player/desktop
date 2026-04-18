@@ -78,6 +78,16 @@ curl -fsSL https://raw.githubusercontent.com/Psychotoxical/psysonic/main/scripts
 - **Fedora / RHEL**: `.rpm` from GitHub Releases
 - **Any distro (portable)**: `.AppImage` from GitHub Releases — `chmod +x` and run, no install required
 
+**Arch Linux (AUR):**
+
+| Package | Type | Description |
+| :--- | :--- | :--- |
+| [**psysonic**](https://aur.archlinux.org/packages/psysonic) | **Source** | Builds from source using your system's native **WebKitGTK** (no bundled libs, no EGL/Mesa compatibility issues). |
+| [**psysonic-bin**](https://aur.archlinux.org/packages/psysonic-bin) | **Binary** | Pre-compiled version for faster installation. |
+
+> [!TIP]
+> The AUR binary package is kindly provided and maintained by [**kilyabin**](https://github.com/kilyabin).
+
 **❄️ NixOS (flakes):**
 - `nix run github:Psychotoxical/psysonic` — one-shot launch
 - Full guide: [`nixos-install.md`](./nixos-install.md) *(contributed by [@cucadmuh](https://github.com/cucadmuh), PR [#209](https://github.com/Psychotoxical/psysonic/pull/209))*
@@ -96,18 +106,6 @@ curl -fsSL https://raw.githubusercontent.com/Psychotoxical/psysonic/main/scripts
 > [!WARNING]
 > **SmartScreen Note:**
 > Windows SmartScreen might show a warning because the installer isn't signed with an expensive developer certificate. Click on **"More info"** and then **"Run anyway"**.
-
-## 📦 Installation (Arch Linux / AUR)
-
-Psysonic is available in the **AUR** in two versions. Choose the one that best fits your needs:
-
-| Package | Type | Description |
-| :--- | :--- | :--- |
-| [**psysonic**](https://aur.archlinux.org/packages/psysonic) | **Source** | Builds from source using your system's native **WebKitGTK** (no bundled libs, no EGL/Mesa compatibility issues). |
-| [**psysonic-bin**](https://aur.archlinux.org/packages/psysonic-bin) | **Binary** | Pre-compiled version for faster installation. |
-
-> [!TIP]
-> The AUR binary package is kindly provided and maintained by [**kilyabin**](https://github.com/kilyabin).
 
 ## 🚀 Getting Started
 
