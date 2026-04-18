@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { SubsonicArtist, buildCoverArtUrl, coverArtCacheKey } from '../api/subsonic';
 import { useNavigate } from 'react-router-dom';
 import { Users } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import CachedImage from './CachedImage';
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export default function ArtistCardLocal({ artist }: Props) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const coverId = artist.coverArt || artist.id;
   // buildCoverArtUrl generates a new crypto salt on every call — must be
@@ -38,7 +40,7 @@ export default function ArtistCardLocal({ artist }: Props) {
         <span className="artist-card-name">{artist.name}</span>
         {typeof artist.albumCount === 'number' && (
           <span className="artist-card-meta">
-            {artist.albumCount} {artist.albumCount === 1 ? 'Album' : 'Alben'}
+            {t('artists.albumCount', { count: artist.albumCount })}
           </span>
         )}
       </div>
