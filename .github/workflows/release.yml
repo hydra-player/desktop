@@ -103,11 +103,25 @@ jobs:
           workspaces: src-tauri
       - name: install npm dependencies
         run: npm install
+      - name: write Apple API key (macOS only)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p ~/private_keys
+          echo "${{ secrets.APPLE_API_KEY_B64 }}" | base64 --decode > ~/private_keys/AuthKey.p8
+          echo "APPLE_API_KEY_PATH=$HOME/private_keys/AuthKey.p8" >> $GITHUB_ENV
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_LASTFM_API_KEY: ${{ secrets.VITE_LASTFM_API_KEY }}
           VITE_LASTFM_API_SECRET: ${{ secrets.VITE_LASTFM_API_SECRET }}
+          # Apple signing + notarization (macOS runner only — ignored on Windows)
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          # APPLE_API_KEY_PATH comes from the previous step via $GITHUB_ENV
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.settings.args }}
