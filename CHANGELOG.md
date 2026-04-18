@@ -13,6 +13,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 >
 > **📦 Version jump 1.34.x → 1.40.0:** The 1.34.x patch series was bumped a lot as each small feature landed. 1.40.0 consolidates the last few weeks of work — macOS signing + auto-updater, the Device-Sync overhaul, theme work and contrast audits — into a single coherent release. The next major bump (2.0.0) is planned once Windows code-signing + Windows auto-updater are active as well.
 
+## [1.41.0] - 2026-04-18
+
+### Added
+
+- **Mini player window — early alpha** *(Issue [#162](https://github.com/Psychotoxical/psysonic/issues/162), by [@Psychotoxical](https://github.com/Psychotoxical))*: A small always-on-top companion window with album art, title, artist, prev/play/next, progress bar, and a pin-on-top toggle. Opens via the new picture-in-picture icon in the player bar. The main window auto-minimizes when the mini opens and is restored when the mini is hidden or closed; an "expand" button in the mini jumps back without closing it. Spacebar toggles playback, arrow keys skip tracks. On tiling WMs (Hyprland/Sway/i3) the always-on-top flag is skipped since it wouldn't be honoured anyway. Lyrics, EQ, queue expand and drag-snap are deliberately out of scope for this first cut.
+
+- **Favorites — genre column + Top Favorite Artists row** *(Issue [#87](https://github.com/Psychotoxical/psysonic/issues/87), by [@Psychotoxical](https://github.com/Psychotoxical))*: The Favorites tracklist now has a toggleable Genre column (alongside the existing Album column and multi-genre filter). A new horizontally scrolling "Top Favorite Artists" row sits between Radio Stations and Songs, aggregated from starred tracks and sorted by star count. Clicking an artist card narrows the song list to that artist.
+
+- **Compilation filter on All Albums** *(Issue [#65](https://github.com/Psychotoxical/psysonic/issues/65), by [@Psychotoxical](https://github.com/Psychotoxical))*: A tri-state toggle in the Albums page header (All / Only compilations / Hide compilations) that reads the OpenSubsonic `isCompilation` tag exposed by Navidrome 0.61+. Client-side filter, no additional server calls. Translated into all 8 supported locales.
+
+- **Sticky header on Albums, New Releases, Artists** *(by [@Psychotoxical](https://github.com/Psychotoxical))*: The header row with search/sort/genre/year controls now pins to the top while scrolling, so filters stay reachable without jumping back up. Works the same on all three browse pages.
+
+- **Device Sync — album artist on both panels** *(by [@Psychotoxical](https://github.com/Psychotoxical))*: Album entries in both the library (left) and on-device (right) panels now display `Album · Artist` inline, so sampler discs and self-titled albums are no longer guesswork. Playlists unchanged.
+
+### Changed
+
+- **Genre filter — portal popover** *(by [@Psychotoxical](https://github.com/Psychotoxical))*: The inline tagbox + dropdown (capped at 60 entries, ate header space when expanded) is replaced by a compact button that opens a portal-rendered popover with a search field and the full scrollable list of genres. Selected genres sort to the top. Used on Albums, New Releases, Random Albums and Favorites.
+
+- **Year filter — portal popover** *(by [@Psychotoxical](https://github.com/Psychotoxical))*: The From/To number inputs in the Albums header became a single button with a popover mirroring the genre filter pattern. When the filter is active, the button shows the range (e.g. `2020–2024`) in accent colour.
+
+- **Sort picker — portal dropdown** *(by [@Psychotoxical](https://github.com/Psychotoxical))*: The two sort buttons on Albums (`A–Z (Album)`, `A–Z (Artist)`) collapse into one dropdown button showing the current choice. Generic `SortDropdown` component, reusable for other pages.
+
+- **Device Sync — album/playlist meta inline** *(by [@Psychotoxical](https://github.com/Psychotoxical))*: `BrowserRow` renders secondary info inline with a `·` separator in muted colour instead of a separate right-aligned column, matching the on-device panel's format.
+
+### Fixed
+
+- **Fullscreen player — lyrics menu toggle + readability** *(by [@Psychotoxical](https://github.com/Psychotoxical))*: Re-clicking the mic icon now actually closes the lyrics settings panel instead of the outside-click handler closing it and the click re-opening it — the trigger button is excluded from the outside-check. The panel itself is now a solid surface (no backdrop blur, near-opaque background, higher-contrast button text) so settings remain readable over the busy fullscreen background.
+
+- **i18n — ArtistCardLocal album count** *(contributed by [@cucadmuh](https://github.com/cucadmuh))*: Local artist cards were rendering the album count with hardcoded German (`Album` / `Alben`). Switched to the existing plural-aware `artists.albumCount` key which already covers all 8 locales including Russian Slavic plurals.
+
+- **Release CI — Cachix never receiving the psysonic closure** *(by [@Psychotoxical](https://github.com/Psychotoxical))*: `cachix-action` installs its post-build hook via `NIX_USER_CONF_FILES`, but the Determinate Nix daemon that runs the actual builds reads the system nix.conf — so the hook never fired. Only a couple of early prep paths ever reached the cache, never the compiled `psysonic` output. The release workflow now pushes the full closure explicitly after `nix build`; Cachix dedupes against paths already present, so redundancy is cheap.
+
+### Contributors
+
+- [@cucadmuh](https://github.com/cucadmuh) — i18n fix for ArtistCardLocal.
+
+---
+
 ## [1.40.0] - 2026-04-18
 
 ### Added
