@@ -83,8 +83,10 @@ jobs:
             args: '--target aarch64-apple-darwin'
           - platform: 'macos-latest'
             args: '--target x86_64-apple-darwin'
-          - platform: 'windows-latest'
-            args: '--bundles nsis'
+          # TEMPORARILY DISABLED during macOS updater testing — faster turnaround.
+          # Re-add before the next public release.
+          # - platform: 'windows-latest'
+          #   args: '--bundles nsis'
     runs-on: ${{ matrix.settings.platform }}
     steps:
       - uses: actions/checkout@v5
@@ -128,35 +130,35 @@ jobs:
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.settings.args }}
-      - name: upload updater signature (macOS only)
+          # Disable tauri-action's own .app.tar.gz re-packaging + updater JSON
+          # upload — its repack overwrites the .app.tar.gz produced by tauri
+          # CLI and invalidates the matching .sig (the tauri-created signature
+          # no longer matches the repacked tarball's hash, so tauri-action
+          # silently drops the .sig). We upload both files ourselves below,
+          # and the generate-manifest job assembles latest.json.
+          includeUpdaterJson: false
+      - name: upload updater bundle + signature (macOS only)
         if: runner.os == 'macOS'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -x
+          set -e
           VERSION=${{ needs.create-release.outputs.package_version }}
           TARGET_ARG='${{ matrix.settings.args }}'
           if echo "$TARGET_ARG" | grep -q 'aarch64'; then
             TARGET="aarch64-apple-darwin"
-            DST="Psysonic_aarch64.app.tar.gz.sig"
+            ARCH="aarch64"
           else
             TARGET="x86_64-apple-darwin"
-            DST="Psysonic_x64.app.tar.gz.sig"
+            ARCH="x64"
           fi
-
           BUNDLE_DIR="src-tauri/target/${TARGET}/release/bundle/macos"
-          echo "=== Listing $BUNDLE_DIR ==="
-          ls -la "$BUNDLE_DIR" || true
-          echo "=== Searching whole target tree for .sig ==="
-          find "src-tauri/target" -name '*.sig' -type f 2>/dev/null || true
-
-          SIG="${BUNDLE_DIR}/Psysonic.app.tar.gz.sig"
-          if [ ! -f "$SIG" ]; then
-            echo "::error::Signature not at expected path: $SIG"
-            exit 1
-          fi
-          cp "$SIG" "$DST"
-          gh release upload "app-v${VERSION}" "$DST" --clobber
+          cp "${BUNDLE_DIR}/Psysonic.app.tar.gz"     "Psysonic_${ARCH}.app.tar.gz"
+          cp "${BUNDLE_DIR}/Psysonic.app.tar.gz.sig" "Psysonic_${ARCH}.app.tar.gz.sig"
+          gh release upload "app-v${VERSION}" \
+            "Psysonic_${ARCH}.app.tar.gz" \
+            "Psysonic_${ARCH}.app.tar.gz.sig" \
+            --clobber
 
   generate-manifest:
     needs: [create-release, build-macos-windows]
@@ -178,6 +180,9 @@ jobs:
           gh release upload "app-v${VERSION}" latest.json --clobber
 
   build-linux:
+    # TEMPORARILY DISABLED during macOS updater testing — faster turnaround.
+    # Re-enable by removing `if: false` before the next public release.
+    if: false
     needs: create-release
     permissions:
       contents: write
