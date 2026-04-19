@@ -1,46 +1,31 @@
 /**
- * Spring-based scroll animation — iOS / Apple Music feel.
+ * Duration-based ease-out scroll animator.
  *
- * Uses a critically-damped spring model driven by rAF:
- *   velocity += (target − position) × stiffness
- *   velocity *= damping
- *   position += velocity
- *
- * Tuning:
- *   stiffness  0.04 – 0.10  → lower = slower / more fluid
- *   damping    0.80 – 0.88  → lower = more bounce; higher = overdamped / snappy
- *   maxVelocity             → caps initial lurch when target is far away
- *
- * A single SpringScroller instance per container avoids fighting rAF loops
- * when the target changes before the previous animation finishes — calling
- * scrollTo() mid-flight just updates the target and the running loop picks it up.
+ * Animates scrollTop from the current position to the target over a fixed
+ * duration using a cubic ease-out curve. Calling scrollTo() mid-flight
+ * restarts cleanly from wherever the container currently sits, so fast
+ * line changes never look jerky or skip.
  */
-export class SpringScroller {
-  private container  : HTMLElement;
-  private target     = 0;
-  private velocity   = 0;
+export class EaseScroller {
+  private container : HTMLElement;
+  private startY    = 0;
+  private targetY   = 0;
+  private startTime = 0;
   private rafId: number | null = null;
 
-  private readonly stiffness  : number;
-  private readonly damping    : number;
-  private readonly maxVelocity: number;
+  private readonly duration: number;
 
-  constructor(
-    container   : HTMLElement,
-    stiffness    = 0.065,   // gentle pull
-    damping      = 0.84,    // smooth settle, no oscillation
-    maxVelocity  = 28,      // px/frame cap — prevents jarring lurch on large jumps
-  ) {
-    this.container   = container;
-    this.target      = container.scrollTop;
-    this.stiffness   = stiffness;
-    this.damping     = damping;
-    this.maxVelocity = maxVelocity;
+  constructor(container: HTMLElement, duration = 650) {
+    this.container = container;
+    this.targetY   = container.scrollTop;
+    this.duration  = duration;
   }
 
-  scrollTo(targetY: number) {
-    this.target = Math.max(0, targetY);
-    if (this.rafId === null) this.tick();
+  scrollTo(y: number) {
+    this.startY    = this.container.scrollTop;
+    this.targetY   = Math.max(0, y);
+    this.startTime = performance.now();
+    if (this.rafId === null) this.rafId = requestAnimationFrame(this.tick);
   }
 
   stop() {
@@ -48,42 +33,30 @@ export class SpringScroller {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
     }
-    this.velocity = 0;
   }
 
-  /** Teleport without animation (e.g. on track reset). */
   jump(y: number) {
     this.stop();
-    this.target = y;
     this.container.scrollTop = y;
+    this.targetY = y;
   }
 
-  private tick = () => {
-    const pos   = this.container.scrollTop;
-    const delta = this.target - pos;
-
-    let v = (this.velocity + delta * this.stiffness) * this.damping;
-    // Cap velocity so large distances don't start with a hard jerk.
-    if (v >  this.maxVelocity) v =  this.maxVelocity;
-    if (v < -this.maxVelocity) v = -this.maxVelocity;
-    this.velocity = v;
-
-    this.container.scrollTop += v;
-
-    const settled = Math.abs(v) < 0.12 && Math.abs(delta) < 0.5;
-    if (settled) {
-      this.container.scrollTop = this.target;
-      this.rafId    = null;
-      this.velocity = 0;
-    } else {
+  private tick = (now: number) => {
+    const t    = Math.min((now - this.startTime) / this.duration, 1);
+    const ease = 1 - Math.pow(1 - t, 3); // cubic ease-out
+    this.container.scrollTop = this.startY + (this.targetY - this.startY) * ease;
+    if (t < 1) {
       this.rafId = requestAnimationFrame(this.tick);
+    } else {
+      this.container.scrollTop = this.targetY;
+      this.rafId = null;
     }
   };
 }
 
 /**
- * Convenience: compute the scroll position that places `el` at `fraction`
- * from the top of `container` (0 = top, 0.5 = centre, 0.35 = Apple-style).
+ * Compute the scroll position that places `el` at `fraction` from the top
+ * of `container` (0 = top edge, 0.35 = Apple Music-style, 0.5 = centre).
  */
 export function targetForFraction(
   container: HTMLElement,

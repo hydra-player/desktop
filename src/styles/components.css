@@ -3621,6 +3621,12 @@
   pointer-events: none;
 }
 
+/* Fade the bottom of the scroll viewport when showing plain lyrics */
+.fsa-lyrics-container--plain {
+  -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+}
+
 .fsa-plain-line {
   font-size: clamp(1.1rem, 2.5vh, 2.2rem);
   font-weight: 500;

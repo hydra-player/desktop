@@ -13,7 +13,7 @@ import { useLyrics, type WordLyricsLine } from '../hooks/useLyrics';
 import { useAuthStore } from '../store/authStore';
 import type { LrcLine } from '../api/lrclib';
 import type { Track } from '../store/playerStore';
-import { SpringScroller, targetForFraction } from '../utils/springScroll';
+import { EaseScroller, targetForFraction } from '../utils/springScroll';
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds)) return '0:00';
@@ -47,23 +47,18 @@ const FsLyricsApple = memo(function FsLyricsApple({ currentTrack }: { currentTra
   const [activeIdx, setActiveIdx]   = useState(-1);
   const activeIdxRef                = useRef(-1);
 
-  const containerRef  = useRef<HTMLDivElement>(null);
-  const springRef     = useRef<SpringScroller | null>(null);
+  const containerRef  = useRef<HTMLDivElement | null>(null);
+  const scrollerRef   = useRef<EaseScroller | null>(null);
   const lineRefs      = useRef<(HTMLDivElement | null)[]>([]);
   const wordRefs      = useRef<HTMLSpanElement[][]>([]);
   const prevWord      = useRef({ line: -1, word: -1 });
   const isUserScroll  = useRef(false);
   const scrollTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Create/destroy the SpringScroller when the container mounts.
   const setContainerRef = useCallback((el: HTMLDivElement | null) => {
-    (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
-    if (el) {
-      springRef.current = new SpringScroller(el, 0.1, 0.78);
-    } else {
-      springRef.current?.stop();
-      springRef.current = null;
-    }
+    containerRef.current = el;
+    scrollerRef.current?.stop();
+    scrollerRef.current = el ? new EaseScroller(el) : null;
   }, []);
 
   // Reset everything on track change.
@@ -73,7 +68,7 @@ const FsLyricsApple = memo(function FsLyricsApple({ currentTrack }: { currentTra
     prevWord.current   = { line: -1, word: -1 };
     activeIdxRef.current = -1;
     setActiveIdx(-1);
-    springRef.current?.jump(0);
+    scrollerRef.current?.jump(0);
   }, [currentTrack?.id]);
 
   // Subscribe to playback time — only triggers React setState when line changes.
@@ -92,13 +87,13 @@ const FsLyricsApple = memo(function FsLyricsApple({ currentTrack }: { currentTra
     return usePlayerStore.subscribe(s => apply(s.currentTime));
   }, [hasSynced, currentTrack?.id]);
 
-  // Spring-scroll active line to ~35% from the top of the container.
+  // Ease-scroll active line to ~35% from the top of the container.
   useEffect(() => {
     if (activeIdx < 0 || isUserScroll.current) return;
     const el  = lineRefs.current[activeIdx];
     const box = containerRef.current;
-    if (!el || !box || !springRef.current) return;
-    springRef.current.scrollTo(targetForFraction(box, el, 0.35));
+    if (!el || !box || !scrollerRef.current) return;
+    scrollerRef.current.scrollTo(targetForFraction(box, el, 0.35));
   }, [activeIdx]);
 
   // Word-sync: imperative DOM updates, zero React re-renders per tick.
@@ -134,8 +129,7 @@ const FsLyricsApple = memo(function FsLyricsApple({ currentTrack }: { currentTra
   }, [useWords, wordLines]);
 
   const handleUserScroll = useCallback(() => {
-    // Stop spring animation so it doesn't fight the user's scroll.
-    springRef.current?.stop();
+    scrollerRef.current?.stop();
     isUserScroll.current = true;
     if (scrollTimer.current) clearTimeout(scrollTimer.current);
     scrollTimer.current = setTimeout(() => { isUserScroll.current = false; }, 4000);
@@ -149,9 +143,11 @@ const FsLyricsApple = memo(function FsLyricsApple({ currentTrack }: { currentTra
 
   if (!currentTrack || loading) return null;
 
+  const isPlain = !hasSynced && !!plainLyrics;
+
   return (
     <div
-      className="fsa-lyrics-container"
+      className={`fsa-lyrics-container${isPlain ? ' fsa-lyrics-container--plain' : ''}`}
       ref={setContainerRef}
       onWheel={handleUserScroll}
       onTouchMove={handleUserScroll}
