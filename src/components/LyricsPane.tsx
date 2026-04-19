@@ -6,7 +6,7 @@ import { useLyrics, type WordLyricsLine } from '../hooks/useLyrics';
 import { useAuthStore } from '../store/authStore';
 import { useTranslation } from 'react-i18next';
 import type { Track } from '../store/playerStore';
-import { SpringScroller, targetForFraction } from '../utils/springScroll';
+import { EaseScroller, targetForFraction } from '../utils/springScroll';
 
 interface Props {
   currentTrack: Track | null;
@@ -33,37 +33,32 @@ export default function LyricsPane({ currentTrack }: Props) {
   const duration = usePlayerStore(s => s.currentTrack?.duration ?? 0);
 
   const containerRef  = useRef<HTMLDivElement | null>(null);
-  const springRef     = useRef<SpringScroller | null>(null);
+  const scrollerRef   = useRef<EaseScroller | null>(null);
   const lineRefs      = useRef<(HTMLDivElement | null)[]>([]);
   const wordRefs      = useRef<HTMLSpanElement[][]>([]);
   const prevActive    = useRef({ line: -1, word: -1 });
   const isUserScroll  = useRef(false);
   const scrollTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Attach/detach SpringScroller when the pane mounts.
   const setContainerRef = useCallback((el: HTMLDivElement | null) => {
     containerRef.current = el;
-    springRef.current?.stop();
-    springRef.current = el ? new SpringScroller(el, 0.1, 0.78) : null;
+    scrollerRef.current?.stop();
+    scrollerRef.current = el ? new EaseScroller(el) : null;
   }, []);
 
-  // Pause auto-scroll when user manually scrolls; stop spring so it doesn't fight.
   const handleUserScroll = useCallback(() => {
-    springRef.current?.stop();
+    scrollerRef.current?.stop();
     isUserScroll.current = true;
     if (scrollTimer.current) clearTimeout(scrollTimer.current);
     scrollTimer.current = setTimeout(() => { isUserScroll.current = false; }, 4000);
   }, []);
 
-  // Scroll active line into view.
-  // Apple style: spring-animate to ~35% from top.
-  // Classic style: native scrollIntoView center.
   const scrollToLine = useCallback((el: HTMLDivElement) => {
     if (isUserScroll.current) return;
     const container = containerRef.current;
     if (!container) return;
-    if (sidebarLyricsStyle === 'apple' && springRef.current) {
-      springRef.current.scrollTo(targetForFraction(container, el, 0.35));
+    if (sidebarLyricsStyle === 'apple' && scrollerRef.current) {
+      scrollerRef.current.scrollTo(targetForFraction(container, el, 0.35));
     } else {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
@@ -74,7 +69,7 @@ export default function LyricsPane({ currentTrack }: Props) {
     lineRefs.current  = [];
     wordRefs.current  = [];
     prevActive.current = { line: -1, word: -1 };
-    springRef.current?.jump(0);
+    scrollerRef.current?.jump(0);
   }, [currentTrack?.id]);
 
   // Imperative tracker — subscribes directly to the store, zero React re-renders per tick.
