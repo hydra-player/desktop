@@ -1145,6 +1145,11 @@
   height: var(--player-height);
   position: relative;
   z-index: 100;
+  /* WebKitGTK (software compositing) occasionally paints the bar fully
+     black for one frame when an unrelated layer in the page invalidates.
+     `contain` isolates layout/paint so the bar's region cannot
+     participate in the surrounding dirty rect. */
+  contain: layout paint;
 }
 
 .player-track-info {
