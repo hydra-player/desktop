@@ -143,9 +143,11 @@ const FsLyricsApple = memo(function FsLyricsApple({ currentTrack }: { currentTra
 
   if (!currentTrack || loading) return null;
 
+  const isPlain = !hasSynced && !!plainLyrics;
+
   return (
     <div
-      className="fsa-lyrics-container"
+      className={`fsa-lyrics-container${isPlain ? ' fsa-lyrics-container--plain' : ''}`}
       ref={setContainerRef}
       onWheel={handleUserScroll}
       onTouchMove={handleUserScroll}
