@@ -682,6 +682,7 @@ export const ruTranslation = {
     shortcutOpenFolderBrowser: 'Открыть {{folderBrowser}}',
     shortcutFullscreenPlayer: 'Полноэкранный плеер',
     shortcutNativeFullscreen: 'Системный полный экран',
+    shortcutOpenMiniPlayer: 'Открыть мини-плеер',
     playbackTitle: 'Воспроизведение',
     replayGain: 'Replay Gain',
     replayGainDesc: 'Выравнивание громкости по метаданным ReplayGain',

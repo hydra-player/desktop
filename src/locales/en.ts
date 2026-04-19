@@ -667,6 +667,7 @@ export const enTranslation = {
     shortcutOpenFolderBrowser: 'Open {{folderBrowser}}',
     shortcutFullscreenPlayer: 'Fullscreen player',
     shortcutNativeFullscreen: 'Native fullscreen',
+    shortcutOpenMiniPlayer: 'Open mini player',
     playbackTitle: 'Playback',
     replayGain: 'Replay Gain',
     replayGainDesc: 'Normalize track volume using ReplayGain metadata',

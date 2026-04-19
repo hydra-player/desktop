@@ -12,7 +12,8 @@ export type KeyAction =
   | 'toggle-queue'
   | 'open-folder-browser'
   | 'fullscreen-player'
-  | 'native-fullscreen';
+  | 'native-fullscreen'
+  | 'open-mini-player';
 
 /** Physical keys only — ignore for binding capture */
 export const MODIFIER_KEY_CODES = [
@@ -35,6 +36,7 @@ export const DEFAULT_BINDINGS: Bindings = {
   'open-folder-browser': null,
   'fullscreen-player': null,
   'native-fullscreen': 'F11',
+  'open-mini-player':  null,
 };
 
 interface KeybindingsState {

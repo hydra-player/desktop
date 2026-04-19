@@ -630,6 +630,7 @@ export const frTranslation = {
     shortcutOpenFolderBrowser: 'Ouvrir {{folderBrowser}}',
     shortcutFullscreenPlayer: 'Lecteur plein écran',
     shortcutNativeFullscreen: 'Plein écran natif',
+    shortcutOpenMiniPlayer: 'Ouvrir le mini-lecteur',
     tabSystem: 'Système',
     tabGeneral: 'Général',
     ratingsSectionTitle: 'Notes',

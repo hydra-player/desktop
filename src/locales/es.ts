@@ -658,6 +658,7 @@ export const esTranslation = {
     shortcutOpenFolderBrowser: 'Abrir {{folderBrowser}}',
     shortcutFullscreenPlayer: 'Reproductor pantalla completa',
     shortcutNativeFullscreen: 'Pantalla completa nativa',
+    shortcutOpenMiniPlayer: 'Abrir mini reproductor',
     playbackTitle: 'Reproducción',
     replayGain: 'Replay Gain',
     replayGainDesc: 'Normalizar volumen de pistas usando metadatos ReplayGain',

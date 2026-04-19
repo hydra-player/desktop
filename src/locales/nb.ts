@@ -652,6 +652,7 @@ export const nbTranslation = {
     shortcutOpenFolderBrowser: 'Åpne {{folderBrowser}}',
     shortcutFullscreenPlayer: 'Fullskjermsspiller',
     shortcutNativeFullscreen: 'Naturlig fullskjerm',
+    shortcutOpenMiniPlayer: 'Åpne minispiller',
     playbackTitle: 'Avspilling',
     replayGain: 'Replay Gain',
     replayGainDesc: 'Normaliser sporvolumet ved hjelp av ReplayGain-metadata',

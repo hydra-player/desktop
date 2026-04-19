@@ -629,6 +629,7 @@ export const nlTranslation = {
     shortcutOpenFolderBrowser: '{{folderBrowser}} openen',
     shortcutFullscreenPlayer: 'Volledigschermspeler',
     shortcutNativeFullscreen: 'Systeemvolledig scherm',
+    shortcutOpenMiniPlayer: 'Mini-speler openen',
     tabSystem: 'Systeem',
     tabGeneral: 'Algemeen',
     ratingsSectionTitle: 'Beoordelingen',

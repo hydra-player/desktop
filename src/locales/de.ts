@@ -642,6 +642,7 @@ export const deTranslation = {
     shortcutOpenFolderBrowser: '{{folderBrowser}} öffnen',
     shortcutFullscreenPlayer: 'Vollbild-Player',
     shortcutNativeFullscreen: 'Nativer Vollbildmodus',
+    shortcutOpenMiniPlayer: 'Mini-Player öffnen',
     tabSystem: 'System',
     tabGeneral: 'Allgemein',
     ratingsSectionTitle: 'Bewertungen',

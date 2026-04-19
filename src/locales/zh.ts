@@ -648,6 +648,7 @@ export const zhTranslation = {
     shortcutOpenFolderBrowser: '打开{{folderBrowser}}',
     shortcutFullscreenPlayer: '全屏播放器',
     shortcutNativeFullscreen: '原生全屏',
+    shortcutOpenMiniPlayer: '打开迷你播放器',
     playbackTitle: '播放',
     replayGain: '回放增益',
     replayGainDesc: '使用 ReplayGain 元数据标准化曲目音量',

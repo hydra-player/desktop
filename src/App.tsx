@@ -812,6 +812,9 @@ function TauriEventBridge() {
           win.isFullscreen().then(fs => win.setFullscreen(!fs));
           break;
         }
+        case 'open-mini-player':
+          invoke('open_mini_player').catch(() => {});
+          break;
       }
     };
     window.addEventListener('keydown', onKey);
@@ -983,6 +986,7 @@ export default function App() {
       if (!e.key) return;
       if (e.key === 'psysonic_theme') useThemeStore.persist.rehydrate();
       else if (e.key === 'psysonic_font') useFontStore.persist.rehydrate();
+      else if (e.key === 'psysonic_keybindings') useKeybindingsStore.persist.rehydrate();
       else if (e.key === 'psysonic_language' && e.newValue) {
         import('./i18n').then(m => m.default.changeLanguage(e.newValue!));
       }

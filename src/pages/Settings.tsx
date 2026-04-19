@@ -2010,6 +2010,7 @@ export default function Settings() {
                 ['open-folder-browser', t('settings.shortcutOpenFolderBrowser', { folderBrowser: t('sidebar.folderBrowser') })],
                 ['fullscreen-player', t('settings.shortcutFullscreenPlayer')],
                 ['native-fullscreen', t('settings.shortcutNativeFullscreen')],
+                ['open-mini-player',  t('settings.shortcutOpenMiniPlayer')],
               ] as [KeyAction, string][]).map(([action, label]) => {
                 const bound = kb.bindings[action];
                 const isListening = listeningFor === action;

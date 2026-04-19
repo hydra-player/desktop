@@ -5,6 +5,7 @@ import { Play, Pause, SkipBack, SkipForward, Pin, PinOff, Maximize2, X, ListMusi
 import CachedImage from './CachedImage';
 import { buildCoverArtUrl, coverArtCacheKey } from '../api/subsonic';
 import { usePlayerStore } from '../store/playerStore';
+import { useKeybindingsStore, matchInAppBinding } from '../store/keybindingsStore';
 import { useDragDrop } from '../contexts/DragDropContext';
 import MiniContextMenu from './MiniContextMenu';
 import type { MiniSyncPayload, MiniControlAction, MiniTrackInfo } from '../utils/miniPlayerBridge';
@@ -178,11 +179,21 @@ export default function MiniPlayer() {
   }, [alwaysOnTop]);
 
   // Keyboard: Space → toggle, ← / → → prev / next. Ignore when typing.
+  // Also honour the user-configured 'open-mini-player' shortcut so the
+  // same chord that opens the mini from main also closes it from here.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tgt = e.target as HTMLElement | null;
       const tag = tgt?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tgt?.isContentEditable) return;
+
+      const openMiniBinding = useKeybindingsStore.getState().bindings['open-mini-player'];
+      if (matchInAppBinding(e, openMiniBinding)) {
+        e.preventDefault();
+        invoke('open_mini_player').catch(() => {});
+        return;
+      }
+
       if (e.key === ' ' || e.code === 'Space') {
         e.preventDefault();
         emit('mini:control', 'toggle').catch(() => {});
