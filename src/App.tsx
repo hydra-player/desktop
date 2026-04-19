@@ -145,7 +145,7 @@ function AppShell() {
   const setEntityRatingSupport = useAuthStore(s => s.setEntityRatingSupport);
   const offlineAlbums = useOfflineStore(s => s.albums);
   const hasOfflineContent = Object.values(offlineAlbums).some(a => a.serverId === serverId);
-  const { floatingPlayerBar } = useThemeStore();
+  const floatingPlayerBar = useThemeStore(s => s.floatingPlayerBar);
 
   // Mini player → main: route requests dispatched as `psy:navigate`
   // CustomEvents from the bridge land here so React Router can take over.

@@ -101,7 +101,7 @@ export default function PlayerBar() {
     setUserRatingOverride: s.setUserRatingOverride,
   })));
   const { lastfmSessionKey } = useAuthStore();
-  const { floatingPlayerBar } = useThemeStore();
+  const floatingPlayerBar = useThemeStore(s => s.floatingPlayerBar);
   const [floatingStyle, setFloatingStyle] = useState<React.CSSProperties>({});
 
   useEffect(() => {
