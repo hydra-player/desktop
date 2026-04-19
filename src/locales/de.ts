@@ -553,6 +553,8 @@ export const deTranslation = {
     showTrayIconDesc: 'Psysonic-Icon im System-Tray / in der Menüleiste anzeigen.',
     minimizeToTray: 'Im Tray minimieren',
     minimizeToTrayDesc: 'Beim Schließen des Fensters läuft Psysonic weiter im System-Tray statt zu beenden.',
+    preloadMiniPlayer: 'Mini-Player vorladen',
+    preloadMiniPlayerDesc: 'Baut das Mini-Player-Fenster beim App-Start im Hintergrund auf, damit es beim ersten Öffnen sofort Inhalt zeigt. Kostet etwas mehr RAM.',
     discordRichPresence: 'Discord Rich Presence',
     discordRichPresenceDesc: 'Zeigt den aktuell gespielten Titel im Discord-Profil an. Discord muss dafür geöffnet sein.',
     useCustomTitlebar: 'Eigene Titelleiste',

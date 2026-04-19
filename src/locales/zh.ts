@@ -538,6 +538,8 @@ export const zhTranslation = {
     showTrayIconDesc: '在系统通知区域 / 菜单栏显示 Psysonic 图标。',
     minimizeToTray: '最小化到托盘',
     minimizeToTrayDesc: '关闭窗口时，Psysonic 将继续在系统托盘中运行，而不是退出。',
+    preloadMiniPlayer: '预加载迷你播放器',
+    preloadMiniPlayerDesc: '在应用启动时于后台构建迷你播放器窗口，使其首次打开即可立即显示内容。会占用少量额外内存。',
     linuxWebkitSmoothScroll: '滚轮平滑（Linux）',
     linuxWebkitSmoothScrollDesc: '开：惯性滚动。关：逐行，类似 GTK。',
     discordRichPresence: 'Discord Rich Presence',

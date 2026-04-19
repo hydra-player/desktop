@@ -543,6 +543,8 @@ export const frTranslation = {
     showTrayIconDesc: 'Affiche l\'icône Psysonic dans la zone de notification / barre des menus.',
     minimizeToTray: 'Réduire dans la barre système',
     minimizeToTrayDesc: 'Lors de la fermeture, Psysonic continue de fonctionner dans la barre système au lieu de se fermer.',
+    preloadMiniPlayer: 'Précharger le mini-lecteur',
+    preloadMiniPlayerDesc: 'Construit la fenêtre du mini-lecteur en arrière-plan au démarrage de l\'application afin qu\'elle affiche son contenu instantanément à la première ouverture. Utilise un peu plus de mémoire.',
     linuxWebkitSmoothScroll: 'Molette fluide (Linux)',
     linuxWebkitSmoothScrollDesc: 'Activé : inertie. Désactivé : pas à la ligne, style GTK.',
     discordRichPresence: 'Discord Rich Presence',

@@ -555,6 +555,8 @@ export const enTranslation = {
     showTrayIconDesc: 'Display the Psysonic icon in the system notification area / menu bar.',
     minimizeToTray: 'Minimize to Tray',
     minimizeToTrayDesc: 'When closing the window, keep Psysonic running in the system tray instead of quitting.',
+    preloadMiniPlayer: 'Preload mini player',
+    preloadMiniPlayerDesc: 'Build the mini player window in the background at app start so it shows content instantly on first open. Uses a little extra memory.',
     discordRichPresence: 'Discord Rich Presence',
     discordRichPresenceDesc: 'Show the currently playing track on your Discord profile. Requires Discord to be running.',
     useCustomTitlebar: 'Custom title bar',

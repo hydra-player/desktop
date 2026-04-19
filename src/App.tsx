@@ -56,7 +56,7 @@ import GenreDetail from './pages/GenreDetail';
 import ExportPickerModal from './components/ExportPickerModal';
 import AppUpdater from './components/AppUpdater';
 import TitleBar from './components/TitleBar';
-import { IS_LINUX } from './utils/platform';
+import { IS_LINUX, IS_WINDOWS } from './utils/platform';
 import { version } from '../package.json';
 import { useConnectionStatus } from './hooks/useConnectionStatus';
 import { useAuthStore } from './store/authStore';
@@ -974,6 +974,15 @@ export default function App() {
     if (isMiniWindow) return;
     return initMiniPlayerBridgeOnMain();
   }, [isMiniWindow]);
+
+  // Main window only: optionally pre-create the mini player webview hidden so
+  // the first open is instant. Windows already does this unconditionally in
+  // Rust .setup() as a hang workaround — skip here to avoid double-building.
+  const preloadMiniPlayer = useAuthStore(s => s.preloadMiniPlayer);
+  useEffect(() => {
+    if (isMiniWindow || IS_WINDOWS || !preloadMiniPlayer) return;
+    invoke('preload_mini_player').catch(() => {});
+  }, [isMiniWindow, preloadMiniPlayer]);
 
   // Mini window only: re-hydrate persisted appearance stores when the main
   // window writes new values. Both webviews share localStorage (same origin),

@@ -542,6 +542,8 @@ export const nbTranslation = {
     showArtistImagesDesc: 'Last inn og vis artistbilder i artistoversikten. Denne er deaktivert som standard, for å redusere disk-I/O og nettverksbelastningen på store biblioteker.',
     minimizeToTray: 'Minimer til oppgavelinjen',
     minimizeToTrayDesc: 'Når vinduet lukkes, vil Psysonic bli kjørende i oppgavelinjen fremfor å bli avsluttet.',
+    preloadMiniPlayer: 'Forhåndslast miniavspiller',
+    preloadMiniPlayerDesc: 'Bygger miniavspiller-vinduet i bakgrunnen ved appstart slik at det viser innhold umiddelbart ved første åpning. Bruker litt mer minne.',
     linuxWebkitSmoothScroll: 'Mykt musehjul (Linux)',
     linuxWebkitSmoothScrollDesc: 'På: treg rull med etterslep. Av: trinnvis som i GTK.',
     discordRichPresence: 'Discord Rich Presence',

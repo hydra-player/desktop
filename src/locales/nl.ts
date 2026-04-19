@@ -542,6 +542,8 @@ export const nlTranslation = {
     showTrayIconDesc: 'Toont het Psysonic-pictogram in het systeemvak / de menubalk.',
     minimizeToTray: 'Minimaliseren naar systeemvak',
     minimizeToTrayDesc: 'Bij het sluiten van het venster blijft Psysonic actief in het systeemvak in plaats van af te sluiten.',
+    preloadMiniPlayer: 'Mini-speler vooraf laden',
+    preloadMiniPlayerDesc: 'Bouwt het venster van de mini-speler op de achtergrond bij het opstarten van de app, zodat het bij de eerste opening direct inhoud toont. Gebruikt iets meer geheugen.',
     linuxWebkitSmoothScroll: 'Vloeiend muiswiel (Linux)',
     linuxWebkitSmoothScrollDesc: 'Aan: traag naloop. Uit: regel voor regel, GTK-stijl.',
     discordRichPresence: 'Discord Rich Presence',

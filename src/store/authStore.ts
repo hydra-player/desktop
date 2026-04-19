@@ -66,6 +66,9 @@ interface AuthState {
   discordTemplateState: string;
   discordTemplateLargeText: string;
   useCustomTitlebar: boolean;
+  /** Pre-build the mini-player webview at app start on Linux/macOS so content is available instantly
+   *  on first open. Ignored on Windows — that platform always pre-creates as a hang workaround. */
+  preloadMiniPlayer: boolean;
   /** Linux WebKitGTK: smooth wheel on when true; off only after explicit opt-out in Settings. */
   linuxWebkitKineticScroll: boolean;
   nowPlayingEnabled: boolean;
@@ -212,6 +215,7 @@ interface AuthState {
   setDiscordTemplateState: (v: string) => void;
   setDiscordTemplateLargeText: (v: string) => void;
   setUseCustomTitlebar: (v: boolean) => void;
+  setPreloadMiniPlayer: (v: boolean) => void;
   setLinuxWebkitKineticScroll: (v: boolean) => void;
   setNowPlayingEnabled: (v: boolean) => void;
   setLyricsServerFirst: (v: boolean) => void;
@@ -318,6 +322,7 @@ export const useAuthStore = create<AuthState>()(
       discordTemplateState: '{album}',
       discordTemplateLargeText: '{album}',
       useCustomTitlebar: false,
+      preloadMiniPlayer: false,
       linuxWebkitKineticScroll: true,
       nowPlayingEnabled: false,
       lyricsServerFirst: true,
@@ -448,6 +453,7 @@ export const useAuthStore = create<AuthState>()(
       setDiscordTemplateState: (v) => set({ discordTemplateState: v }),
       setDiscordTemplateLargeText: (v) => set({ discordTemplateLargeText: v }),
       setUseCustomTitlebar: (v) => set({ useCustomTitlebar: v }),
+      setPreloadMiniPlayer: (v) => set({ preloadMiniPlayer: v }),
       setLinuxWebkitKineticScroll: (v) => set({ linuxWebkitKineticScroll: v }),
       setNowPlayingEnabled: (v) => set({ nowPlayingEnabled: v }),
       setLyricsServerFirst: (v: boolean) => set({ lyricsServerFirst: v }),

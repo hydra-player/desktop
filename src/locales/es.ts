@@ -546,6 +546,8 @@ export const esTranslation = {
     showTrayIconDesc: 'Muestra el icono de Psysonic en el área de notificación / barra de menú.',
     minimizeToTray: 'Minimizar a Bandeja',
     minimizeToTrayDesc: 'Al cerrar la ventana, mantener Psysonic ejecutándose en la bandeja del sistema en lugar de salir.',
+    preloadMiniPlayer: 'Precargar mini reproductor',
+    preloadMiniPlayerDesc: 'Crea la ventana del mini reproductor en segundo plano al iniciar la aplicación para que muestre contenido al instante la primera vez que se abre. Consume un poco más de memoria.',
     discordRichPresence: 'Discord Rich Presence',
     discordRichPresenceDesc: 'Muestra la pista actual en tu perfil de Discord. Requiere que Discord esté ejecutándose.',
     useCustomTitlebar: 'Barra de título personalizada',

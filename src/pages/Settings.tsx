@@ -23,7 +23,7 @@ import ThemePicker, { THEME_GROUPS } from '../components/ThemePicker';
 import { useShallow } from 'zustand/react/shallow';
 import { useAuthStore, ServerProfile, MIX_MIN_RATING_FILTER_MAX_STARS, type SeekbarStyle, type LyricsSourceId, type LyricsSourceConfig } from '../store/authStore';
 import { SeekbarPreview } from '../components/WaveformSeek';
-import { IS_LINUX, IS_MACOS } from '../utils/platform';
+import { IS_LINUX, IS_MACOS, IS_WINDOWS } from '../utils/platform';
 import { useThemeStore } from '../store/themeStore';
 import { useFontStore, FontId } from '../store/fontStore';
 import { useKeybindingsStore, KeyAction, formatBinding, buildInAppBinding } from '../store/keybindingsStore';
@@ -1127,6 +1127,25 @@ export default function Settings() {
                   <span className="toggle-track" />
                 </label>
               </div>
+              {!IS_WINDOWS && (
+                <>
+                  <div className="settings-section-divider" />
+                  <div className="settings-toggle-row">
+                    <div>
+                      <div style={{ fontWeight: 500 }}>{t('settings.preloadMiniPlayer')}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('settings.preloadMiniPlayerDesc')}</div>
+                    </div>
+                    <label className="toggle-switch" aria-label={t('settings.preloadMiniPlayer')}>
+                      <input
+                        type="checkbox"
+                        checked={auth.preloadMiniPlayer}
+                        onChange={e => auth.setPreloadMiniPlayer(e.target.checked)}
+                      />
+                      <span className="toggle-track" />
+                    </label>
+                  </div>
+                </>
+              )}
               {IS_LINUX && !isTilingWm && (
                 <>
                   <div className="settings-section-divider" />

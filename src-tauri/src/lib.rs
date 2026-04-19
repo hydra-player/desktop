@@ -2764,6 +2764,19 @@ fn build_mini_player_window(
         .map_err(|e| format!("failed to build mini player window: {e}"))
 }
 
+/// Pre-build the mini player window hidden, so the first `open_mini_player`
+/// call becomes a pure show/hide and the user sees content instantly. On
+/// Windows this already happens unconditionally in `.setup()` as a hang
+/// workaround; this command is used by Linux/macOS when the user opts into
+/// the `preloadMiniPlayer` setting. Idempotent — no-op if the window exists.
+#[tauri::command]
+fn preload_mini_player(app: tauri::AppHandle) -> Result<(), String> {
+    if app.get_webview_window("mini").is_some() {
+        return Ok(());
+    }
+    build_mini_player_window(&app, false).map(|_| ())
+}
+
 /// Open (or toggle) the mini player window. On platforms where the window
 /// was pre-created at startup (Windows), this is a pure show/hide. On
 /// other platforms the window is created lazily on first call.
@@ -3132,6 +3145,7 @@ pub fn run() {
             no_compositing_mode,
             is_tiling_wm_cmd,
             open_mini_player,
+            preload_mini_player,
             close_mini_player,
             set_mini_player_always_on_top,
             resize_mini_player,
