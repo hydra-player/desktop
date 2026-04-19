@@ -120,10 +120,58 @@ export function initMiniPlayerBridgeOnMain(): () => void {
     if (track) store.playTrack(track, store.queue, true);
   });
 
+  // PsyDnD reorder forwarded from the mini queue.
+  const reorderUnlisten = listen<{ from: number; to: number }>('mini:reorder', (e) => {
+    const store = usePlayerStore.getState();
+    const { from, to } = e.payload ?? { from: -1, to: -1 };
+    if (from < 0 || from >= store.queue.length) return;
+    if (to < 0 || to > store.queue.length) return;
+    if (from === to) return;
+    store.reorderQueue(from, to);
+  });
+
+  // Remove a track at index (context menu → "Remove from queue").
+  const removeUnlisten = listen<{ index: number }>('mini:remove', (e) => {
+    const store = usePlayerStore.getState();
+    const idx = e.payload?.index ?? -1;
+    if (idx < 0 || idx >= store.queue.length) return;
+    store.removeTrack(idx);
+  });
+
+  // Navigate the main app to a route. Used by mini context menu actions
+  // like "Open Album" / "Go to Artist" — those need the full main UI.
+  const navigateUnlisten = listen<{ to: string }>('mini:navigate', (e) => {
+    const to = e.payload?.to;
+    if (!to) return;
+    // Surface the main window first so the navigation is visible.
+    const w = getCurrentWindow();
+    w.unminimize().catch(() => {});
+    w.show().catch(() => {});
+    w.setFocus().catch(() => {});
+    // React Router lives in main; route via a custom event the AppShell
+    // picks up (defined in App.tsx).
+    window.dispatchEvent(new CustomEvent('psy:navigate', { detail: { to } }));
+  });
+
+  // Open the SongInfo modal in main for a given track id.
+  const songInfoUnlisten = listen<{ id: string }>('mini:song-info', (e) => {
+    const id = e.payload?.id;
+    if (!id) return;
+    const w = getCurrentWindow();
+    w.unminimize().catch(() => {});
+    w.show().catch(() => {});
+    w.setFocus().catch(() => {});
+    usePlayerStore.getState().openSongInfo(id);
+  });
+
   return () => {
     unsub();
     readyUnlisten.then(fn => fn()).catch(() => {});
     controlUnlisten.then(fn => fn()).catch(() => {});
     jumpUnlisten.then(fn => fn()).catch(() => {});
+    reorderUnlisten.then(fn => fn()).catch(() => {});
+    removeUnlisten.then(fn => fn()).catch(() => {});
+    navigateUnlisten.then(fn => fn()).catch(() => {});
+    songInfoUnlisten.then(fn => fn()).catch(() => {});
   };
 }

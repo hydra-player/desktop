@@ -2603,6 +2603,81 @@ fn is_tiling_wm_cmd() -> bool {
 // "mini". On tiling WMs (Hyprland, Sway, i3, …) always-on-top is ignored, so
 // we fall back to a regular window there.
 
+/// Persisted geometry for the mini player. Stored in
+/// `<app_config_dir>/mini_player_pos.json` and rewritten (throttled) on
+/// every `WindowEvent::Moved` so the window reopens where the user last
+/// left it. Coordinates are physical pixels — that's what `set_position`
+/// and the move event both report, so we don't need to round-trip through
+/// scale factors that may differ across monitors.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug)]
+struct MiniPlayerPosition {
+    x: i32,
+    y: i32,
+}
+
+fn mini_pos_file(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    app.path().app_config_dir().ok().map(|p| p.join("mini_player_pos.json"))
+}
+
+fn read_mini_pos(app: &tauri::AppHandle) -> Option<MiniPlayerPosition> {
+    let path = mini_pos_file(app)?;
+    let raw = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str(&raw).ok()
+}
+
+fn write_mini_pos(app: &tauri::AppHandle, pos: MiniPlayerPosition) {
+    let Some(path) = mini_pos_file(app) else { return };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(json) = serde_json::to_string(&pos) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
+/// Throttle disk writes during a drag — `WindowEvent::Moved` fires on
+/// every pointer step. 250 ms keeps the file fresh enough that any close
+/// or release lands a recent position, without hammering the disk.
+fn persist_mini_pos_throttled(app: &tauri::AppHandle, x: i32, y: i32) {
+    static LAST_WRITE: OnceLock<Mutex<std::time::Instant>> = OnceLock::new();
+    let mu = LAST_WRITE.get_or_init(|| {
+        Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(10))
+    });
+    {
+        let mut last = mu.lock().unwrap();
+        if last.elapsed() < std::time::Duration::from_millis(250) {
+            return;
+        }
+        *last = std::time::Instant::now();
+    }
+    write_mini_pos(app, MiniPlayerPosition { x, y });
+}
+
+/// Default position when nothing is persisted: bottom-right of the monitor
+/// the main window sits on (falls back to primary). A 24 px logical margin
+/// keeps it off the screen edge; +56 px on the bottom margin avoids most
+/// taskbars/docks since Tauri does not expose work-area rects.
+fn default_mini_position(app: &tauri::AppHandle) -> Option<tauri::PhysicalPosition<i32>> {
+    let monitor = app
+        .get_webview_window("main")
+        .and_then(|w| w.current_monitor().ok().flatten())
+        .or_else(|| app.primary_monitor().ok().flatten())?;
+
+    let scale = monitor.scale_factor();
+    let m_pos = monitor.position();
+    let m_size = monitor.size();
+
+    let win_w = (340.0 * scale).round() as i32;
+    let win_h = (180.0 * scale).round() as i32;
+    let margin_x = (24.0 * scale).round() as i32;
+    let margin_y = (56.0 * scale).round() as i32;
+
+    Some(tauri::PhysicalPosition::new(
+        m_pos.x + (m_size.width as i32) - win_w - margin_x,
+        m_pos.y + (m_size.height as i32) - win_h - margin_y,
+    ))
+}
+
 /// Open (or toggle) the mini player window. Creates it on first call; on
 /// subsequent calls, hides it if visible, shows + focuses it if hidden.
 /// Opening the mini player minimizes the main window; hiding the mini player
@@ -2647,9 +2722,19 @@ fn open_mini_player(app: tauri::AppHandle) -> Result<(), String> {
     .decorations(true)
     .always_on_top(use_always_on_top)
     .skip_taskbar(false)
+    .visible(false) // place first, then show — avoids the corner flash
     .build()
     .map_err(|e| format!("failed to build mini player window: {e}"))?;
 
+    // Restore last-known position, otherwise drop into the bottom-right of
+    // the main window's monitor.
+    let target = read_mini_pos(&app)
+        .map(|p| tauri::PhysicalPosition::new(p.x, p.y))
+        .or_else(|| default_mini_position(&app));
+    if let Some(pos) = target {
+        let _ = win.set_position(pos);
+    }
+    let _ = win.show();
     let _ = win.set_focus();
     if let Some(main) = app.get_webview_window("main") {
         let _ = main.minimize();
@@ -2690,19 +2775,43 @@ fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 /// Toggle always-on-top on the mini player window.
+///
+/// Some window managers (KWin, certain Mutter releases, GNOME-on-Wayland)
+/// silently ignore `set_always_on_top(true)` when the internal flag is
+/// already `true` — which happens whenever the window was hidden and
+/// re-shown, or focus was lost and the WM dropped the constraint. We
+/// always force a `false → true` cycle so the WM re-evaluates the layer.
 #[tauri::command]
 fn set_mini_player_always_on_top(app: tauri::AppHandle, on_top: bool) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("mini") {
+        if on_top {
+            let _ = win.set_always_on_top(false);
+        }
         win.set_always_on_top(on_top).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
 
 /// Resize the mini player window (logical pixels). Used when toggling the
-/// queue panel to expand/collapse without a capability dance.
+/// queue panel to expand/collapse without a capability dance. Optional
+/// `minWidth` / `minHeight` adjust the window's resize floor so the user
+/// can't shrink past the layout's minimum (e.g. 2 visible queue rows when
+/// the queue panel is open).
 #[tauri::command]
-fn resize_mini_player(app: tauri::AppHandle, width: f64, height: f64) -> Result<(), String> {
+fn resize_mini_player(
+    app: tauri::AppHandle,
+    width: f64,
+    height: f64,
+    min_width: Option<f64>,
+    min_height: Option<f64>,
+) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("mini") {
+        // Lower the floor first; otherwise set_size to a value below the
+        // existing min would silently clamp.
+        if let (Some(mw), Some(mh)) = (min_width, min_height) {
+            win.set_min_size(Some(tauri::LogicalSize::new(mw, mh)))
+                .map_err(|e| e.to_string())?;
+        }
         win.set_size(tauri::LogicalSize::new(width, height)).map_err(|e| e.to_string())?;
     }
     Ok(())
@@ -2891,6 +3000,13 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            // Persist mini player position whenever the user drags it.
+            if window.label() == "mini" {
+                if let tauri::WindowEvent::Moved(pos) = event {
+                    persist_mini_pos_throttled(window.app_handle(), pos.x, pos.y);
+                }
+            }
+
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "main" {
                     api.prevent_close();

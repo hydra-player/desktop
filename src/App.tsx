@@ -146,6 +146,17 @@ function AppShell() {
   const offlineAlbums = useOfflineStore(s => s.albums);
   const hasOfflineContent = Object.values(offlineAlbums).some(a => a.serverId === serverId);
 
+  // Mini player → main: route requests dispatched as `psy:navigate`
+  // CustomEvents from the bridge land here so React Router can take over.
+  useEffect(() => {
+    const onPsyNavigate = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.to) navigate(detail.to);
+    };
+    window.addEventListener('psy:navigate', onPsyNavigate);
+    return () => window.removeEventListener('psy:navigate', onPsyNavigate);
+  }, [navigate]);
+
   // Sync custom titlebar preference with native decorations on Linux
   // On tiling WMs decorations are always off (no native title bar to replace).
   useEffect(() => {
@@ -961,8 +972,32 @@ export default function App() {
     return initMiniPlayerBridgeOnMain();
   }, [isMiniWindow]);
 
+  // Mini window only: re-hydrate persisted appearance stores when the main
+  // window writes new values. Both webviews share localStorage (same origin),
+  // so the `storage` event fires here whenever main mutates a key — but
+  // Zustand persist only reads localStorage on initial load, hence the
+  // explicit rehydrate.
+  useEffect(() => {
+    if (!isMiniWindow) return;
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (e.key === 'psysonic_theme') useThemeStore.persist.rehydrate();
+      else if (e.key === 'psysonic_font') useFontStore.persist.rehydrate();
+      else if (e.key === 'psysonic_language' && e.newValue) {
+        import('./i18n').then(m => m.default.changeLanguage(e.newValue!));
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [isMiniWindow]);
+
   if (isMiniWindow) {
-    return <MiniPlayer />;
+    return (
+      <DragDropProvider>
+        <MiniPlayer />
+        <TooltipPortal />
+      </DragDropProvider>
+    );
   }
 
   // UI scaling is scoped to .main-content via an inner wrapper (see <main>

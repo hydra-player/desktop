@@ -9190,17 +9190,47 @@ html.no-compositing .fsr-lyric-line.fsrl-active .fsr-lyric-word.active {
   justify-content: flex-end;
 }
 
-.mini-queue {
+.mini-queue-wrap {
   grid-column: 1 / -1;
   grid-row: 3;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  position: relative;
   background: var(--bg-card);
   border-radius: 8px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.mini-queue {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 4px;
   display: flex;
   flex-direction: column;
   gap: 1px;
+  box-sizing: border-box;
+  /* Hide native scrollbar — we render an overlay thumb beside it. */
+  scrollbar-width: none;
+}
+.mini-queue::-webkit-scrollbar {
+  display: none;
+}
+
+.mini-queue__thumb {
+  position: absolute;
+  top: 4px;
+  right: 3px;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+  will-change: transform;
+}
+.mini-queue-wrap:hover .mini-queue__thumb,
+.mini-queue.is-scrolling ~ .mini-queue__thumb {
+  opacity: 0.55;
 }
 
 .mini-queue__empty {
@@ -9226,6 +9256,14 @@ html.no-compositing .fsr-lyric-line.fsrl-active .fsr-lyric-word.active {
 
 .mini-queue__item:hover {
   background: var(--bg-hover);
+}
+
+.mini-queue__item--ctx {
+  background: var(--bg-hover);
+}
+
+.mini-queue-wrap--drop-active .mini-queue {
+  scroll-behavior: auto;
 }
 
 .mini-queue__item--current {
