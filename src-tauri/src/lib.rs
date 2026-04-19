@@ -2635,10 +2635,33 @@ fn write_mini_pos(app: &tauri::AppHandle, pos: MiniPlayerPosition) {
     }
 }
 
+/// Tracks when we last set the mini player position programmatically.
+/// `WindowEvent::Moved` fires for both user drags AND our own `show()` /
+/// `set_position` calls — without this guard the WM's "centre on show"
+/// behaviour would silently overwrite the user's saved position.
+fn last_programmatic_pos_set() -> &'static Mutex<std::time::Instant> {
+    static LAST: OnceLock<Mutex<std::time::Instant>> = OnceLock::new();
+    LAST.get_or_init(|| Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(10)))
+}
+
+fn mark_mini_pos_programmatic() {
+    *last_programmatic_pos_set().lock().unwrap() = std::time::Instant::now();
+}
+
+fn is_mini_pos_programmatic() -> bool {
+    last_programmatic_pos_set().lock().unwrap().elapsed()
+        < std::time::Duration::from_millis(1000)
+}
+
 /// Throttle disk writes during a drag — `WindowEvent::Moved` fires on
 /// every pointer step. 250 ms keeps the file fresh enough that any close
 /// or release lands a recent position, without hammering the disk.
+/// Programmatic moves (during `show()` / `set_position`) are skipped so
+/// WM re-centring on re-show doesn't clobber the saved position.
 fn persist_mini_pos_throttled(app: &tauri::AppHandle, x: i32, y: i32) {
+    if is_mini_pos_programmatic() {
+        return;
+    }
     static LAST_WRITE: OnceLock<Mutex<std::time::Instant>> = OnceLock::new();
     let mu = LAST_WRITE.get_or_init(|| {
         Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(10))
@@ -2694,8 +2717,18 @@ fn open_mini_player(app: tauri::AppHandle) -> Result<(), String> {
                 let _ = main.set_focus();
             }
         } else {
+            // Re-applying the saved position after show() — many Linux WMs
+            // (Mutter, KWin) re-centre hidden windows when they're shown
+            // again, ignoring any earlier set_position. Mark the move as
+            // programmatic so the Moved-event handler doesn't echo the
+            // intermediate centre coords back to disk.
+            let target = read_mini_pos(&app);
+            mark_mini_pos_programmatic();
             win.show().map_err(|e| e.to_string())?;
             let _ = win.set_focus();
+            if let Some(p) = target {
+                let _ = win.set_position(tauri::PhysicalPosition::new(p.x, p.y));
+            }
             if let Some(main) = app.get_webview_window("main") {
                 let _ = main.minimize();
             }
@@ -2710,7 +2743,20 @@ fn open_mini_player(app: tauri::AppHandle) -> Result<(), String> {
         { true }
     };
 
-    let win = tauri::WebviewWindowBuilder::new(
+    // Resolve target position BEFORE building so the WM places the window
+    // correctly from creation. Calling `set_position` after `build()` is
+    // unreliable on several Linux WMs which re-centre hidden windows.
+    let target_physical = read_mini_pos(&app)
+        .map(|p| tauri::PhysicalPosition::new(p.x, p.y))
+        .or_else(|| default_mini_position(&app));
+    let scale = app
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .map(|m| m.scale_factor())
+        .unwrap_or(1.0);
+
+    let mut builder = tauri::WebviewWindowBuilder::new(
         &app,
         "mini",
         tauri::WebviewUrl::App("index.html".into()),
@@ -2721,20 +2767,20 @@ fn open_mini_player(app: tauri::AppHandle) -> Result<(), String> {
     .resizable(true)
     .decorations(true)
     .always_on_top(use_always_on_top)
-    .skip_taskbar(false)
-    .visible(false) // place first, then show — avoids the corner flash
-    .build()
-    .map_err(|e| format!("failed to build mini player window: {e}"))?;
+    .skip_taskbar(false);
 
-    // Restore last-known position, otherwise drop into the bottom-right of
-    // the main window's monitor.
-    let target = read_mini_pos(&app)
-        .map(|p| tauri::PhysicalPosition::new(p.x, p.y))
-        .or_else(|| default_mini_position(&app));
-    if let Some(pos) = target {
-        let _ = win.set_position(pos);
+    if let Some(pos) = target_physical {
+        builder = builder.position(pos.x as f64 / scale, pos.y as f64 / scale);
     }
-    let _ = win.show();
+
+    // Suppress Moved-event echo for the initial show — Linux WMs sometimes
+    // fire stray Moved events with default coords during the first paint.
+    mark_mini_pos_programmatic();
+
+    let win = builder
+        .build()
+        .map_err(|e| format!("failed to build mini player window: {e}"))?;
+
     let _ = win.set_focus();
     if let Some(main) = app.get_webview_window("main") {
         let _ = main.minimize();

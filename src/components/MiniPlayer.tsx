@@ -31,6 +31,14 @@ function readStoredExpandedHeight(): number {
   return EXPANDED_SIZE.h;
 }
 
+// Persist whether the queue panel was open so the next launch restores
+// the same state. Same scope as the height: localStorage of the mini
+// webview (shared across mini sessions, separate from the main store).
+const QUEUE_OPEN_KEY = 'psysonic_mini_queue_open';
+function readQueueOpen(): boolean {
+  try { return localStorage.getItem(QUEUE_OPEN_KEY) === '1'; } catch { return false; }
+}
+
 function toMini(t: any): MiniTrackInfo {
   return {
     id: t.id,
@@ -85,7 +93,7 @@ export default function MiniPlayer() {
     return initial.track?.duration ?? 0;
   });
   const [alwaysOnTop, setAlwaysOnTop] = useState(true);
-  const [queueOpen, setQueueOpen] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(readQueueOpen);
   const [scrollMeta, setScrollMeta] = useState({ thumbH: 0, thumbT: 0, visible: false });
   const ticker = useRef<number | null>(null);
   const queueScrollRef = useRef<HTMLDivElement>(null);
@@ -135,6 +143,22 @@ export default function MiniPlayer() {
   // Announce to main window that we're mounted; it replies with a snapshot.
   useEffect(() => {
     emit('mini:ready', {}).catch(() => {});
+  }, []);
+
+  // Restore the expanded window size on initial mount when the queue was
+  // open at the previous app close. Rust always builds the window at the
+  // collapsed size; without this we'd render queueOpen=true into a 180 px
+  // window. Brief jump from collapsed to expanded is unavoidable since
+  // localStorage only lives in JS.
+  useEffect(() => {
+    if (!queueOpen) return;
+    invoke('resize_mini_player', {
+      width: EXPANDED_SIZE.w,
+      height: readStoredExpandedHeight(),
+      minWidth: EXPANDED_MIN.w,
+      minHeight: EXPANDED_MIN.h,
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Re-apply pin state on mount and whenever the window regains focus.
@@ -217,6 +241,7 @@ export default function MiniPlayer() {
       }
     }
     setQueueOpen(next);
+    try { localStorage.setItem(QUEUE_OPEN_KEY, next ? '1' : '0'); } catch {}
     const targetH = next ? readStoredExpandedHeight() : COLLAPSED_SIZE.h;
     const targetW = next ? EXPANDED_SIZE.w : COLLAPSED_SIZE.w;
     const min = next ? EXPANDED_MIN : COLLAPSED_MIN;
