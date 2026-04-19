@@ -451,10 +451,11 @@ export default function QueuePanel() {
               })(),
             ].filter(Boolean) as string[];
             const rgParts = formatQueueReplayGainParts(currentTrack, t);
-            const techLine = [...baseParts, ...rgParts].join(' · ');
-            if (!techLine && !playbackSource) return null;
+            const baseLine = baseParts.join(' · ');
+            const rgLine = rgParts.join(' · ');
+            if (!baseLine && !rgLine && !playbackSource) return null;
             return (
-              <div className="queue-current-tech">
+              <div className={`queue-current-tech${rgLine ? ' queue-current-tech--two-line' : ''}`}>
                 {playbackSource && (
                   <span
                     className="queue-current-tech-source"
@@ -472,7 +473,15 @@ export default function QueuePanel() {
                     {playbackSource === 'stream' && <Waves size={11} strokeWidth={2.25} />}
                   </span>
                 )}
-                <span className="queue-current-tech-main">{techLine}</span>
+                <div className="queue-current-tech-stack">
+                  {baseLine && <span className="queue-current-tech-main">{baseLine}</span>}
+                  {rgLine && (
+                    <span className="queue-current-tech-rg">
+                      <span className="queue-current-tech-rg-label">{t('queue.replayGain')}</span>
+                      {' · '}{rgLine}
+                    </span>
+                  )}
+                </div>
               </div>
             );
           })()}

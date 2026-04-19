@@ -897,6 +897,7 @@ export const esTranslation = {
     trackPlural: 'pistas',
     showRemaining: 'Mostrar tiempo restante',
     showTotal: 'Mostrar tiempo total',
+    replayGain: 'ReplayGain',
     rgTrack: 'T {{db}} dB',
     rgAlbum: 'A {{db}} dB',
     rgPeak: 'Pico {{pk}}',

@@ -904,6 +904,7 @@ export const deTranslation = {
     trackPlural: 'Titel',
     showRemaining: 'Restzeit anzeigen',
     showTotal: 'Gesamtzeit anzeigen',
+    replayGain: 'ReplayGain',
     rgTrack: 'T {{db}} dB',
     rgAlbum: 'A {{db}} dB',
     rgPeak: 'Peak {{pk}}',

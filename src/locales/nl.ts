@@ -891,6 +891,7 @@ export const nlTranslation = {
     trackPlural: 'nummers',
     showRemaining: 'Resterende tijd tonen',
     showTotal: 'Totale tijd tonen',
+    replayGain: 'ReplayGain',
     rgTrack: 'T {{db}} dB',
     rgAlbum: 'A {{db}} dB',
     rgPeak: 'Piek {{pk}}',

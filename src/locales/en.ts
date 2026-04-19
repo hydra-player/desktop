@@ -906,6 +906,7 @@ export const enTranslation = {
     trackPlural: 'tracks',
     showRemaining: 'Show remaining time',
     showTotal: 'Show total time',
+    replayGain: 'ReplayGain',
     rgTrack: 'T {{db}} dB',
     rgAlbum: 'A {{db}} dB',
     rgPeak: 'Peak {{pk}}',

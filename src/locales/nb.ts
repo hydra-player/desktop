@@ -891,6 +891,7 @@ export const nbTranslation = {
     trackPlural: 'spor',
     showRemaining: 'Vis gjenværende tid',
     showTotal: 'Vis total tid',
+    replayGain: 'ReplayGain',
     rgTrack: 'T {{db}} dB',
     rgAlbum: 'A {{db}} dB',
     rgPeak: 'Topp {{pk}}',

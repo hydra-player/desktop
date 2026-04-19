@@ -944,6 +944,7 @@ export const ruTranslation = {
     trackPlural: 'треков',
     showRemaining: 'Осталось',
     showTotal: 'Всего',
+    replayGain: 'ReplayGain',
     rgTrack: 'Т {{db}} дБ',
     rgAlbum: 'А {{db}} дБ',
     rgPeak: 'Пик {{pk}}',
