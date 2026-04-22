@@ -6,6 +6,7 @@ import {
   writeOrbitHeartbeat,
   sweepGuestOutboxes,
   applyOutboxSnapshotsToState,
+  maybeShuffleQueue,
 } from '../utils/orbit';
 import { orbitOutboxPlaylistName, type OrbitState } from '../api/orbit';
 
@@ -79,10 +80,13 @@ export function useOrbitHost(): void {
         afterSweep = applyOutboxSnapshotsToState(base, snaps);
       } catch { /* best-effort; keep old participants and queue */ }
 
-      // 2) Overlay the host's live playback snapshot.
-      const next: OrbitState = { ...afterSweep, ...snapshotPlayerPatch(base.host) };
+      // 2) Shuffle check — no-op unless >= 15 min since last shuffle.
+      const afterShuffle = maybeShuffleQueue(afterSweep);
 
-      // 3) Commit locally + push remote.
+      // 3) Overlay the host's live playback snapshot.
+      const next: OrbitState = { ...afterShuffle, ...snapshotPlayerPatch(base.host) };
+
+      // 4) Commit locally + push remote.
       useOrbitStore.getState().setState(next);
       try {
         await writeOrbitState(sessionPlaylistId, next);

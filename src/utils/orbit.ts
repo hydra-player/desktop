@@ -513,6 +513,35 @@ export async function sweepGuestOutboxes(sid: string, hostUsername: string): Pro
 /** How long we consider a heartbeat still fresh. Longer than the guest tick so a single missed beat is tolerated. */
 export const ORBIT_HEARTBEAT_ALIVE_MS = 30_000;
 
+/** Shuffle cadence — queue is reshuffled once every interval. */
+export const ORBIT_SHUFFLE_INTERVAL_MS = 15 * 60_000;
+
+/**
+ * Host helper — applies a Fisher-Yates shuffle to `state.queue` iff enough
+ * time has passed since the last shuffle. Pure, returns a new state object.
+ * `currentTrack` is never touched.
+ */
+export function maybeShuffleQueue(state: OrbitState, nowMs: number = Date.now()): OrbitState {
+  if (nowMs - state.lastShuffle < ORBIT_SHUFFLE_INTERVAL_MS) return state;
+  if (state.queue.length < 2) {
+    // Still bump `lastShuffle` so the next eligible shuffle is 15 min away,
+    // preventing a tight retry loop right after a guest drops a single item in.
+    return { ...state, lastShuffle: nowMs };
+  }
+  const shuffled = state.queue.slice();
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return { ...state, queue: shuffled, lastShuffle: nowMs };
+}
+
+/** Drift between a guest's local playback and the host's estimated live position. */
+export function computeOrbitDriftMs(state: OrbitState, guestPositionMs: number, nowMs: number = Date.now()): number {
+  const hostEstimated = state.positionMs + (state.isPlaying ? (nowMs - state.positionAt) : 0);
+  return guestPositionMs - hostEstimated;
+}
+
 /**
  * Fold sweep results into an updated `OrbitState`.
  *
