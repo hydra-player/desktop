@@ -12,6 +12,7 @@ import {
 } from '../utils/orbit';
 import {
   orbitOutboxPlaylistName,
+  ORBIT_PLAY_QUEUE_LIMIT,
   type OrbitState,
   type OrbitQueueItem,
 } from '../api/orbit';
@@ -125,7 +126,24 @@ export function useOrbitHost(): void {
       }
 
       // 4) Overlay the host's live playback snapshot.
-      const next: OrbitState = { ...afterShuffle, ...snapshotPlayerPatch(base.host) };
+      const playerLive = usePlayerStore.getState();
+      const upcoming   = playerLive.queue.slice(playerLive.queueIndex + 1);
+      // Map track id → original suggester (if any). State's `queue` carries
+      // every suggestion we've ever seen this session, so it's the right
+      // attribution source even after the track has been merged into the
+      // host's player queue.
+      const suggesterByTrack = new Map<string, string>();
+      for (const q of afterShuffle.queue) suggesterByTrack.set(q.trackId, q.addedBy);
+      const playQueue = upcoming.slice(0, ORBIT_PLAY_QUEUE_LIMIT).map(t => ({
+        trackId: t.id,
+        addedBy: suggesterByTrack.get(t.id) ?? base.host,
+      }));
+      const next: OrbitState = {
+        ...afterShuffle,
+        ...snapshotPlayerPatch(base.host),
+        playQueue,
+        playQueueTotal: upcoming.length,
+      };
 
       // 5) Commit locally + push remote.
       useOrbitStore.getState().setState(next);

@@ -206,6 +206,7 @@ export async function startOrbitSession(args: StartOrbitArgs): Promise<OrbitStat
       phase: 'active',
       state,
       errorMessage: null,
+      joinedAt: Date.now(),
     });
 
     return state;
@@ -452,6 +453,7 @@ export async function joinOrbitSession(sid: string): Promise<OrbitState> {
       phase: 'active',
       state,
       errorMessage: null,
+      joinedAt: Date.now(),
     });
 
     return state;
@@ -593,6 +595,14 @@ export const ORBIT_HEARTBEAT_ALIVE_MS = 30_000;
 export const ORBIT_SHUFFLE_INTERVAL_MS = 15 * 60_000;
 
 /**
+ * How long a soft-`removed` marker stays in the state blob. Long enough for
+ * the affected guest's 2.5 s read tick to surface the modal even after a
+ * one-tick miss; short enough that the marker doesn't bloat state if the
+ * guest never reconnects.
+ */
+export const ORBIT_REMOVED_TTL_MS = 60_000;
+
+/**
  * Host helper — applies a Fisher-Yates shuffle to `state.queue` iff enough
  * time has passed since the last shuffle. Pure, returns a new state object.
  * `currentTrack` is never touched.
@@ -651,16 +661,68 @@ export async function kickOrbitParticipant(username: string): Promise<void> {
     if (hit) await deletePlaylist(hit.id);
   } catch { /* best-effort */ }
 
-  // 2) Update state: append kick, drop from participants.
+  // 2) Update state: append kick, drop from participants. Also strip any
+  // pending soft-`removed` marker for the same user — the permanent ban
+  // supersedes it.
   const nextState: OrbitState = {
     ...state,
     kicked: [...state.kicked, username],
     participants: state.participants.filter(p => p.user !== username),
+    removed: (state.removed ?? []).filter(r => r.user !== username),
   };
   useOrbitStore.getState().setState(nextState);
   try {
     await writeOrbitState(sessionPlaylistId, nextState);
   } catch { /* best-effort; next host tick will retry via its normal push */ }
+}
+
+/**
+ * Host: soft-remove a participant by username.
+ *
+ * Like `kickOrbitParticipant`, but does NOT add the user to `kicked` —
+ * instead writes a short-lived entry to `removed`. The affected guest sees
+ * it on their next state-read tick and is shown a "you were removed" exit
+ * modal, but they are free to re-join immediately via the invite link.
+ *
+ * The marker ages out after `ORBIT_REMOVED_TTL_MS` in `applyOutboxSnapshotsToState`.
+ *
+ * Ignored if not the host, target is the host, target is permanently
+ * kicked, or the session isn't active.
+ */
+export async function removeOrbitParticipant(username: string): Promise<void> {
+  const store = useOrbitStore.getState();
+  if (store.role !== 'host') return;
+  const state = store.state;
+  const sessionPlaylistId = store.sessionPlaylistId;
+  const sid = store.sessionId;
+  if (!state || !sessionPlaylistId || !sid) return;
+  if (username === state.host) return;
+  if (state.kicked.includes(username)) return;
+
+  // 1) Delete outbox so the guest's next heartbeat-write hits a missing
+  // playlist (they'll create a new one on rejoin via joinOrbitSession).
+  const outboxName = orbitOutboxPlaylistName(sid, username);
+  try {
+    const all = await getPlaylists();
+    const hit = all.find(p => p.name === outboxName);
+    if (hit) await deletePlaylist(hit.id);
+  } catch { /* best-effort */ }
+
+  // 2) Update state: drop from participants, append fresh `removed` marker.
+  // Filter any prior marker for the same user so we always carry the latest ts.
+  const now = Date.now();
+  const nextState: OrbitState = {
+    ...state,
+    participants: state.participants.filter(p => p.user !== username),
+    removed: [
+      ...(state.removed ?? []).filter(r => r.user !== username),
+      { user: username, at: now },
+    ],
+  };
+  useOrbitStore.getState().setState(nextState);
+  try {
+    await writeOrbitState(sessionPlaylistId, nextState);
+  } catch { /* best-effort */ }
 }
 
 /**
@@ -687,11 +749,21 @@ export function applyOutboxSnapshotsToState(
     }
   }
 
+  // ── Soft-removed list aging ──
+  // Drop entries older than the TTL so the list stays bounded and a long-
+  // expired marker doesn't kick a freshly-rejoined user back out.
+  const removed = (state.removed ?? []).filter(r => nowMs - r.at < ORBIT_REMOVED_TTL_MS);
+  const removedUsers = new Set(removed.map(r => r.user));
+
   // ── Participants rebuild ──
+  // Soft-removed users stay out of `participants` even if their heartbeat is
+  // still fresh — gives them up to one read tick (~2.5s) to notice the
+  // `removed`-marker and tear down their guest hooks before the marker ages out.
   const prev = new Map(state.participants.map(p => [p.user, p]));
   const participants: OrbitParticipant[] = [];
   for (const snap of snapshots) {
     if (state.kicked.includes(snap.user)) continue;
+    if (removedUsers.has(snap.user)) continue;
     const fresh = snap.lastHeartbeat > 0 && (nowMs - snap.lastHeartbeat) < ORBIT_HEARTBEAT_ALIVE_MS;
     if (!fresh) continue;
     const existing = prev.get(snap.user);
@@ -706,5 +778,6 @@ export function applyOutboxSnapshotsToState(
     ...state,
     queue: newItems.length > 0 ? [...state.queue, ...newItems] : state.queue,
     participants,
+    removed,
   };
 }

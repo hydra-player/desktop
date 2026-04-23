@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Crown, UserMinus, Copy, Check } from 'lucide-react';
+import { Crown, UserMinus, ShieldOff, Copy, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useOrbitStore } from '../store/orbitStore';
 import { useAuthStore } from '../store/authStore';
-import { kickOrbitParticipant, buildOrbitShareLink } from '../utils/orbit';
+import { kickOrbitParticipant, removeOrbitParticipant, buildOrbitShareLink } from '../utils/orbit';
+import ConfirmModal from './ConfirmModal';
 
 interface Props {
   /** Anchor — we position the popover directly below its bottom-right. */
@@ -29,6 +30,7 @@ export default function OrbitParticipantsPopover({ anchorRef, onClose }: Props) 
   const sessionId = useOrbitStore(s => s.sessionId);
   const popRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
+  const [confirm, setConfirm] = useState<{ user: string; mode: 'remove' | 'ban' } | null>(null);
   const nowMs = Date.now();
 
   const shareLink = role === 'host' && sessionId
@@ -44,22 +46,28 @@ export default function OrbitParticipantsPopover({ anchorRef, onClose }: Props) 
     } catch { /* silent */ }
   };
 
-  // Close on outside click / Escape.
+  // Close on outside click / Escape — unless a confirm dialog is open
+  // (otherwise outside-clicking the modal would dismiss the popover too,
+  // and re-opening would lose the in-flight confirm context).
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
+      if (confirm) return;
       const t = e.target as Node | null;
       if (popRef.current?.contains(t)) return;
       if (anchorRef.current?.contains(t)) return;
       onClose();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (confirm) return;
+      if (e.key === 'Escape') onClose();
+    };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
     };
-  }, [anchorRef, onClose]);
+  }, [anchorRef, onClose, confirm]);
 
   if (!state) return null;
 
@@ -73,11 +81,16 @@ export default function OrbitParticipantsPopover({ anchorRef, onClose }: Props) 
       }
     : { display: 'none' };
 
-  const onKick = (username: string) => {
-    void kickOrbitParticipant(username);
+  const onConfirm = async () => {
+    if (!confirm) return;
+    const { user, mode } = confirm;
+    setConfirm(null);
+    if (mode === 'remove') await removeOrbitParticipant(user);
+    else                   await kickOrbitParticipant(user);
   };
 
   return createPortal(
+    <>
     <div ref={popRef} className="orbit-participants-pop" style={style} role="menu">
       {shareLink && (
         <div className="orbit-participants-pop__invite">
@@ -116,19 +129,47 @@ export default function OrbitParticipantsPopover({ anchorRef, onClose }: Props) 
           <span className="orbit-participants-pop__name">{p.user}</span>
           <span className="orbit-participants-pop__meta">{joinedFor(p.joinedAt, nowMs)}</span>
           {role === 'host' && (
-            <button
-              type="button"
-              className="orbit-participants-pop__kick"
-              onClick={() => onKick(p.user)}
-              data-tooltip={t('orbit.participantsKickTooltip')}
-              aria-label={t('orbit.participantsKickAria', { user: p.user })}
-            >
-              <UserMinus size={12} />
-            </button>
+            <div className="orbit-participants-pop__actions">
+              <button
+                type="button"
+                className="orbit-participants-pop__kick"
+                onClick={() => setConfirm({ user: p.user, mode: 'remove' })}
+                data-tooltip={t('orbit.participantsRemoveTooltip')}
+                aria-label={t('orbit.participantsRemoveAria', { user: p.user })}
+              >
+                <UserMinus size={12} />
+              </button>
+              <button
+                type="button"
+                className="orbit-participants-pop__kick orbit-participants-pop__kick--ban"
+                onClick={() => setConfirm({ user: p.user, mode: 'ban' })}
+                data-tooltip={t('orbit.participantsBanTooltip')}
+                aria-label={t('orbit.participantsBanAria', { user: p.user })}
+              >
+                <ShieldOff size={12} />
+              </button>
+            </div>
           )}
         </div>
       ))}
-    </div>,
+    </div>
+    <ConfirmModal
+      open={!!confirm}
+      title={confirm?.mode === 'ban'
+        ? t('orbit.confirmBanTitle')
+        : t('orbit.confirmRemoveTitle')}
+      message={confirm?.mode === 'ban'
+        ? t('orbit.confirmBanBody',    { user: confirm?.user ?? '' })
+        : t('orbit.confirmRemoveBody', { user: confirm?.user ?? '' })}
+      confirmLabel={confirm?.mode === 'ban'
+        ? t('orbit.confirmBanConfirm')
+        : t('orbit.confirmRemoveConfirm')}
+      cancelLabel={t('orbit.confirmCancel')}
+      danger={confirm?.mode === 'ban'}
+      onConfirm={() => { void onConfirm(); }}
+      onCancel={() => setConfirm(null)}
+    />
+    </>,
     document.body,
   );
 }

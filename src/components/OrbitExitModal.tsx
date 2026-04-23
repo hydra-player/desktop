@@ -8,7 +8,9 @@ import { leaveOrbitSession } from '../utils/orbit';
  *
  * Shown when:
  *   - `phase === 'ended'` (host closed the session; guest sees it)
- *   - `phase === 'error' && errorMessage === 'kicked'` (host removed us)
+ *   - `phase === 'error' && errorMessage === 'kicked'`  (host permanently banned us)
+ *   - `phase === 'error' && errorMessage === 'removed'` (host soft-removed us;
+ *     re-join via invite link still works)
  *
  * "OK" cleans up the guest-side outbox + resets the local store.
  */
@@ -20,14 +22,21 @@ export default function OrbitExitModal() {
   const sessionName  = useOrbitStore(s => s.state?.name);
   const hostName     = useOrbitStore(s => s.state?.host);
 
-  const isEnded  = phase === 'ended';
-  const isKicked = phase === 'error' && errorMessage === 'kicked';
-  if (!isEnded && !isKicked) return null;
+  const isEnded   = phase === 'ended';
+  const isKicked  = phase === 'error' && errorMessage === 'kicked';
+  const isRemoved = phase === 'error' && errorMessage === 'removed';
+  if (!isEnded && !isKicked && !isRemoved) return null;
 
-  const title = isKicked ? t('orbit.exitKickedTitle') : t('orbit.exitEndedTitle');
-  const body  = isKicked
-    ? t('orbit.exitKickedBody', { host: hostName ?? '', name: sessionName ?? '' })
-    : t('orbit.exitEndedBody',  { name: sessionName ?? '' });
+  const title = isKicked
+    ? t('orbit.exitKickedTitle')
+    : isRemoved
+      ? t('orbit.exitRemovedTitle')
+      : t('orbit.exitEndedTitle');
+  const body = isKicked
+    ? t('orbit.exitKickedBody',  { host: hostName ?? '', name: sessionName ?? '' })
+    : isRemoved
+      ? t('orbit.exitRemovedBody', { host: hostName ?? '', name: sessionName ?? '' })
+      : t('orbit.exitEndedBody',   { name: sessionName ?? '' });
 
   const onOk = async () => {
     try {

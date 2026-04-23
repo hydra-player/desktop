@@ -63,11 +63,22 @@ export function useOrbitGuest(): void {
         return;
       }
 
-      // Kicked: transition into `ended` phase but with a different
-      // errorMessage so the UI can show the right copy.
+      // Kicked / soft-removed: transition into the error phase with a
+      // matching errorMessage so the UI can pick the right copy.
       const me = useAuthStore.getState().getActiveServer()?.username;
       if (me && state.kicked.includes(me)) {
         useOrbitStore.getState().setError('kicked');
+        return;
+      }
+      // Soft-remove: only react to markers strictly newer than our own join
+      // time, otherwise a stale marker from a prior session-life would
+      // immediately bounce us out on rejoin.
+      if (me && state.removed && state.removed.length > 0) {
+        const joinedAt = useOrbitStore.getState().joinedAt ?? 0;
+        const hit = state.removed.find(r => r.user === me && r.at > joinedAt);
+        if (hit) {
+          useOrbitStore.getState().setError('removed');
+        }
       }
     };
 

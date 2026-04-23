@@ -14,6 +14,7 @@ import { estimateLivePosition } from '../api/orbit';
 import OrbitParticipantsPopover from './OrbitParticipantsPopover';
 import OrbitExitModal from './OrbitExitModal';
 import OrbitSettingsPopover from './OrbitSettingsPopover';
+import ConfirmModal from './ConfirmModal';
 
 /**
  * Orbit — top-strip session indicator.
@@ -45,6 +46,7 @@ export default function OrbitSessionBar() {
   const [nowMs, setNowMs]  = useState(() => Date.now());
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
   const peopleBtnRef = useRef<HTMLButtonElement>(null);
   const settingsBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -80,7 +82,7 @@ export default function OrbitSessionBar() {
     && state.currentTrack
     && (driftMs == null || Math.abs(driftMs) > CATCH_UP_DRIFT_THRESHOLD_MS);
 
-  const onExit = async () => {
+  const performExit = async () => {
     try {
       if (role === 'host') await endOrbitSession();
       else if (role === 'guest') await leaveOrbitSession();
@@ -88,6 +90,17 @@ export default function OrbitSessionBar() {
     } catch {
       useOrbitStore.getState().reset();
     }
+  };
+
+  const onExit = () => {
+    // Guests in an active session get a confirm — leaving is voluntary and
+    // a fat-finger shouldn't drop them out. Host-end and post-end/kicked
+    // dismissals exit immediately (the session is already over there).
+    if (role === 'guest' && phase === 'active') {
+      setConfirmLeave(true);
+      return;
+    }
+    void performExit();
   };
 
   const onCatchUp = async () => {
@@ -200,6 +213,15 @@ export default function OrbitSessionBar() {
         />
       )}
       <OrbitExitModal />
+      <ConfirmModal
+        open={confirmLeave}
+        title={t('orbit.confirmLeaveTitle')}
+        message={t('orbit.confirmLeaveBody', { name: state.name, host: state.host })}
+        confirmLabel={t('orbit.confirmLeaveConfirm')}
+        cancelLabel={t('orbit.confirmCancel')}
+        onConfirm={() => { setConfirmLeave(false); void performExit(); }}
+        onCancel={() => setConfirmLeave(false)}
+      />
     </div>
   );
 }

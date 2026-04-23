@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../store/authStore';
@@ -6,7 +6,23 @@ import { decodeSharePayloadFromText } from '../utils/shareLink';
 import { decodeServerMagicStringFromText } from '../utils/serverMagicString';
 import { applySharePastePayload } from '../utils/applySharePaste';
 import { showToast } from '../utils/toast';
-import { parseOrbitShareLink, joinOrbitSession, OrbitJoinError } from '../utils/orbit';
+import {
+  parseOrbitShareLink,
+  joinOrbitSession,
+  findSessionPlaylistId,
+  readOrbitState,
+  OrbitJoinError,
+} from '../utils/orbit';
+import ConfirmModal from './ConfirmModal';
+
+const ORBIT_JOIN_ERROR_KEYS: Record<string, string> = {
+  'not-found':    'orbit.joinErrNotFound',
+  'ended':        'orbit.joinErrEnded',
+  'full':         'orbit.joinErrFull',
+  'kicked':       'orbit.joinErrKicked',
+  'no-user':      'orbit.joinErrNoUser',
+  'server-error': 'orbit.joinErrServerError',
+};
 
 /**
  * Global paste: library share links (`psysonic2-`) and server invites (`psysonic1-`)
@@ -17,6 +33,33 @@ export default function PasteClipboardHandler() {
   const { t } = useTranslation();
   const isLoggedIn = useAuthStore(s => s.isLoggedIn);
   const busy = useRef(false);
+  const [orbitConfirm, setOrbitConfirm] = useState<{ sid: string; host: string; name: string } | null>(null);
+  const [orbitInvalid, setOrbitInvalid] = useState(false);
+
+  // `not-found` and `ended` collapse into a single "link no longer valid"
+  // dialog — from the guest's POV both mean the same thing: the invite
+  // doesn't lead anywhere any more. Other reasons stay as toasts because
+  // they're actionable (full → wait, kicked → talk to host, etc.).
+  const handleJoinError = (reason: string | null, fallback?: string) => {
+    if (reason === 'not-found' || reason === 'ended') {
+      setOrbitInvalid(true);
+      return;
+    }
+    const i18nKey = reason ? ORBIT_JOIN_ERROR_KEYS[reason] : null;
+    showToast(i18nKey ? t(i18nKey) : (fallback ?? t('orbit.toastJoinFail')), 4000, 'error');
+  };
+
+  const runOrbitJoin = (sid: string) => {
+    if (busy.current) return;
+    busy.current = true;
+    joinOrbitSession(sid)
+      .then(() => showToast(t('orbit.toastJoined'), 2500, 'info'))
+      .catch(err => {
+        if (err instanceof OrbitJoinError) handleJoinError(err.reason, err.message);
+        else                               handleJoinError(null);
+      })
+      .finally(() => { busy.current = false; });
+  };
 
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
@@ -46,25 +89,21 @@ export default function PasteClipboardHandler() {
           return;
         }
         if (busy.current) return;
+
+        // Preview the session state so the confirm dialog can show the host
+        // and session name. Failures (session vanished / ended / unreachable)
+        // surface the same error toasts the join would, without ever showing
+        // the confirm.
         busy.current = true;
-        joinOrbitSession(orbit.sid)
-          .then(() => showToast(t('orbit.toastJoined'), 2500, 'info'))
-          .catch(err => {
-            if (err instanceof OrbitJoinError) {
-              const key: Record<string, string> = {
-                'not-found':    'orbit.joinErrNotFound',
-                'ended':        'orbit.joinErrEnded',
-                'full':         'orbit.joinErrFull',
-                'kicked':       'orbit.joinErrKicked',
-                'no-user':      'orbit.joinErrNoUser',
-                'server-error': 'orbit.joinErrServerError',
-              };
-              const i18nKey = key[err.reason];
-              showToast(i18nKey ? t(i18nKey) : err.message, 4000, 'error');
-            } else {
-              showToast(t('orbit.toastJoinFail'), 4000, 'error');
-            }
-          })
+        (async () => {
+          const playlistId = await findSessionPlaylistId(orbit.sid);
+          if (!playlistId) { handleJoinError('not-found'); return; }
+          const state = await readOrbitState(playlistId);
+          if (!state)      { handleJoinError('not-found'); return; }
+          if (state.ended) { handleJoinError('ended');     return; }
+          setOrbitConfirm({ sid: orbit.sid, host: state.host, name: state.name });
+        })()
+          .catch(() => handleJoinError(null))
           .finally(() => { busy.current = false; });
         return;
       }
@@ -113,5 +152,31 @@ export default function PasteClipboardHandler() {
     return () => document.removeEventListener('paste', onPaste, true);
   }, [navigate, t, isLoggedIn]);
 
-  return null;
+  return (
+    <>
+      <ConfirmModal
+        open={!!orbitConfirm}
+        title={t('orbit.confirmJoinTitle')}
+        message={t('orbit.confirmJoinBody', {
+          host: orbitConfirm?.host ?? '',
+          name: orbitConfirm?.name ?? '',
+        })}
+        confirmLabel={t('orbit.confirmJoinConfirm')}
+        cancelLabel={t('orbit.confirmCancel')}
+        onConfirm={() => {
+          const sid = orbitConfirm?.sid;
+          setOrbitConfirm(null);
+          if (sid) runOrbitJoin(sid);
+        }}
+        onCancel={() => setOrbitConfirm(null)}
+      />
+      <ConfirmModal
+        open={orbitInvalid}
+        title={t('orbit.invalidLinkTitle')}
+        message={t('orbit.invalidLinkBody')}
+        confirmLabel={t('orbit.exitOk')}
+        onConfirm={() => setOrbitInvalid(false)}
+      />
+    </>
+  );
 }

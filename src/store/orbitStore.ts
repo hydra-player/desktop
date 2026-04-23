@@ -47,6 +47,12 @@ interface OrbitStore {
   state: OrbitState | null;
   /** Human-readable error when `phase === 'error'`. */
   errorMessage: string | null;
+  /**
+   * Wall-clock ms when this client joined the current session (host: start
+   * time, guest: join time). Used to disambiguate stale `removed`-list
+   * entries from a fresh re-join after a remove. Null when idle.
+   */
+  joinedAt: number | null;
 
   // ── Setters (Phase 1 scaffolding; later phases add real actions) ────────
   setPhase: (phase: OrbitPhase) => void;
@@ -70,6 +76,7 @@ const initialState = {
   phase: 'idle' as OrbitPhase,
   state: null,
   errorMessage: null,
+  joinedAt: null,
 } satisfies Omit<OrbitStore, 'setPhase' | 'setRole' | 'setSessionBinding' | 'setState' | 'setError' | 'reset'>;
 
 export const useOrbitStore = create<OrbitStore>()((set) => ({

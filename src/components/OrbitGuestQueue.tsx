@@ -14,16 +14,19 @@ import CachedImage from './CachedImage';
  * Orbit — guest-side queue view.
  *
  * Rendered in place of the normal QueuePanel contents while `role === 'guest'`.
- * Read-only: shows the host's current track + every guest-submitted suggestion
- * (including ours). No reorder / remove / save — those belong to the host.
+ * Read-only: shows the host's current track + the host's actual upcoming
+ * play queue (`state.playQueue`, capped at `ORBIT_PLAY_QUEUE_LIMIT`). No
+ * reorder / remove / save — those belong to the host.
  *
  * Track metadata is resolved lazily via `getSong` and cached locally so the
- * list doesn't flicker while the 2.5 s state tick refreshes `state.queue`.
+ * list doesn't flicker while the 2.5 s state tick refreshes the snapshot.
  */
 export default function OrbitGuestQueue() {
   const { t } = useTranslation();
   const state        = useOrbitStore(s => s.state);
-  const queueItems   = state?.queue ?? [];
+  const queueItems   = state?.playQueue ?? [];
+  const totalUpcoming = state?.playQueueTotal ?? queueItems.length;
+  const truncatedBy  = Math.max(0, totalUpcoming - queueItems.length);
   const currentTrack = state?.currentTrack ?? null;
 
   // Local song cache — keyed by trackId. Survives parent re-renders triggered
@@ -103,19 +106,20 @@ export default function OrbitGuestQueue() {
       )}
 
       <div className="orbit-guest-queue__section-head">
-        {t('orbit.guestSuggestions')} <span className="orbit-guest-queue__count">{queueItems.length}</span>
+        {t('orbit.guestUpNext')} <span className="orbit-guest-queue__count">{totalUpcoming}</span>
       </div>
 
       <div className="orbit-guest-queue__list">
         {queueItems.length === 0 && (
-          <div className="orbit-guest-queue__empty">{t('orbit.guestEmpty')}</div>
+          <div className="orbit-guest-queue__empty">{t('orbit.guestUpNextEmpty')}</div>
         )}
 
         {queueItems.map((q, i) => {
           const song = songs[q.trackId];
+          const isHostPick = q.addedBy === state.host;
           return (
             <div
-              key={`${q.addedBy}-${q.addedAt}-${q.trackId}-${i}`}
+              key={`${q.trackId}-${i}`}
               className="orbit-guest-queue__item"
             >
               {song?.coverArt ? (
@@ -135,13 +139,21 @@ export default function OrbitGuestQueue() {
                 <div className="orbit-guest-queue__track-artist">
                   {song?.artist ?? ''}
                 </div>
-                <div className="orbit-guest-queue__submitter">
-                  {t('orbit.guestSubmitter', { user: q.addedBy })}
-                </div>
+                {!isHostPick && (
+                  <div className="orbit-guest-queue__submitter">
+                    {t('orbit.guestSubmitter', { user: q.addedBy })}
+                  </div>
+                )}
               </div>
             </div>
           );
         })}
+
+        {truncatedBy > 0 && (
+          <div className="orbit-guest-queue__more">
+            {t('orbit.guestUpNextMore', { count: truncatedBy })}
+          </div>
+        )}
       </div>
 
       <div className="orbit-guest-queue__footer">{t('orbit.guestFooter')}</div>
