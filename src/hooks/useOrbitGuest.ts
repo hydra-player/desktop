@@ -159,8 +159,11 @@ export function useOrbitGuest(): void {
       // Rules:
       //   1. First tick after activation → mirror host (initial join sync,
       //      no need for the guest to click catch-up to get started).
-      //   2. Track changed at host → guest follows. Track-change is the
-      //      "session sync point"; it overrides any local divergence.
+      //   2. Track changed at host → guest follows ONLY if they haven't
+      //      locally diverged. A guest who hit pause should stay paused
+      //      even when the host moves to the next song; otherwise their
+      //      pause button silently un-does itself. If diverged, we just
+      //      advance the anchor so Catch Up stays the opt-in path.
       //   3. Same track, host flipped play/pause → mirror only if the local
       //      player still matches our last-applied host state. If the guest
       //      paused/resumed locally, we leave them alone — they have to
@@ -184,9 +187,19 @@ export function useOrbitGuest(): void {
           lastAppliedRef.current = { trackId: null, isPlaying: hostPlaying };
         }
       } else if (last.trackId !== hostTrackId) {
-        if (hostTrackId) void syncToHost(hostTrackId, state);
-        else if (player.isPlaying) player.pause();
-        lastAppliedRef.current = { trackId: hostTrackId, isPlaying: hostPlaying };
+        const diverged = player.isPlaying !== last.isPlaying;
+        if (diverged) {
+          // Guest is running their own show (typically: paused while host
+          // kept going). Do not load/start the host's new track — just
+          // track the host state so the catch-up prompt stays accurate.
+          lastAppliedRef.current = { trackId: hostTrackId, isPlaying: hostPlaying };
+        } else if (hostTrackId) {
+          void syncToHost(hostTrackId, state);
+          lastAppliedRef.current = { trackId: hostTrackId, isPlaying: hostPlaying };
+        } else {
+          if (player.isPlaying) player.pause();
+          lastAppliedRef.current = { trackId: hostTrackId, isPlaying: hostPlaying };
+        }
       } else if (last.isPlaying !== hostPlaying) {
         // Only mirror when the guest hasn't diverged. We compare against the
         // *last applied* host state, not the new one — divergence means the
