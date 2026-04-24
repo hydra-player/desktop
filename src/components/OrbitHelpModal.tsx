@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X, Sparkles, Users, Share2, LogIn, MousePointerClick,
@@ -17,10 +17,34 @@ import SettingsSubSection from './SettingsSubSection';
 export default function OrbitHelpModal() {
   const { t } = useTranslation();
   const { isOpen, close } = useHelpModalStore();
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    // Focus the first accordion summary so arrow keys work immediately.
+    queueMicrotask(() => {
+      const first = bodyRef.current?.querySelector<HTMLElement>('summary');
+      first?.focus();
+    });
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { close(); return; }
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      const summaries = Array.from(
+        bodyRef.current?.querySelectorAll<HTMLElement>('summary') ?? [],
+      );
+      if (summaries.length === 0) return;
+      const current = document.activeElement as HTMLElement | null;
+      const idx = summaries.indexOf(current as HTMLElement);
+      e.preventDefault();
+      const next = e.key === 'ArrowDown'
+        ? summaries[(idx + 1 + summaries.length) % summaries.length]
+        : summaries[(idx - 1 + summaries.length) % summaries.length];
+      next?.focus();
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [isOpen, close]);
@@ -48,7 +72,7 @@ export default function OrbitHelpModal() {
         </h3>
         <p className="orbit-help-modal__intro">{t('orbit.helpIntro')}</p>
 
-        <div className="orbit-help-modal__body">
+        <div className="orbit-help-modal__body" ref={bodyRef}>
           <SettingsSubSection title={t('orbit.helpSec1Title')} icon={<Sparkles size={16} />}>
             <p>{t('orbit.helpSec1Body')}</p>
           </SettingsSubSection>

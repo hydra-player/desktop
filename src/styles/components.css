@@ -12021,7 +12021,8 @@ html[data-psy-native-hidden="true"] *::after {
   color: var(--accent);
   flex-shrink: 0;
 }
-.orbit-account-picker__item:hover {
+.orbit-account-picker__item:hover,
+.orbit-account-picker__item.is-active {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border-color: color-mix(in srgb, var(--accent) 35%, transparent);
 }

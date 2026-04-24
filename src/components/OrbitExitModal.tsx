@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useOrbitStore } from '../store/orbitStore';
@@ -26,7 +27,29 @@ export default function OrbitExitModal() {
   const isKicked      = phase === 'error' && errorMessage === 'kicked';
   const isRemoved     = phase === 'error' && errorMessage === 'removed';
   const isHostTimeout = phase === 'error' && errorMessage === 'host-timeout';
-  if (!isEnded && !isKicked && !isRemoved && !isHostTimeout) return null;
+  const isOpen = isEnded || isKicked || isRemoved || isHostTimeout;
+
+  const onOk = async () => {
+    try {
+      if (role === 'guest') await leaveOrbitSession();
+      else useOrbitStore.getState().reset();
+    } catch {
+      useOrbitStore.getState().reset();
+    }
+  };
+
+  // Modal is informational with a single action — Enter / Escape both fire OK.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); void onOk(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  if (!isOpen) return null;
 
   const title = isKicked
     ? t('orbit.exitKickedTitle')
@@ -43,15 +66,6 @@ export default function OrbitExitModal() {
         ? t('orbit.exitHostTimeoutBody', { host: hostName ?? '', name: sessionName ?? '' })
         : t('orbit.exitEndedBody',   { name: sessionName ?? '' });
 
-  const onOk = async () => {
-    try {
-      if (role === 'guest') await leaveOrbitSession();
-      else useOrbitStore.getState().reset();
-    } catch {
-      useOrbitStore.getState().reset();
-    }
-  };
-
   return createPortal(
     <div
       className="modal-overlay orbit-exit-overlay"
@@ -64,7 +78,7 @@ export default function OrbitExitModal() {
         <h3 id="orbit-exit-title" className="orbit-exit-modal__title">{title}</h3>
         <p className="orbit-exit-modal__body">{body}</p>
         <div className="orbit-exit-modal__actions">
-          <button type="button" className="btn btn-primary" onClick={onOk}>{t('orbit.exitOk')}</button>
+          <button type="button" className="btn btn-primary" onClick={onOk} autoFocus>{t('orbit.exitOk')}</button>
         </div>
       </div>
     </div>,

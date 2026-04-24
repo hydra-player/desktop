@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -13,13 +13,43 @@ import { useOrbitAccountPickerStore } from '../store/orbitAccountPickerStore';
 export default function OrbitAccountPicker() {
   const { t } = useTranslation();
   const { isOpen, accounts, pick, cancel } = useOrbitAccountPickerStore();
+  const [selected, setSelected] = useState(0);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  // Reset + focus first item each time the picker re-opens.
+  useEffect(() => {
+    if (!isOpen) return;
+    setSelected(0);
+    // Defer focus to the next tick so the DOM has actually mounted.
+    queueMicrotask(() => itemRefs.current[0]?.focus());
+  }, [isOpen]);
+
+  // Move DOM focus with the arrow-key selection so the browser's focus
+  // ring follows, and the currently active button is readable to AT.
+  useEffect(() => {
+    if (!isOpen) return;
+    itemRefs.current[selected]?.focus();
+  }, [selected, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') cancel(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { cancel(); return; }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelected(s => (s + 1) % Math.max(1, accounts.length));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelected(s => (s - 1 + accounts.length) % Math.max(1, accounts.length));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const target = accounts[selected];
+        if (target) pick(target);
+      }
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen, cancel]);
+  }, [isOpen, accounts, selected, pick, cancel]);
 
   if (!isOpen) return null;
 
@@ -42,13 +72,15 @@ export default function OrbitAccountPicker() {
         <p className="orbit-account-picker__sub">
           {t('orbit.accountPickerSub', { url: accounts[0]?.url ?? '' })}
         </p>
-        <ul className="orbit-account-picker__list">
-          {accounts.map(a => (
-            <li key={a.id}>
+        <ul className="orbit-account-picker__list" role="listbox">
+          {accounts.map((a, i) => (
+            <li key={a.id} role="option" aria-selected={i === selected}>
               <button
+                ref={el => { itemRefs.current[i] = el; }}
                 type="button"
-                className="orbit-account-picker__item"
+                className={`orbit-account-picker__item${i === selected ? ' is-active' : ''}`}
                 onClick={() => pick(a)}
+                onMouseEnter={() => setSelected(i)}
               >
                 <User size={14} />
                 <span className="orbit-account-picker__user">{a.username}</span>

@@ -137,6 +137,12 @@ export default function OrbitStartModal({ onClose }: Props) {
               autoFocus
               value={name}
               onChange={e => { setName(e.target.value); setHasCopied(false); }}
+              onKeyDown={e => {
+                if (e.key !== 'Enter') return;
+                if (busy || !name.trim()) return;
+                e.preventDefault();
+                void onStart();
+              }}
               placeholder={t('orbit.namePlaceholder')}
               maxLength={40}
               className="orbit-start-modal__input"
