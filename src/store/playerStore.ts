@@ -12,6 +12,7 @@ import { useOfflineStore } from './offlineStore';
 import { useHotCacheStore } from './hotCacheStore';
 import { orbitBulkGuard } from '../utils/orbitBulkGuard';
 import { useOrbitStore } from './orbitStore';
+import { estimateLivePosition } from '../api/orbit';
 
 export interface Track {
   id: string;
@@ -1436,6 +1437,50 @@ export const usePlayerStore = create<PlayerState>()(
       resume: () => {
         clearAllPlaybackScheduleTimers();
         set({ scheduledPauseAtMs: null, scheduledPauseStartMs: null, scheduledResumeAtMs: null, scheduledResumeStartMs: null });
+
+        // Orbit guest: resume means "catch up to the host's live stream".
+        // The user hit pause at some earlier point; resuming shouldn't drop
+        // them back at the stale local position while the host is already
+        // two songs ahead. Covers PlayerBar, media keys, MPRIS — everything
+        // that funnels through resume().
+        const orbit = useOrbitStore.getState();
+        const hostState = orbit.state;
+        if (orbit.role === 'guest' && hostState?.isPlaying && hostState.currentTrack) {
+          const trackId = hostState.currentTrack.trackId;
+          const targetMs = estimateLivePosition(hostState, Date.now());
+          const targetSec = Math.max(0, targetMs / 1000);
+          const localTrackId = get().currentTrack?.id;
+          void (async () => {
+            try {
+              const song = await getSong(trackId);
+              if (!song) return;
+              const track = songToTrack(song);
+              const fraction = Math.max(0, Math.min(0.99, targetSec / Math.max(1, track.duration)));
+              if (localTrackId === trackId) {
+                // Same track: seek + un-pause via the Rust engine directly.
+                // Bypasses this resume() branch re-entry via the early return below.
+                get().seek(fraction);
+                if (isAudioPaused) {
+                  invoke('audio_resume').catch(console.error);
+                  isAudioPaused = false;
+                  set({ isPlaying: true });
+                } else {
+                  set({ isPlaying: true });
+                }
+              } else {
+                // Host has a different track — load it (`_orbitConfirmed=true`
+                // skips the bulk gate; single-track play isn't a bulk replace
+                // anyway). Seek after a short defer once the engine loads.
+                get().playTrack(track, [track], false, true);
+                window.setTimeout(() => {
+                  if (get().currentTrack?.id === trackId) get().seek(fraction);
+                }, 400);
+              }
+            } catch { /* silent */ }
+          })();
+          return;
+        }
+
         if (get().currentRadio) {
           radioAudio.play().catch(console.error);
           set({ isPlaying: true });
