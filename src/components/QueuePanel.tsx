@@ -264,13 +264,13 @@ function QueuePanelHostOrSolo() {
   }, [orbitRole, orbitState]);
   const orbitHostUsername = orbitState?.host ?? '';
   /** Attribution label for a queue row / current track while hosting. Null when
-   *  not hosting, when the track isn't part of the Orbit state, or when it
-   *  isn't relevant for this user (non-host and we haven't mapped the added-by). */
+   *  not in a hosted session. Bulk-adds (album / playlist enqueue) bypass
+   *  `hostEnqueueToOrbit` and therefore never land in `state.queue`, so we
+   *  default those to "Added by you" rather than showing nothing. */
   const orbitAttributionLabel = (trackId: string): string | null => {
-    if (orbitRole !== 'host') return null;
+    if (orbitRole !== 'host' || !orbitState) return null;
     const addedBy = orbitAddedByByTrack.get(trackId);
-    if (!addedBy) return null;
-    if (addedBy === orbitHostUsername) return t('orbit.queueAddedByYou');
+    if (!addedBy || addedBy === orbitHostUsername) return t('orbit.queueAddedByYou');
     return t('orbit.queueAddedByUser', { user: addedBy });
   };
   const queue = usePlayerStore(s => s.queue);
