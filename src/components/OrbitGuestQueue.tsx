@@ -169,11 +169,11 @@ export default function OrbitGuestQueue() {
                 <div className="orbit-guest-queue__track-artist">
                   {song?.artist ?? ''}
                 </div>
-                {!isHostPick && (
-                  <div className="orbit-guest-queue__submitter">
-                    {t('orbit.guestSubmitter', { user: q.addedBy })}
-                  </div>
-                )}
+                <div className="orbit-guest-queue__submitter">
+                  {isHostPick
+                    ? t('orbit.queueAddedByHost')
+                    : t('orbit.guestSubmitter', { user: q.addedBy })}
+                </div>
               </div>
             </div>
           );

@@ -251,6 +251,28 @@ function QueuePanelHostOrSolo() {
   const navigate = useNavigate();
   const orbitRole = useOrbitStore(s => s.role);
   const orbitState = useOrbitStore(s => s.state);
+  /** trackId → addedBy (host username or guest username) — only populated while
+   *  hosting an Orbit session, so the queue rows can surface attribution. */
+  const orbitAddedByByTrack = useMemo(() => {
+    const map = new Map<string, string>();
+    if (orbitRole !== 'host' || !orbitState) return map;
+    if (orbitState.currentTrack) {
+      map.set(orbitState.currentTrack.trackId, orbitState.currentTrack.addedBy);
+    }
+    for (const q of orbitState.queue) map.set(q.trackId, q.addedBy);
+    return map;
+  }, [orbitRole, orbitState]);
+  const orbitHostUsername = orbitState?.host ?? '';
+  /** Attribution label for a queue row / current track while hosting. Null when
+   *  not hosting, when the track isn't part of the Orbit state, or when it
+   *  isn't relevant for this user (non-host and we haven't mapped the added-by). */
+  const orbitAttributionLabel = (trackId: string): string | null => {
+    if (orbitRole !== 'host') return null;
+    const addedBy = orbitAddedByByTrack.get(trackId);
+    if (!addedBy) return null;
+    if (addedBy === orbitHostUsername) return t('orbit.queueAddedByYou');
+    return t('orbit.queueAddedByUser', { user: addedBy });
+  };
   const queue = usePlayerStore(s => s.queue);
   const queueIndex = usePlayerStore(s => s.queueIndex);
   const currentTrack = usePlayerStore(s => s.currentTrack);
@@ -571,6 +593,10 @@ function QueuePanelHostOrSolo() {
               {currentTrack.year && (
                 <div className="queue-current-sub">{currentTrack.year}</div>
               )}
+              {(() => {
+                const label = orbitAttributionLabel(currentTrack.id);
+                return label ? <div className="queue-current-sub queue-current-attribution">{label}</div> : null;
+              })()}
               {renderStars(userRatingOverrides[currentTrack.id] ?? currentTrack.userRating)}
             </div>
           </div>
@@ -748,6 +774,10 @@ function QueuePanelHostOrSolo() {
                     <span className="truncate">{track.title}</span>
                   </div>
                   <div className="queue-item-artist truncate">{track.artist}</div>
+                  {(() => {
+                    const label = orbitAttributionLabel(track.id);
+                    return label ? <div className="queue-item-attribution truncate">{label}</div> : null;
+                  })()}
                 </div>
                 <div className="queue-item-duration">
                   {formatTime(track.duration)}
