@@ -732,13 +732,13 @@ export async function sweepGuestOutboxes(sid: string, hostUsername: string): Pro
 export const ORBIT_HEARTBEAT_ALIVE_MS = 30_000;
 
 /**
- * Grace window for the app-start orphan sweep. Has to be comfortably
- * larger than the outbox heartbeat interval (10 s) and the session state
- * tick (2.5 s) so a session running on the user's other device doesn't
- * get deleted on a transient slow tick. 2× ALIVE window is the minimum
- * sane value.
+ * Grace window for the app-start orphan sweep. A session on the user's
+ * other device or a browser that briefly restarted must NOT be deleted
+ * by this sweep. 5 min matches the guest-side host-timeout threshold:
+ * if a session is silent for that long, it's fair to treat it as dead;
+ * anything shorter is a real restart and must survive.
  */
-export const ORBIT_ORPHAN_TTL_MS = 60_000;
+export const ORBIT_ORPHAN_TTL_MS = 5 * 60_000;
 
 /**
  * Legacy / fallback shuffle cadence. New sessions store their own interval
