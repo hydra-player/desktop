@@ -12465,6 +12465,118 @@ html[data-psy-native-hidden="true"] *::after {
   font-weight: 600;
 }
 
+/* Host manual-approval strip — rendered right below OrbitQueueHead when
+   autoApprove is off and guest suggestions are waiting. Prominent accent
+   colour so the host can't miss queued approvals. */
+.host-approval {
+  margin: 0 10px 10px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: var(--radius-md, 10px);
+}
+.host-approval__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.host-approval__head svg { color: var(--accent); flex-shrink: 0; }
+.host-approval__count {
+  margin-left: auto;
+  padding: 1px 7px;
+  background: var(--accent);
+  color: var(--bg-primary, #0b0b13);
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.host-approval__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.host-approval__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+}
+.host-approval__cover {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.host-approval__cover--ph {
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+}
+.host-approval__info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.host-approval__title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.host-approval__artist {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.host-approval__submitter {
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.host-approval__actions {
+  display: inline-flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.host-approval__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--text-primary) 18%, transparent);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.host-approval__btn--approve:hover {
+  background: color-mix(in srgb, var(--ctp-green, #a6e3a1) 28%, transparent);
+  border-color: var(--ctp-green, #a6e3a1);
+  color: var(--ctp-green, #a6e3a1);
+}
+.host-approval__btn--decline:hover {
+  background: color-mix(in srgb, var(--danger, #f38ba8) 28%, transparent);
+  border-color: var(--danger, #f38ba8);
+  color: var(--danger, #f38ba8);
+}
+
 /* Pending suggestions — tracks the guest has submitted but the host
    hasn't merged yet. Looks like the regular queue section, with a subtle
    yellow accent and a clock icon in the heading. */

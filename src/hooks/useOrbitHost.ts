@@ -9,6 +9,7 @@ import {
   applyOutboxSnapshotsToState,
   maybeShuffleQueue,
   effectiveShuffleIntervalMs,
+  suggestionKey,
 } from '../utils/orbit';
 import {
   orbitOutboxPlaylistName,
@@ -18,9 +19,6 @@ import {
 } from '../api/orbit';
 import { showToast } from '../utils/toast';
 import i18n from '../i18n';
-
-/** Stable per-suggestion key — survives reshuffles since all three fields are immutable. */
-const suggestionKey = (q: OrbitQueueItem): string => `${q.addedBy}:${q.addedAt}:${q.trackId}`;
 
 /**
  * Orbit — host-side tick hook.
@@ -54,21 +52,10 @@ export function useOrbitHost(): void {
   // recompute against, no need to subscribe to every playerStore tick.
   const lastPushedAtRef = useRef(0);
 
-  /**
-   * Tracks which guest-submitted queue items we've already appended to the
-   * local playerStore queue. Prevents duplicate enqueues on every tick and
-   * when `maybeShuffleQueue` reorders `state.queue` without adding items.
-   * Reset on session start / end via the `active` effect below.
-   */
-  const mergedSuggestionsRef = useRef<Set<string>>(new Set());
-
   const active = role === 'host' && phase === 'active' && !!sessionPlaylistId;
 
   useEffect(() => {
     if (!active || !sessionPlaylistId) return;
-
-    // Fresh session → nothing has been merged yet.
-    mergedSuggestionsRef.current = new Set();
 
     const snapshotPlayerPatch = (hostUsername: string): Partial<OrbitState> => {
       const p = usePlayerStore.getState();
@@ -162,15 +149,22 @@ export function useOrbitHost(): void {
       // Opt-out: host turned auto-approve off. Items still accumulate in
       // `OrbitState.queue` and show up in the guest view / approval list —
       // they just don't flow into the host's actual play queue yet.
-      const settings = useOrbitStore.getState().state?.settings;
+      const store = useOrbitStore.getState();
+      const settings = store.state?.settings;
       if (settings && settings.autoApprove === false) return;
 
       // Host-authored items are enqueued directly by `hostEnqueueToOrbit` and
       // must not flow through the merge pipeline again — otherwise the tick
-      // would duplicate the track into the upcoming queue.
-      const hostUser = useOrbitStore.getState().state?.host;
-      const merged = mergedSuggestionsRef.current;
-      const pending = items.filter(q => q.addedBy !== hostUser && !merged.has(suggestionKey(q)));
+      // would duplicate the track into the upcoming queue. Declined items
+      // stay out too; merged items are the existing dedup anchor.
+      const hostUser = store.state?.host;
+      const mergedKeys = new Set(store.mergedSuggestionKeys);
+      const declinedKeys = new Set(store.declinedSuggestionKeys);
+      const pending = items.filter(q =>
+        q.addedBy !== hostUser
+        && !mergedKeys.has(suggestionKey(q))
+        && !declinedKeys.has(suggestionKey(q))
+      );
       if (pending.length === 0) return;
 
       // Resolve in parallel — Navidrome is fine with concurrent getSong calls.
@@ -184,10 +178,11 @@ export function useOrbitHost(): void {
       }));
 
       const toEnqueue = resolved.filter((r): r is { q: OrbitQueueItem; track: ReturnType<typeof songToTrack> } => r !== null);
+      const markAllAsMerged = () => pending.forEach(q => store.addMergedSuggestion(suggestionKey(q)));
       if (toEnqueue.length === 0) {
         // Mark the failed lookups as seen anyway so we don't keep retrying
         // every tick for a track the server can't serve.
-        pending.forEach(q => merged.add(suggestionKey(q)));
+        markAllAsMerged();
         return;
       }
 
@@ -203,7 +198,7 @@ export function useOrbitHost(): void {
         const pos  = from + Math.floor(Math.random() * span);
         player.enqueueAt([track], pos);
       }
-      pending.forEach(q => merged.add(suggestionKey(q)));
+      markAllAsMerged();
 
       // Friendly nudge per sweep, not per track — bundled toast if >1.
       if (toEnqueue.length === 1) {

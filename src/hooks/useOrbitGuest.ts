@@ -129,12 +129,15 @@ export function useOrbitGuest(): void {
 
       useOrbitStore.getState().setState(state);
 
-      // Reconcile pending guest suggestions against the host's shared state.
-      // Once a suggested trackId shows up in state.queue or state.currentTrack,
-      // the host has merged it and we can drop it from the "pending" list.
+      // Reconcile pending guest suggestions against the host's *playable*
+      // queue — NOT `state.queue`, which is the suggestion history (every
+      // submission lands there immediately, even under manual-approval mode
+      // where the host hasn't actually accepted the track yet).
+      // `state.playQueue` is the host's real upcoming queue, so a trackId
+      // appearing there (or as `currentTrack`) means the host has merged it.
       if (useOrbitStore.getState().pendingSuggestions.length > 0) {
         const landed = new Set<string>();
-        for (const q of state.queue) landed.add(q.trackId);
+        for (const q of (state.playQueue ?? [])) landed.add(q.trackId);
         if (state.currentTrack) landed.add(state.currentTrack.trackId);
         useOrbitStore.getState().reconcilePendingSuggestions(landed);
       }

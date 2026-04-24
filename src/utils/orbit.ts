@@ -512,6 +512,41 @@ export async function suggestOrbitTrack(trackId: string): Promise<void> {
 }
 
 /**
+ * Stable per-suggestion key across reshuffles — `addedBy`, `addedAt` and
+ * `trackId` are all immutable once the host sweep has written them.
+ * Shared between the host tick and the manual-approval UI.
+ */
+export const suggestionKey = (q: OrbitQueueItem): string =>
+  `${q.addedBy}:${q.addedAt}:${q.trackId}`;
+
+/**
+ * Host: accept a guest suggestion and route it into the live play queue.
+ * No-op outside host role. Uses the shared `mergedSuggestionKeys` store
+ * slot so the tick doesn't re-process the same item.
+ */
+export async function approveOrbitSuggestion(q: OrbitQueueItem): Promise<void> {
+  const store = useOrbitStore.getState();
+  if (store.role !== 'host' || !store.state) return;
+  try {
+    const song = await getSong(q.trackId);
+    if (!song) return;
+    const track = songToTrack(song);
+    usePlayerStore.getState().enqueue([track]);
+    store.addMergedSuggestion(suggestionKey(q));
+  } catch { /* silent */ }
+}
+
+/**
+ * Host: reject a guest suggestion. It stays in `OrbitState.queue` as
+ * history but is filtered out of the approval UI and the merge tick.
+ */
+export function declineOrbitSuggestion(q: OrbitQueueItem): void {
+  const store = useOrbitStore.getState();
+  if (store.role !== 'host') return;
+  store.addDeclinedSuggestion(suggestionKey(q));
+}
+
+/**
  * Host: add a track to the active Orbit session directly, skipping the
  * outbox/approval loop guests go through. The track lands in the host's
  * own play queue immediately and is attributed to the host in the

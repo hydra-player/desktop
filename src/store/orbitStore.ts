@@ -62,6 +62,19 @@ interface OrbitStore {
    * the host's next sweep anyway.
    */
   pendingSuggestions: string[];
+  /**
+   * Host-only: suggestionKeys (see suggestionKey() in utils/orbit) that
+   * the host has already merged into the play queue — whether via
+   * auto-approve or an explicit Approve button. Stops the host tick
+   * from re-inserting the same item on every sweep.
+   */
+  mergedSuggestionKeys: string[];
+  /**
+   * Host-only: suggestionKeys that the host explicitly declined. Keeps
+   * them out of the merge pipeline AND out of the pending-approvals UI
+   * so a declined suggestion doesn't keep begging for attention.
+   */
+  declinedSuggestionKeys: string[];
 
   // ── Setters (Phase 1 scaffolding; later phases add real actions) ────────
   setPhase: (phase: OrbitPhase) => void;
@@ -76,6 +89,10 @@ interface OrbitStore {
   addPendingSuggestion: (trackId: string) => void;
   /** Keep only the pending ids that are NOT yet observable in the shared queue. */
   reconcilePendingSuggestions: (landedTrackIds: Set<string>) => void;
+  /** Host: mark a suggestion as merged so the tick stops re-proposing it. */
+  addMergedSuggestion: (key: string) => void;
+  /** Host: mark a suggestion as declined so the approval UI and tick ignore it. */
+  addDeclinedSuggestion: (key: string) => void;
   /** Tear down the session locally. Does NOT clean up remote playlists. */
   reset: () => void;
 }
@@ -90,9 +107,12 @@ const initialState = {
   errorMessage: null,
   joinedAt: null,
   pendingSuggestions: [] as string[],
+  mergedSuggestionKeys: [] as string[],
+  declinedSuggestionKeys: [] as string[],
 } satisfies Omit<OrbitStore,
   | 'setPhase' | 'setRole' | 'setSessionBinding' | 'setState' | 'setError'
-  | 'addPendingSuggestion' | 'reconcilePendingSuggestions' | 'reset'
+  | 'addPendingSuggestion' | 'reconcilePendingSuggestions'
+  | 'addMergedSuggestion' | 'addDeclinedSuggestion' | 'reset'
 >;
 
 export const useOrbitStore = create<OrbitStore>()((set) => ({
@@ -113,5 +133,15 @@ export const useOrbitStore = create<OrbitStore>()((set) => ({
     const next = s.pendingSuggestions.filter(id => !landedTrackIds.has(id));
     return next.length === s.pendingSuggestions.length ? s : { pendingSuggestions: next };
   }),
+  addMergedSuggestion: (key) => set(s => (
+    s.mergedSuggestionKeys.includes(key)
+      ? s
+      : { mergedSuggestionKeys: [...s.mergedSuggestionKeys, key] }
+  )),
+  addDeclinedSuggestion: (key) => set(s => (
+    s.declinedSuggestionKeys.includes(key)
+      ? s
+      : { declinedSuggestionKeys: [...s.declinedSuggestionKeys, key] }
+  )),
   reset: () => set({ ...initialState }),
 }));
