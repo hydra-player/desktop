@@ -124,7 +124,8 @@ export interface OrbitSettings {
 }
 
 export const ORBIT_DEFAULT_SETTINGS: OrbitSettings = {
-  autoApprove: true,
+  // Off by default — host decides per suggestion via the approval list.
+  autoApprove: false,
   autoShuffle: true,
   shuffleIntervalMin: 15,
 };
