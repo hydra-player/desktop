@@ -1051,6 +1051,14 @@
   box-shadow: var(--shadow-lg);
 }
 
+/* In playlist cards, the 2x2 grid must fill the full cover area. */
+.album-card-cover > .playlist-cover-grid {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 .playlist-cover-cell {
   width: 100%;
   height: 100%;

@@ -636,6 +636,28 @@ async fn nd_update_playlist(
     Ok(serde_json::from_str(&text).unwrap_or(serde_json::Value::Null))
 }
 
+/// GET `/api/playlist/{id}` — get a single playlist (includes smart rules if available).
+#[tauri::command]
+async fn nd_get_playlist(
+    server_url: String,
+    token: String,
+    id: String,
+) -> Result<serde_json::Value, String> {
+    let resp = nd_retry(|| {
+        nd_http_client()
+            .get(format!("{}/api/playlist/{}", server_url, id))
+            .header("X-ND-Authorization", format!("Bearer {}", token))
+            .send()
+    })
+    .await?;
+    let status = resp.status();
+    let text = resp.text().await.unwrap_or_default();
+    if !status.is_success() {
+        return Err(format!("HTTP {}: {}", status, text));
+    }
+    Ok(serde_json::from_str(&text).unwrap_or(serde_json::Value::Null))
+}
+
 /// DELETE `/api/playlist/{id}` — delete playlist.
 #[tauri::command]
 async fn nd_delete_playlist(
@@ -3820,6 +3842,7 @@ pub fn run() {
             nd_list_playlists,
             nd_create_playlist,
             nd_update_playlist,
+            nd_get_playlist,
             nd_delete_playlist,
             search_radio_browser,
             get_top_radio_stations,

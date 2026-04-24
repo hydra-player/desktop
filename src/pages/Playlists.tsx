@@ -10,7 +10,7 @@ import StarRating from '../components/StarRating';
 import { useTranslation } from 'react-i18next';
 import { formatHumanHoursMinutes } from '../utils/formatHumanDuration';
 import { showToast } from '../utils/toast';
-import { ndCreateSmartPlaylist } from '../api/navidromeSmart';
+import { ndCreateSmartPlaylist, ndGetSmartPlaylist, ndListSmartPlaylists, ndUpdateSmartPlaylist } from '../api/navidromeSmart';
 
 function formatDuration(seconds: number): string {
   return formatHumanHoursMinutes(seconds);
@@ -48,6 +48,8 @@ type PendingSmartPlaylist = {
   attempts: number;
 };
 
+type NdSmartRuleNode = Record<string, unknown>;
+
 const defaultSmartFilters: SmartFilters = {
   name: '',
   limit: '50',
@@ -79,6 +81,90 @@ function displayPlaylistName(name: string): string {
   return n;
 }
 
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+}
+
+function parseSmartRulesToFilters(
+  rules: Record<string, unknown> | undefined,
+  playlistName: string,
+): SmartFilters {
+  const next: SmartFilters = {
+    ...defaultSmartFilters,
+    name: displayPlaylistName(playlistName),
+  };
+  if (!rules) return next;
+
+  if (typeof rules.limit === 'number' && Number.isFinite(rules.limit)) {
+    next.limit = String(Math.max(1, Math.min(LIMIT_MAX, Number(rules.limit))));
+  }
+  if (typeof rules.sort === 'string' && rules.sort.trim()) next.sort = rules.sort;
+
+  const includeGenres: string[] = [];
+  const excludeGenres: string[] = [];
+  const all = Array.isArray(rules.all) ? rules.all : [];
+  for (const node of all) {
+    const obj = asRecord(node);
+    if (!obj) continue;
+
+    const contains = asRecord(obj.contains);
+    if (contains) {
+      if (typeof contains.artist === 'string') next.artistContains = contains.artist;
+      if (typeof contains.album === 'string') next.albumContains = contains.album;
+      if (typeof contains.title === 'string') next.titleContains = contains.title;
+    }
+
+    const gt = asRecord(obj.gt);
+    if (gt && typeof gt.rating === 'number') {
+      if (gt.rating > 0) next.minRating = Math.max(0, Math.min(5, Math.floor(gt.rating)));
+      else if (gt.rating === 0) next.excludeUnrated = true;
+    }
+
+    const is = asRecord(obj.is);
+    if (is?.compilation === true) next.compilationOnly = true;
+
+    const notContains = asRecord(obj.notContains);
+    if (notContains && typeof notContains.genre === 'string') excludeGenres.push(notContains.genre);
+
+    const inTheRange = asRecord(obj.inTheRange);
+    if (inTheRange && Array.isArray(inTheRange.year) && inTheRange.year.length === 2) {
+      const from = Number(inTheRange.year[0]);
+      const to = Number(inTheRange.year[1]);
+      if (Number.isFinite(from) && Number.isFinite(to)) {
+        next.yearMode = 'include';
+        next.yearFrom = clampYear(Math.min(from, to));
+        next.yearTo = clampYear(Math.max(from, to));
+      }
+    }
+
+    const any = Array.isArray(obj.any) ? (obj.any as NdSmartRuleNode[]) : [];
+    if (any.length > 0) {
+      const parsedGenreIncludes = any
+        .map((item) => asRecord(asRecord(item)?.contains)?.genre)
+        .filter((v): v is string => typeof v === 'string');
+      if (parsedGenreIncludes.length > 0) includeGenres.push(...parsedGenreIncludes);
+
+      const ltYear = any.map((item) => asRecord(asRecord(item)?.lt)?.year).find((v) => typeof v === 'number');
+      const gtYear = any.map((item) => asRecord(asRecord(item)?.gt)?.year).find((v) => typeof v === 'number');
+      if (typeof ltYear === 'number' && typeof gtYear === 'number') {
+        next.yearMode = 'exclude';
+        next.yearFrom = clampYear(Math.min(ltYear, gtYear));
+        next.yearTo = clampYear(Math.max(ltYear, gtYear));
+      }
+    }
+  }
+
+  if (includeGenres.length > 0) {
+    next.genreMode = 'include';
+    next.selectedGenres = [...new Set(includeGenres)];
+  } else if (excludeGenres.length > 0) {
+    next.genreMode = 'exclude';
+    next.selectedGenres = [...new Set(excludeGenres)];
+  }
+
+  return next;
+}
+
 export default function Playlists() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -102,6 +188,7 @@ export default function Playlists() {
   const [genres, setGenres] = useState<SubsonicGenre[]>([]);
   const [genreQuery, setGenreQuery] = useState('');
   const [creatingSmartBusy, setCreatingSmartBusy] = useState(false);
+  const [editingSmartId, setEditingSmartId] = useState<string | null>(null);
   const [pendingSmart, setPendingSmart] = useState<PendingSmartPlaylist[]>([]);
   const [smartCoverIdsByPlaylist, setSmartCoverIdsByPlaylist] = useState<Record<string, string[]>>({});
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -236,6 +323,57 @@ export default function Playlists() {
     return rules;
   };
 
+  const handleOpenSmartEditor = async (pl: SubsonicPlaylist) => {
+    if (!isNavidromeServer || !isSmartPlaylistName(pl.name)) return;
+    setCreatingSmartBusy(true);
+    try {
+      let target: { id: string; name: string; rules?: Record<string, unknown> } | null = null;
+      try {
+        // Prefer direct endpoint for this playlist: returns freshest rules.
+        const direct = await ndGetSmartPlaylist(pl.id);
+        if (direct.id && (direct.rules || isSmartPlaylistName(direct.name))) target = direct;
+      } catch {
+        // Fallback to list endpoint below.
+      }
+      if (!target) {
+        const smart = await ndListSmartPlaylists();
+        target = smart.find((v) =>
+          v.id === pl.id ||
+          v.name === pl.name ||
+          displayPlaylistName(v.name) === displayPlaylistName(pl.name),
+        ) ?? null;
+      }
+      if (target) {
+        setSmartFilters(parseSmartRulesToFilters(target.rules, target.name));
+        setEditingSmartId(target.id);
+      } else {
+        // Fallback: allow editing even if Navidrome smart list endpoint
+        // doesn't return this playlist (shared/migrated/legacy edge cases).
+        setSmartFilters({
+          ...defaultSmartFilters,
+          name: displayPlaylistName(pl.name),
+        });
+        setEditingSmartId(pl.id);
+      }
+      setGenreQuery('');
+      setCreating(false);
+      setCreatingSmart(true);
+    } catch {
+      // Degrade gracefully instead of blocking the editor on transient/API errors.
+      setSmartFilters({
+        ...defaultSmartFilters,
+        name: displayPlaylistName(pl.name),
+      });
+      setGenreQuery('');
+      setEditingSmartId(pl.id);
+      setCreating(false);
+      setCreatingSmart(true);
+      showToast(t('smartPlaylists.loadFailed'), 3500, 'warning');
+    } finally {
+      setCreatingSmartBusy(false);
+    }
+  };
+
   const handleCreateSmart = async () => {
     if (!isNavidromeServer) {
       showToast(t('smartPlaylists.navidromeOnly'), 3500, 'error');
@@ -243,31 +381,48 @@ export default function Playlists() {
     }
     setCreatingSmartBusy(true);
     try {
-      const baseName = smartFilters.name.trim() || `mix-${new Date().toISOString().slice(0, 10)}`;
+      let baseName = smartFilters.name.trim() || `mix-${new Date().toISOString().slice(0, 10)}`;
+      if (!editingSmartId) {
+        const existingNames = new Set(playlists.map((p) => (p.name ?? '').toLowerCase()));
+        const requestedBaseName = baseName;
+        let ordinal = 2;
+        while (existingNames.has(`${SMART_PREFIX}${baseName}`.toLowerCase())) {
+          baseName = `${requestedBaseName}-${ordinal}`;
+          ordinal += 1;
+        }
+      }
       const rules = buildSmartRulesPayload();
-      await ndCreateSmartPlaylist(`${SMART_PREFIX}${baseName}`, rules, true);
+      const fullName = `${SMART_PREFIX}${baseName}`;
+      if (editingSmartId) {
+        await ndUpdateSmartPlaylist(editingSmartId, fullName, rules, true);
+      } else {
+        await ndCreateSmartPlaylist(fullName, rules, true);
+      }
       await fetchPlaylists();
-      const createdName = `${SMART_PREFIX}${baseName}`;
+      const createdName = fullName;
+      const updatedId = editingSmartId;
       setPendingSmart(prev => {
-        const existing = prev.find(p => p.name === createdName);
+        const existing = prev.find(p => p.id === updatedId || p.name === createdName);
         if (existing) return prev;
-        const created = usePlaylistStore.getState().playlists.find(p => p.name === createdName);
+        const created = usePlaylistStore.getState().playlists.find((p) => p.id === updatedId || p.name === createdName);
         return [
           ...prev,
           {
             name: createdName,
-            id: created?.id,
+            id: updatedId ?? created?.id,
             firstSeenCoverArt: created?.coverArt,
             attempts: 0,
           },
         ];
       });
       setCreatingSmart(false);
+      setEditingSmartId(null);
       setSmartFilters(defaultSmartFilters);
       setGenreQuery('');
-      showToast(t('smartPlaylists.created', { name: createdName }), 3500, 'success');
+      if (updatedId) showToast(t('smartPlaylists.updated', { name: createdName }), 3500, 'success');
+      else showToast(t('smartPlaylists.created', { name: createdName }), 3500, 'success');
     } catch {
-      showToast(t('smartPlaylists.createFailed'), 3500, 'error');
+      showToast(editingSmartId ? t('smartPlaylists.updateFailed') : t('smartPlaylists.createFailed'), 3500, 'error');
     } finally {
       setCreatingSmartBusy(false);
     }
@@ -522,7 +677,13 @@ export default function Playlists() {
                 </button>
               )}
               {!creating && isNavidromeServer && (
-                <button className="btn btn-surface" onClick={() => { setCreating(false); setCreatingSmart(v => !v); }}>
+                <button className="btn btn-surface" onClick={() => {
+                  setCreating(false);
+                  setEditingSmartId(null);
+                  setSmartFilters(defaultSmartFilters);
+                  setGenreQuery('');
+                  setCreatingSmart(v => !v);
+                }}>
                   <Plus size={15} /> {t('smartPlaylists.create')}
                 </button>
               )}
@@ -625,9 +786,19 @@ export default function Playlists() {
               </div>
             </section>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-              <button className="btn btn-surface" onClick={() => setCreatingSmart(false)}>{t('playlists.cancel')}</button>
+              <button
+                className="btn btn-surface"
+                onClick={() => {
+                  setCreatingSmart(false);
+                  setEditingSmartId(null);
+                  setSmartFilters(defaultSmartFilters);
+                  setGenreQuery('');
+                }}
+              >
+                {t('playlists.cancel')}
+              </button>
               <button className="btn btn-primary" onClick={handleCreateSmart} disabled={creatingSmartBusy}>
-                <Plus size={15} /> {t('smartPlaylists.create')}
+                <Plus size={15} /> {editingSmartId ? t('smartPlaylists.save') : t('smartPlaylists.create')}
               </button>
             </div>
           </div>
@@ -668,16 +839,22 @@ export default function Playlists() {
             >
               {!selectionMode && (
                 <div className="playlist-card-actions">
-                  <button
-                    className="playlist-card-action playlist-card-action--edit"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/playlists/${pl.id}`, { state: { openEditMeta: true } });
-                    }}
-                    data-tooltip={t('playlists.editMeta')}
-                  >
-                    <Pencil size={13} />
-                  </button>
+                  {isPlaylistDeletable(pl) && (
+                    <button
+                      className="playlist-card-action playlist-card-action--edit"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isSmartPlaylistName(pl.name)) {
+                          void handleOpenSmartEditor(pl);
+                          return;
+                        }
+                        navigate(`/playlists/${pl.id}`, { state: { openEditMeta: true } });
+                      }}
+                      data-tooltip={t('playlists.editMeta')}
+                    >
+                      <Pencil size={13} />
+                    </button>
+                  )}
                   {isPlaylistDeletable(pl) && (
                     <button
                       className={`playlist-card-action playlist-card-action--delete${deleteConfirmId === pl.id ? ' playlist-card-action--delete-confirm' : ''}`}

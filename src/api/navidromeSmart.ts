@@ -29,6 +29,19 @@ export interface NdSmartPlaylist {
   updatedAt?: string;
 }
 
+function parseNdSmartPlaylist(raw: unknown, fallback: Partial<NdSmartPlaylist> = {}): NdSmartPlaylist {
+  const o = (raw as Record<string, unknown>) ?? {};
+  return {
+    id: String(o.id ?? fallback.id ?? ''),
+    name: String(o.name ?? fallback.name ?? ''),
+    songCount: Number(o.songCount ?? fallback.songCount ?? 0),
+    duration: typeof o.duration === 'number' ? o.duration : fallback.duration,
+    rules: typeof o.rules === 'object' && o.rules ? (o.rules as Record<string, unknown>) : fallback.rules,
+    sync: typeof o.sync === 'boolean' ? o.sync : fallback.sync,
+    updatedAt: typeof o.updatedAt === 'string' ? o.updatedAt : fallback.updatedAt,
+  };
+}
+
 let authCache: {
   key: string;
   token: string;
@@ -75,18 +88,7 @@ export async function ndListSmartPlaylists(): Promise<NdSmartPlaylist[]> {
     : (raw && typeof raw === 'object' && Array.isArray((raw as { items?: unknown[] }).items))
       ? (raw as { items: unknown[] }).items
       : [];
-  return list.map((v) => {
-    const o = (v as Record<string, unknown>) ?? {};
-    return {
-      id: String(o.id ?? ''),
-      name: String(o.name ?? ''),
-      songCount: Number(o.songCount ?? 0),
-      duration: typeof o.duration === 'number' ? o.duration : undefined,
-      rules: typeof o.rules === 'object' && o.rules ? (o.rules as Record<string, unknown>) : undefined,
-      sync: typeof o.sync === 'boolean' ? o.sync : undefined,
-      updatedAt: typeof o.updatedAt === 'string' ? o.updatedAt : undefined,
-    };
-  });
+  return list.map((v) => parseNdSmartPlaylist(v));
 }
 
 export async function ndCreateSmartPlaylist(name: string, rules: Record<string, unknown>, sync = true): Promise<NdSmartPlaylist> {
@@ -96,16 +98,29 @@ export async function ndCreateSmartPlaylist(name: string, rules: Record<string, 
     token,
     body: { name, rules, sync },
   });
-  const o = (raw as Record<string, unknown>) ?? {};
-  return {
-    id: String(o.id ?? ''),
-    name: String(o.name ?? name),
-    songCount: Number(o.songCount ?? 0),
-    duration: typeof o.duration === 'number' ? o.duration : undefined,
-    rules: typeof o.rules === 'object' && o.rules ? (o.rules as Record<string, unknown>) : undefined,
-    sync: typeof o.sync === 'boolean' ? o.sync : undefined,
-    updatedAt: typeof o.updatedAt === 'string' ? o.updatedAt : undefined,
-  };
+  return parseNdSmartPlaylist(raw, { name, rules, sync });
+}
+
+export async function ndUpdateSmartPlaylist(
+  id: string,
+  name: string,
+  rules: Record<string, unknown>,
+  sync = true,
+): Promise<NdSmartPlaylist> {
+  const { serverUrl, token } = await getNavidromeAuth();
+  const raw = await invoke<unknown>('nd_update_playlist', {
+    serverUrl,
+    token,
+    id,
+    body: { name, rules, sync },
+  });
+  return parseNdSmartPlaylist(raw, { id, name, rules, sync });
+}
+
+export async function ndGetSmartPlaylist(id: string): Promise<NdSmartPlaylist> {
+  const { serverUrl, token } = await getNavidromeAuth();
+  const raw = await invoke<unknown>('nd_get_playlist', { serverUrl, token, id });
+  return parseNdSmartPlaylist(raw, { id });
 }
 
 export async function ndDeletePlaylist(id: string): Promise<void> {
