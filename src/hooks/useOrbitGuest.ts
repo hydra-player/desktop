@@ -66,10 +66,10 @@ export function useOrbitGuest(): void {
      * past the deadline so a loading error doesn't leave the guest stuck
      * on a silent pause.
      */
-    const syncToHost = async (trackId: string, hostState: OrbitState) => {
+    const syncToHost = async (trackId: string, hostState: OrbitState): Promise<boolean> => {
       try {
         const song = await getSong(trackId);
-        if (!song || cancelled) return;
+        if (!song || cancelled) return false;
         const track = songToTrack(song);
         // Clamp fraction to [0, 0.99] — if the host's positionAt is unusually
         // stale, estimateLivePosition can overshoot the track duration and a
@@ -79,37 +79,37 @@ export function useOrbitGuest(): void {
           const targetSec = Math.max(0, targetMs / 1000);
           return Math.max(0, Math.min(0.99, targetSec / Math.max(1, track.duration)));
         };
-        const applyMirror = () => {
+        const applyMirror = (): boolean => {
           const p = usePlayerStore.getState();
-          if (cancelled || p.currentTrack?.id !== trackId) return;
+          if (cancelled || p.currentTrack?.id !== trackId) return false;
           p.seek(calcFraction());
           if (hostState.isPlaying && !p.isPlaying) p.resume();
           else if (!hostState.isPlaying && p.isPlaying) p.pause();
+          return true;
         };
 
         const player = usePlayerStore.getState();
         if (player.currentTrack?.id === trackId) {
-          applyMirror();
-          return;
+          return applyMirror();
         }
 
         player.playTrack(track, [track]);
 
-        // Poll until the engine has the track loaded AND matches host play
-        // state; fall back to a blind apply after 2 s so a stuck load (audio
-        // error reverts isPlaying → false) doesn't leave the guest silent.
-        const deadline = Date.now() + 2000;
-        const poll = () => {
-          if (cancelled) return;
-          const p = usePlayerStore.getState();
-          const trackReady = p.currentTrack?.id === trackId;
-          const stateMatches = p.isPlaying === hostState.isPlaying;
-          if (trackReady && (stateMatches || p.isPlaying)) { applyMirror(); return; }
-          if (Date.now() >= deadline) { applyMirror(); return; }
+        // Poll until the engine has the track loaded; fall back to a blind
+        // apply after 2 s so a stuck load doesn't leave us spinning forever.
+        return await new Promise<boolean>(resolve => {
+          const deadline = Date.now() + 2000;
+          const poll = () => {
+            if (cancelled) { resolve(false); return; }
+            const p = usePlayerStore.getState();
+            const trackReady = p.currentTrack?.id === trackId;
+            if (trackReady && p.isPlaying) { resolve(applyMirror()); return; }
+            if (Date.now() >= deadline) { resolve(applyMirror()); return; }
+            window.setTimeout(poll, 100);
+          };
           window.setTimeout(poll, 100);
-        };
-        window.setTimeout(poll, 100);
-      } catch { /* silent */ }
+        });
+      } catch { return false; }
     };
 
     const pull = async () => {
@@ -171,8 +171,18 @@ export function useOrbitGuest(): void {
       const last = lastAppliedRef.current;
 
       if (!last) {
-        if (hostTrackId) void syncToHost(hostTrackId, state);
-        lastAppliedRef.current = { trackId: hostTrackId, isPlaying: hostPlaying };
+        // Initial sync: only record `last` *after* syncToHost actually
+        // landed. If the first attempt loses the race (engine not ready,
+        // stale audio state, network blip), a retry ticker below will try
+        // again every 500 ms until it succeeds. Without this, the first
+        // failed sync set `last` anyway and the guest was stuck on their
+        // pre-join state until they clicked Catch Up.
+        if (hostTrackId) {
+          const ok = await syncToHost(hostTrackId, state);
+          if (ok) lastAppliedRef.current = { trackId: hostTrackId, isPlaying: hostPlaying };
+        } else {
+          lastAppliedRef.current = { trackId: null, isPlaying: hostPlaying };
+        }
       } else if (last.trackId !== hostTrackId) {
         if (hostTrackId) void syncToHost(hostTrackId, state);
         else if (player.isPlaying) player.pause();
@@ -191,9 +201,23 @@ export function useOrbitGuest(): void {
       }
     };
 
-    void pull();
-    const id = window.setInterval(() => { void pull(); }, STATE_READ_TICK_MS);
-    return () => { cancelled = true; window.clearInterval(id); };
+    // Self-scheduling tick: fast-poll (500 ms) while we haven't locked in an
+    // initial sync yet, fall back to the steady cadence once we're anchored.
+    // Lets a failed first attempt retry quickly without spamming the network
+    // for the lifetime of the session.
+    let timer: number | null = null;
+    const tick = async () => {
+      timer = null;
+      await pull();
+      if (cancelled) return;
+      const delay = lastAppliedRef.current === null ? 500 : STATE_READ_TICK_MS;
+      timer = window.setTimeout(tick, delay);
+    };
+    void tick();
+    return () => {
+      cancelled = true;
+      if (timer !== null) window.clearTimeout(timer);
+    };
   }, [active, sessionPlaylistId]);
 
   // ── Heartbeat ────────────────────────────────────────────────────────
