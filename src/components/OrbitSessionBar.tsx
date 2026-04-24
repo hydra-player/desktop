@@ -8,8 +8,8 @@ import {
   endOrbitSession,
   leaveOrbitSession,
   computeOrbitDriftMs,
+  effectiveShuffleIntervalMs,
 } from '../utils/orbit';
-import { ORBIT_SHUFFLE_INTERVAL_MS } from '../utils/orbit';
 import { estimateLivePosition } from '../api/orbit';
 import OrbitParticipantsPopover from './OrbitParticipantsPopover';
 import OrbitExitModal from './OrbitExitModal';
@@ -69,7 +69,7 @@ export default function OrbitSessionBar() {
     <OrbitExitModal />
   );
 
-  const untilShuffle = Math.max(0, (state.lastShuffle + ORBIT_SHUFFLE_INTERVAL_MS) - nowMs);
+  const untilShuffle = Math.max(0, (state.lastShuffle + effectiveShuffleIntervalMs(state)) - nowMs);
 
   // Guest-only: detect drift from the host's estimated live position.
   const guestPlayback = usePlayerStore.getState();

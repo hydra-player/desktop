@@ -8,7 +8,7 @@ import {
   sweepGuestOutboxes,
   applyOutboxSnapshotsToState,
   maybeShuffleQueue,
-  ORBIT_SHUFFLE_INTERVAL_MS,
+  effectiveShuffleIntervalMs,
 } from '../utils/orbit';
 import {
   orbitOutboxPlaylistName,
@@ -117,7 +117,7 @@ export function useOrbitHost(): void {
       //       mix the guests hear actually changes. `autoShuffle=false` skips
       //       both.
       const shouldShuffleNow = afterSweep.settings?.autoShuffle !== false
-        && (Date.now() - afterSweep.lastShuffle >= ORBIT_SHUFFLE_INTERVAL_MS);
+        && (Date.now() - afterSweep.lastShuffle >= effectiveShuffleIntervalMs(afterSweep));
       const afterShuffle = maybeShuffleQueue(afterSweep);
       if (shouldShuffleNow) {
         const before = usePlayerStore.getState().queue.length;

@@ -700,8 +700,23 @@ export const ORBIT_HEARTBEAT_ALIVE_MS = 30_000;
  */
 export const ORBIT_ORPHAN_TTL_MS = 60_000;
 
-/** Shuffle cadence — queue is reshuffled once every interval. */
+/**
+ * Legacy / fallback shuffle cadence. New sessions store their own interval
+ * in `OrbitState.settings.shuffleIntervalMin`; `effectiveShuffleIntervalMs`
+ * resolves that against this constant for sessions created before the
+ * field existed.
+ */
 export const ORBIT_SHUFFLE_INTERVAL_MS = 15 * 60_000;
+
+/**
+ * Resolve the active auto-shuffle cadence in ms. Reads the host's configured
+ * preset from `state.settings.shuffleIntervalMin`; older sessions that lack
+ * the field fall back to 15 min so their tick cadence is unchanged.
+ */
+export function effectiveShuffleIntervalMs(state: Pick<OrbitState, 'settings'>): number {
+  const min = state.settings?.shuffleIntervalMin;
+  return typeof min === 'number' ? min * 60_000 : ORBIT_SHUFFLE_INTERVAL_MS;
+}
 
 /**
  * How long a soft-`removed` marker stays in the state blob. Long enough for
@@ -718,10 +733,11 @@ export const ORBIT_REMOVED_TTL_MS = 60_000;
  */
 export function maybeShuffleQueue(state: OrbitState, nowMs: number = Date.now()): OrbitState {
   if (state.settings?.autoShuffle === false) return state;
-  if (nowMs - state.lastShuffle < ORBIT_SHUFFLE_INTERVAL_MS) return state;
+  if (nowMs - state.lastShuffle < effectiveShuffleIntervalMs(state)) return state;
   if (state.queue.length < 2) {
-    // Still bump `lastShuffle` so the next eligible shuffle is 15 min away,
-    // preventing a tight retry loop right after a guest drops a single item in.
+    // Still bump `lastShuffle` so the next eligible shuffle is one full
+    // interval away, preventing a tight retry loop right after a guest
+    // drops a single item in.
     return { ...state, lastShuffle: nowMs };
   }
   const shuffled = state.queue.slice();

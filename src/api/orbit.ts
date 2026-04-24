@@ -106,16 +106,27 @@ export interface OrbitState {
  * Host-configurable rules. All default to `true`, i.e. the feature runs
  * "all on" for new sessions. Toggled via the Orbit-bar settings popover.
  */
+/** Minute presets offered to the host in the Orbit settings popover. */
+export const ORBIT_SHUFFLE_INTERVAL_PRESETS_MIN = [1, 5, 10, 15, 30] as const;
+export type OrbitShuffleIntervalMin = typeof ORBIT_SHUFFLE_INTERVAL_PRESETS_MIN[number];
+
 export interface OrbitSettings {
   /** Guest suggestions go straight into the host's play queue. */
   autoApprove: boolean;
-  /** Queue is reshuffled every `ORBIT_SHUFFLE_INTERVAL_MS`. */
+  /** Whether the auto-shuffle cycle runs at all. */
   autoShuffle: boolean;
+  /**
+   * Minutes between each auto-shuffle cycle. Must be one of
+   * `ORBIT_SHUFFLE_INTERVAL_PRESETS_MIN`. Older sessions that predate this
+   * field fall back to 15 via `effectiveShuffleIntervalMs`.
+   */
+  shuffleIntervalMin?: OrbitShuffleIntervalMin;
 }
 
 export const ORBIT_DEFAULT_SETTINGS: OrbitSettings = {
   autoApprove: true,
   autoShuffle: true,
+  shuffleIntervalMin: 15,
 };
 
 /** What the guest's outbox-playlist comment holds (heartbeat only, for now). */
