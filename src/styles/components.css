@@ -11918,6 +11918,61 @@ html[data-psy-native-hidden="true"] *::after {
   cursor: not-allowed;
 }
 
+/* Orbit help modal — 9 accordions on SettingsSubSection, scrollable body. */
+.orbit-help-modal {
+  max-width: 560px;
+  width: min(560px, calc(100vw - 32px));
+  max-height: 85vh;
+  padding: 22px 26px 20px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.orbit-help-modal__title {
+  margin: 0 0 8px;
+  padding-right: 1.5rem;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+.orbit-help-modal__intro {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+.orbit-help-modal__body {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+.orbit-help-modal__body p {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-secondary, var(--text-primary));
+}
+.orbit-help-modal__body p:last-child { margin-bottom: 0; }
+.orbit-help-modal__warn {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--ctp-yellow, #f9e2af) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ctp-yellow, #f9e2af) 40%, transparent);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+.orbit-help-modal__warn strong {
+  color: var(--ctp-yellow, #f9e2af);
+  font-weight: 700;
+}
+
 /* Account picker — modal for multi-account server switch on Orbit join. */
 .orbit-account-picker {
   max-width: 420px;

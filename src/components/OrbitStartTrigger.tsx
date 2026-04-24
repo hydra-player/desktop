@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Orbit as OrbitIcon, Plus, LogIn, HelpCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useOrbitStore } from '../store/orbitStore';
+import { useHelpModalStore } from '../store/helpModalStore';
 import OrbitStartModal from './OrbitStartModal';
 import OrbitJoinModal from './OrbitJoinModal';
 
@@ -54,6 +55,7 @@ export default function OrbitStartTrigger() {
 
   const pickCreate = () => { setPopoverOpen(false); setStartOpen(true); };
   const pickJoin   = () => { setPopoverOpen(false); setJoinOpen(true); };
+  const pickHelp   = () => { setPopoverOpen(false); useHelpModalStore.getState().open(); };
 
   return (
     <>
@@ -85,9 +87,7 @@ export default function OrbitStartTrigger() {
           <button
             type="button"
             className="orbit-launch-pop__item"
-            disabled
-            data-tooltip={t('orbit.launchHelpSoon')}
-            data-tooltip-pos="bottom"
+            onClick={pickHelp}
           >
             <HelpCircle size={14} />
             <span>{t('orbit.launchHelp')}</span>

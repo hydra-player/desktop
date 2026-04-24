@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, RefreshCw, Shuffle, Settings2, Share2 } from 'lucide-react';
+import { X, RefreshCw, Shuffle, Settings2, Share2, HelpCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useOrbitStore } from '../store/orbitStore';
+import { useHelpModalStore } from '../store/helpModalStore';
 import { usePlayerStore, songToTrack } from '../store/playerStore';
 import { getSong } from '../api/subsonic';
 import {
@@ -208,6 +209,15 @@ export default function OrbitSessionBar() {
             <span>{t('orbit.catchUpLabel')}</span>
           </button>
         )}
+        <button
+          type="button"
+          className="orbit-bar__settings"
+          onClick={() => useHelpModalStore.getState().open()}
+          data-tooltip={t('orbit.helpTooltip')}
+          aria-label={t('orbit.helpTooltip')}
+        >
+          <HelpCircle size={14} />
+        </button>
         <button
           type="button"
           className="orbit-bar__exit"
