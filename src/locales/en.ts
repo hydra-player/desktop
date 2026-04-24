@@ -1483,6 +1483,7 @@ export const enTranslation = {
     hostLabel: 'Host: {{name}}',
     participantsTooltip: 'Participants',
     settingsTooltip: 'Session settings',
+    shareTooltip: 'Share invite link',
     shuffleLabel: 'Queue reshuffles in',
     catchUpLabel: 'catch up',
     catchUpTooltip: "Jump to the host's current position",

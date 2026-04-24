@@ -11689,22 +11689,27 @@ html[data-psy-native-hidden="true"] *::after {
   box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
 
-.orbit-participants-pop__invite {
-  padding: 8px 8px 10px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+/* Share popover (host-only) — standalone counterpart to the participants popover. */
+.orbit-share-pop {
+  min-width: 320px;
+  max-width: 380px;
+  padding: 12px 14px 14px;
+  background: var(--ctp-base, #1e1e2e);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, rgba(255,255,255,0.1));
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
 
-.orbit-participants-pop__invite-label {
+.orbit-share-pop__label {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
-.orbit-participants-pop__invite-row {
+.orbit-share-pop__row {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -11714,7 +11719,7 @@ html[data-psy-native-hidden="true"] *::after {
   padding: 6px 6px 6px 8px;
 }
 
-.orbit-participants-pop__invite-link {
+.orbit-share-pop__link {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -11729,7 +11734,7 @@ html[data-psy-native-hidden="true"] *::after {
   user-select: all;
 }
 
-.orbit-participants-pop__invite-copy {
+.orbit-share-pop__copy {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -11744,7 +11749,7 @@ html[data-psy-native-hidden="true"] *::after {
   cursor: pointer;
   transition: filter 0.15s ease;
 }
-.orbit-participants-pop__invite-copy:hover { filter: brightness(1.1); }
+.orbit-share-pop__copy:hover { filter: brightness(1.1); }
 
 .orbit-participants-pop__head {
   font-size: 10px;
@@ -11768,6 +11773,12 @@ html[data-psy-native-hidden="true"] *::after {
 
 .orbit-participants-pop__row--host { color: var(--accent); }
 .orbit-participants-pop__row--host svg { color: var(--accent); }
+/* Guest rows — give the user icon a quieter tone so the host's crown stays
+   the accent focal point. */
+.orbit-participants-pop__row:not(.orbit-participants-pop__row--host) > svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
 
 .orbit-participants-pop__name {
   flex: 1;

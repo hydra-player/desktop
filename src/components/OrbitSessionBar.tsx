@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, RefreshCw, Shuffle, Settings2 } from 'lucide-react';
+import { X, RefreshCw, Shuffle, Settings2, Share2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useOrbitStore } from '../store/orbitStore';
 import { usePlayerStore, songToTrack } from '../store/playerStore';
@@ -14,6 +14,7 @@ import { estimateLivePosition } from '../api/orbit';
 import OrbitParticipantsPopover from './OrbitParticipantsPopover';
 import OrbitExitModal from './OrbitExitModal';
 import OrbitSettingsPopover from './OrbitSettingsPopover';
+import OrbitSharePopover from './OrbitSharePopover';
 import ConfirmModal from './ConfirmModal';
 
 /**
@@ -46,9 +47,11 @@ export default function OrbitSessionBar() {
   const [nowMs, setNowMs]  = useState(() => Date.now());
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const peopleBtnRef = useRef<HTMLButtonElement>(null);
   const settingsBtnRef = useRef<HTMLButtonElement>(null);
+  const shareBtnRef = useRef<HTMLButtonElement>(null);
 
   // Second-level tick just for the shuffle countdown + drift readout —
   // the store itself only ticks at 2.5 s which is too coarse for a smooth
@@ -179,6 +182,20 @@ export default function OrbitSessionBar() {
             <Settings2 size={14} />
           </button>
         )}
+        {role === 'host' && (
+          <button
+            ref={shareBtnRef}
+            type="button"
+            className="orbit-bar__settings"
+            onClick={() => setShareOpen(v => !v)}
+            data-tooltip={t('orbit.shareTooltip')}
+            aria-haspopup="menu"
+            aria-expanded={shareOpen || undefined}
+            aria-label={t('orbit.shareTooltip')}
+          >
+            <Share2 size={14} />
+          </button>
+        )}
         {showCatchUp && (
           <button
             type="button"
@@ -211,6 +228,12 @@ export default function OrbitSessionBar() {
         <OrbitSettingsPopover
           anchorRef={settingsBtnRef}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {shareOpen && (
+        <OrbitSharePopover
+          anchorRef={shareBtnRef}
+          onClose={() => setShareOpen(false)}
         />
       )}
       <OrbitExitModal />

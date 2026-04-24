@@ -1480,6 +1480,7 @@ export const deTranslation = {
     hostLabel: 'Gastgeber: {{name}}',
     participantsTooltip: 'Teilnehmer',
     settingsTooltip: 'Session-Einstellungen',
+    shareTooltip: 'Einladungslink teilen',
     shuffleLabel: 'Warteschlange wird neu gemischt in',
     catchUpLabel: 'aufholen',
     catchUpTooltip: 'Zur aktuellen Host-Position springen',

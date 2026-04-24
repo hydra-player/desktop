@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Crown, UserMinus, ShieldOff, Copy, Check } from 'lucide-react';
+import { Crown, User, UserMinus, ShieldOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useOrbitStore } from '../store/orbitStore';
-import { useAuthStore } from '../store/authStore';
-import { kickOrbitParticipant, removeOrbitParticipant, buildOrbitShareLink } from '../utils/orbit';
+import { kickOrbitParticipant, removeOrbitParticipant } from '../utils/orbit';
 import ConfirmModal from './ConfirmModal';
 
 interface Props {
@@ -27,24 +26,9 @@ export default function OrbitParticipantsPopover({ anchorRef, onClose }: Props) 
   const { t } = useTranslation();
   const state = useOrbitStore(s => s.state);
   const role  = useOrbitStore(s => s.role);
-  const sessionId = useOrbitStore(s => s.sessionId);
   const popRef = useRef<HTMLDivElement>(null);
-  const [copied, setCopied] = useState(false);
   const [confirm, setConfirm] = useState<{ user: string; mode: 'remove' | 'ban' } | null>(null);
   const nowMs = Date.now();
-
-  const shareLink = role === 'host' && sessionId
-    ? buildOrbitShareLink(useAuthStore.getState().getActiveServer()?.url ?? '', sessionId)
-    : null;
-
-  const onCopy = async () => {
-    if (!shareLink) return;
-    try {
-      await navigator.clipboard.writeText(shareLink);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch { /* silent */ }
-  };
 
   // Close on outside click / Escape — unless a confirm dialog is open
   // (otherwise outside-clicking the modal would dismiss the popover too,
@@ -92,24 +76,6 @@ export default function OrbitParticipantsPopover({ anchorRef, onClose }: Props) 
   return createPortal(
     <>
     <div ref={popRef} className="orbit-participants-pop" style={style} role="menu">
-      {shareLink && (
-        <div className="orbit-participants-pop__invite">
-          <div className="orbit-participants-pop__invite-label">{t('orbit.participantsInviteLabel')}</div>
-          <div className="orbit-participants-pop__invite-row">
-            <code className="orbit-participants-pop__invite-link">{shareLink}</code>
-            <button
-              type="button"
-              className="orbit-participants-pop__invite-copy"
-              onClick={onCopy}
-              data-tooltip={copied ? t('orbit.tooltipCopied') : t('orbit.tooltipCopy')}
-              aria-label={t('orbit.ariaCopyLink')}
-            >
-              {copied ? <Check size={13} /> : <Copy size={13} />}
-            </button>
-          </div>
-        </div>
-      )}
-
       <div className="orbit-participants-pop__head">
         {t('orbit.participantsCountLabel', { count: state.participants.length + 1 })}
       </div>
@@ -126,6 +92,7 @@ export default function OrbitParticipantsPopover({ anchorRef, onClose }: Props) 
 
       {state.participants.map(p => (
         <div key={p.user} className="orbit-participants-pop__row">
+          <User size={13} />
           <span className="orbit-participants-pop__name">{p.user}</span>
           <span className="orbit-participants-pop__meta">{joinedFor(p.joinedAt, nowMs)}</span>
           {role === 'host' && (
