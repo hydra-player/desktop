@@ -309,7 +309,8 @@ export async function pingWithCredentials(
       serverVersion: typeof data?.serverVersion === 'string' ? data.serverVersion : undefined,
       openSubsonic: data?.openSubsonic === true,
     };
-  } catch {
+  } catch (err) {
+    console.warn('[psysonic] pingWithCredentials failed:', serverUrl, err);
     return { ok: false };
   }
 }
