@@ -11891,14 +11891,14 @@ html[data-psy-native-hidden="true"] *::after {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--ctp-surface1));
   transition: color 150ms ease, border-color 150ms ease, background 150ms ease, box-shadow 200ms ease;
 }
-.orbit-start-trigger svg { transition: transform 260ms ease; }
+.orbit-start-trigger__spin { transition: transform 260ms ease; }
 .orbit-start-trigger:hover {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 70%, transparent);
   background: color-mix(in srgb, var(--accent) 10%, var(--bg-hover));
   box-shadow: 0 0 12px -3px color-mix(in srgb, var(--accent) 55%, transparent);
 }
-.orbit-start-trigger:hover svg { transform: rotate(45deg); }
+.orbit-start-trigger:hover .orbit-start-trigger__spin { transform: rotate(45deg); }
 
 /* Launch popover — three-option menu anchored below the topbar trigger. */
 .orbit-launch-pop {

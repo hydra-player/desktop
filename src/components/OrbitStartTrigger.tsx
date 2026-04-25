@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/authStore';
 import { useHelpModalStore } from '../store/helpModalStore';
 import OrbitStartModal from './OrbitStartModal';
 import OrbitJoinModal from './OrbitJoinModal';
+import OrbitWordmark from './OrbitWordmark';
 
 /**
  * Topbar trigger — opens a small launch popover offering three choices:
@@ -71,10 +72,11 @@ export default function OrbitStartTrigger() {
         data-tooltip-pos="bottom"
         aria-haspopup="menu"
         aria-expanded={popoverOpen || undefined}
+        aria-label={t('orbit.triggerLabel')}
         style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem' }}
       >
-        <OrbitIcon size={18} />
-        <span>{t('orbit.triggerLabel')}</span>
+        <OrbitIcon size={18} className="orbit-start-trigger__spin" />
+        <OrbitWordmark height={14} />
       </button>
 
       {popoverOpen && createPortal(
