@@ -17,6 +17,7 @@ import { open as openUrl } from '@tauri-apps/plugin-shell';
 import { getImageCacheSize, clearImageCache } from '../utils/imageCache';
 import { useOfflineStore } from '../store/offlineStore';
 import { useHotCacheStore } from '../store/hotCacheStore';
+import { usePlayerStore } from '../store/playerStore';
 import { lastfmGetToken, lastfmAuthUrl, lastfmGetSession, lastfmGetUserInfo, LastfmUserInfo } from '../api/lastfm';
 import LastfmIcon from '../components/LastfmIcon';
 import CustomSelect from '../components/CustomSelect';
@@ -1788,6 +1789,29 @@ export default function Settings() {
     setClearing(false);
   }, [clearAllOffline, serverId]);
 
+  const handleClearWaveformCache = useCallback(async () => {
+    setClearing(true);
+    try {
+      const deleted = await invoke<number>('analysis_delete_all_waveforms');
+      usePlayerStore.setState({
+        waveformBins: null,
+        waveformIsPartial: false,
+        waveformKnownUntilSec: 0,
+        waveformDurationSec: 0,
+      });
+      showToast(
+        t('settings.waveformCacheCleared', { count: deleted }),
+        3500,
+        'success',
+      );
+    } catch (e) {
+      console.error(e);
+      showToast(t('settings.waveformCacheClearFailed'), 4500, 'error');
+    } finally {
+      setClearing(false);
+    }
+  }, [t]);
+
   const startLastfmConnect = useCallback(async () => {
     setLfmError(null);
     let token: string;
@@ -3032,6 +3056,16 @@ export default function Settings() {
                   <Trash2 size={14} /> {t('settings.cacheClearBtn')}
                 </button>
               )}
+              <div style={{ marginTop: 8 }}>
+                <button
+                  className="btn btn-ghost"
+                  style={{ fontSize: 13 }}
+                  onClick={handleClearWaveformCache}
+                  disabled={clearing}
+                >
+                  <Trash2 size={14} /> {t('settings.waveformCacheClearBtn')}
+                </button>
+              </div>
             </div>
           </SettingsSubSection>
 

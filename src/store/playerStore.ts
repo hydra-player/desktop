@@ -824,19 +824,11 @@ function handleAudioProgress(current_time: number, duration: number) {
   const dur = duration > 0 ? duration : track.duration;
   if (dur <= 0) return;
   const progress = displayTime / dur;
-  const stateNow = usePlayerStore.getState();
-  if (stateNow.waveformIsPartial) {
-    usePlayerStore.setState({
-      currentTime: displayTime,
-      progress,
-      buffered: 0,
-      // Keep known span aligned with playback position during partial stage:
-      // if playback moved forward, this part is definitely known already.
-      waveformKnownUntilSec: Math.max(stateNow.waveformKnownUntilSec || 0, displayTime),
-    });
-  } else {
-    usePlayerStore.setState({ currentTime: displayTime, progress, buffered: 0 });
-  }
+  // Do not couple `waveformKnownUntilSec` to playhead: for partial streams it
+  // must track **download/analysis progress** (emitted in `analysis:waveform-partial`).
+  // Using `displayTime` here broke the seekbar after seeks — bins only cover the
+  // buffered prefix of the file while `knownUntil` jumped with the seek position.
+  usePlayerStore.setState({ currentTime: displayTime, progress, buffered: 0 });
 
   // Scrobble at 50%: Last.fm + Navidrome (updates play_date / recently played)
   if (progress >= 0.5 && !store.scrobbled) {
@@ -1123,11 +1115,37 @@ export function initAudioListeners(): () => void {
         usePlayerStore.setState({ waveformIsPartial: false, waveformKnownUntilSec: 0 });
         return;
       }
-      usePlayerStore.setState({
-        waveformBins: payload.bins,
-        waveformIsPartial: true,
-        waveformKnownUntilSec: Number.isFinite(payload.knownUntilSec) ? payload.knownUntilSec : 0,
-        waveformDurationSec: Number.isFinite(payload.durationSec) ? payload.durationSec : (current.duration || 0),
+      const nextKnownUntilSec = Number.isFinite(payload.knownUntilSec) ? payload.knownUntilSec : 0;
+      const nextDurationSec = Number.isFinite(payload.durationSec) ? payload.durationSec : (current.duration || 0);
+      usePlayerStore.setState((prev) => {
+        const prevBins = prev.waveformBins;
+        const prevKnownUntilSec = Number.isFinite(prev.waveformKnownUntilSec) ? prev.waveformKnownUntilSec : 0;
+        if (!prevBins || prevBins.length === 0 || prevKnownUntilSec <= 0 || nextDurationSec <= 0) {
+          return {
+            waveformBins: payload.bins,
+            waveformIsPartial: true,
+            waveformKnownUntilSec: nextKnownUntilSec,
+            waveformDurationSec: nextDurationSec,
+          };
+        }
+        const len = Math.max(prevBins.length, payload.bins.length);
+        const merged = new Array<number>(len);
+        for (let i = 0; i < len; i++) {
+          merged[i] = i < prevBins.length ? prevBins[i] : 0;
+        }
+        const prevKnownBars = Math.max(0, Math.min(len, Math.floor((prevKnownUntilSec / nextDurationSec) * len)));
+        const nextKnownBars = Math.max(0, Math.min(len, Math.floor((nextKnownUntilSec / nextDurationSec) * len)));
+        if (nextKnownBars > prevKnownBars) {
+          for (let i = prevKnownBars; i < nextKnownBars; i++) {
+            if (i < payload.bins.length) merged[i] = payload.bins[i];
+          }
+        }
+        return {
+          waveformBins: merged,
+          waveformIsPartial: true,
+          waveformKnownUntilSec: Math.max(prevKnownUntilSec, nextKnownUntilSec),
+          waveformDurationSec: nextDurationSec,
+        };
       });
     }),
     listen<{ trackId?: string | null; gainDb: number; targetLufs: number; isPartial: boolean }>('analysis:loudness-partial', ({ payload }) => {
@@ -1151,6 +1169,9 @@ export function initAudioListeners(): () => void {
       if (!payloadTrackId) return;
       const currentId = usePlayerStore.getState().currentTrack?.id;
       if (currentId && payloadTrackId === currentId) {
+        if (!payload.isPartial) {
+          usePlayerStore.setState({ waveformIsPartial: false });
+        }
         void refreshWaveformForTrack(currentId);
         void refreshLoudnessForTrack(currentId);
         emitNormalizationDebug('backfill:applied', { trackId: currentId });

@@ -1215,6 +1215,7 @@ async fn ranged_download_task(
     let dl_started = Instant::now();
     let mut next_progress_mb: usize = 1;
     let mut last_partial_emit = Instant::now();
+    let mut last_partial_emit_downloaded: usize = 0;
     let mut last_partial_loudness_emit = Instant::now() - Duration::from_secs(5);
 
     'outer: loop {
@@ -1292,10 +1293,14 @@ async fn ranged_download_task(
             downloaded_to.store(downloaded, Ordering::SeqCst);
             if downloaded >= 4096
                 && total_size > 0
+                && downloaded.saturating_sub(last_partial_emit_downloaded) >= PARTIAL_WAVEFORM_EMIT_MIN_BYTES_DELTA
                 && last_partial_emit.elapsed() >= partial_waveform_emit_min_interval(downloaded)
             {
-                let bins =
-                    derive_partial_waveform_bins_short_locks(&buf, downloaded, 500);
+                // Keep streaming path lightweight: avoid expensive PCM decode
+                // in the hot loop (it can steal CPU and cause audible underruns
+                // while playback is starting). We emit a fast sampled waveform
+                // here and let full analysis/backfill produce final bins later.
+                let bins = derive_partial_waveform_bins_short_locks(&buf, downloaded, 500);
                 if last_partial_loudness_emit.elapsed() >= Duration::from_millis(PARTIAL_LOUDNESS_EMIT_INTERVAL_MS) {
                     let target_lufs = f32::from_bits(normalization_target_lufs.load(Ordering::Relaxed));
                     if let Some(provisional_db) = provisional_loudness_gain_from_progress(downloaded, total_size, target_lufs) {
@@ -1334,6 +1339,7 @@ async fn ranged_download_task(
                     },
                 );
                 last_partial_emit = Instant::now();
+                last_partial_emit_downloaded = downloaded;
             }
             let mb = downloaded / (1024 * 1024);
             if mb >= next_progress_mb {
@@ -1386,11 +1392,11 @@ async fn ranged_download_task(
 fn partial_waveform_emit_min_interval(downloaded: usize) -> Duration {
     const MB: usize = 1024 * 1024;
     if downloaded <= 3 * MB {
-        Duration::from_millis(280)
+        Duration::from_millis(260)
     } else if downloaded <= 10 * MB {
-        Duration::from_millis(650)
+        Duration::from_millis(620)
     } else {
-        Duration::from_millis(1100)
+        Duration::from_millis(980)
     }
 }
 
@@ -2785,7 +2791,8 @@ async fn fetch_data(
 /// 10^(-1/20) ≈ 0.891 — inaudible volume difference, eliminates clipping.
 const MASTER_HEADROOM: f32 = 0.891_254;
 const PARTIAL_LOUDNESS_MIN_BYTES: usize = 256 * 1024;
-const PARTIAL_LOUDNESS_EMIT_INTERVAL_MS: u64 = 350;
+const PARTIAL_LOUDNESS_EMIT_INTERVAL_MS: u64 = 900;
+const PARTIAL_WAVEFORM_EMIT_MIN_BYTES_DELTA: usize = 192 * 1024;
 /// Until integrated LUFS is known, stay clearly below "full" level so a follow-up
 /// `audio_update_replay_gain(null)` cannot briefly blast louder than this anchor.
 const LOUDNESS_STARTUP_ATTENUATION_DB: f32 = -6.0;
@@ -3688,6 +3695,22 @@ fn spawn_progress_task(
     gapless_switch_at: Arc<AtomicU64>,
     current_playback_url: Arc<Mutex<Option<String>>>,
 ) {
+    fn estimated_output_latency_secs(sample_rate_hz: f64) -> f64 {
+        #[cfg(target_os = "linux")]
+        {
+            // Keep progress aligned with audible output (ALSA/PipeWire/Pulse
+            // queue). We mirror the quantum policy used for stream open/reopen.
+            let rate = sample_rate_hz.max(1.0);
+            let frames = if rate > 48_000.0 { 8192.0 } else { 4096.0 };
+            // Add a small scheduler/mixer cushion so UI doesn't run ahead.
+            return (frames / rate) + 0.012;
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            0.0
+        }
+    }
+
     tokio::spawn(async move {
         let mut near_end_ticks: u32 = 0;
         // Local done-flag reference; swapped on gapless transition.
@@ -3775,21 +3798,25 @@ fn spawn_progress_task(
             let samples = samples_played.load(Ordering::Relaxed) as f64;
             let divisor = (rate * ch).max(1.0);
 
-            let dur = {
+            // Read playback snapshot under a single lock to minimize contention
+            // with seek/play/pause commands that also touch `current`.
+            let (dur, paused_at) = {
                 let cur = current_arc.lock().unwrap();
-                cur.duration_secs
+                (cur.duration_secs, cur.paused_at)
             };
-            let is_paused = {
-                let cur = current_arc.lock().unwrap();
-                cur.paused_at.is_some()
-            };
+            let is_paused = paused_at.is_some();
 
-            let pos = if is_paused {
-                let cur = current_arc.lock().unwrap();
-                cur.paused_at.unwrap_or(0.0)
+            let pos_raw = if let Some(p) = paused_at {
+                p
             } else {
                 (samples / divisor).min(dur.max(0.001))
             };
+            let progress_latency = if is_paused {
+                0.0
+            } else {
+                estimated_output_latency_secs(rate)
+            };
+            let pos = (pos_raw - progress_latency).max(0.0);
 
             app.emit("audio:progress", ProgressPayload { current_time: pos, duration: dur }).ok();
 
@@ -3801,7 +3828,7 @@ fn spawn_progress_task(
             let cf_secs = f32::from_bits(crossfade_secs_arc.load(Ordering::Relaxed)).clamp(0.5, 12.0) as f64;
             let end_threshold = if cf_enabled { cf_secs.max(1.0) } else { 1.0 };
 
-            if dur > end_threshold && pos >= dur - end_threshold {
+            if dur > end_threshold && pos_raw >= dur - end_threshold {
                 near_end_ticks += 1;
                 // At 100 ms ticks, 10 ticks ≈ 1 s — equivalent to the old 2×500ms.
                 if near_end_ticks >= 10 {

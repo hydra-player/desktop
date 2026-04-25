@@ -14,7 +14,7 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use tauri::Manager;
 
-pub const WAVEFORM_ALGO_VERSION: i64 = 1;
+pub const WAVEFORM_ALGO_VERSION: i64 = 3;
 pub const LOUDNESS_ALGO_VERSION: i64 = 1;
 
 #[derive(Debug, Clone)]
@@ -100,6 +100,18 @@ impl AnalysisCache {
             total = total.saturating_add(n as u64);
         }
         Ok(total)
+    }
+
+    /// Remove all cached waveform rows across all tracks/variants.
+    pub fn delete_all_waveforms(&self) -> Result<u64, String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "analysis_cache lock poisoned".to_string())?;
+        let n = conn
+            .execute("DELETE FROM waveform_cache", [])
+            .map_err(|e| e.to_string())?;
+        Ok(n as u64)
     }
 
     pub fn touch_track_status(&self, key: &TrackKey, status: &str) -> Result<(), String> {
@@ -313,8 +325,20 @@ pub fn seed_from_bytes(app: &tauri::AppHandle, track_id: &str, bytes: &[u8]) -> 
     };
     cache.touch_track_status(&key, "queued")?;
 
+    let wf_bins: Vec<u8>;
+    let loudness_opt: Option<(f64, f64, f64, f64)>;
+    match analyze_loudness_and_waveform(bytes, -16.0, 500) {
+        Some((integrated_lufs, true_peak, recommended_gain_db, target_lufs, bins)) => {
+            wf_bins = bins;
+            loudness_opt = Some((integrated_lufs, true_peak, recommended_gain_db, target_lufs));
+        }
+        None => {
+            wf_bins = derive_waveform_bins(bytes, 500);
+            loudness_opt = None;
+        }
+    }
     let waveform = WaveformEntry {
-        bins: derive_waveform_bins(bytes, 500),
+        bins: wf_bins,
         bin_count: 500,
         is_partial: false,
         known_until_sec: 0.0,
@@ -323,9 +347,7 @@ pub fn seed_from_bytes(app: &tauri::AppHandle, track_id: &str, bytes: &[u8]) -> 
     };
     cache.upsert_waveform(&key, &waveform)?;
 
-    if let Some((integrated_lufs, true_peak, recommended_gain_db, target_lufs)) =
-        analyze_loudness_from_audio_bytes(bytes, -16.0)
-    {
+    if let Some((integrated_lufs, true_peak, recommended_gain_db, target_lufs)) = loudness_opt {
         let loudness = LoudnessEntry {
             integrated_lufs,
             true_peak,
@@ -372,11 +394,48 @@ fn derive_waveform_bins(bytes: &[u8], bin_count: usize) -> Vec<u8> {
     out
 }
 
-fn analyze_loudness_from_audio_bytes(bytes: &[u8], target_lufs: f64) -> Option<(f64, f64, f64, f64)> {
-    if bytes.is_empty() {
+struct PcmScanResult {
+    bins: Vec<u8>,
+    loudness: Option<(f64, f64, f64, f64)>,
+}
+
+/// Decoded PCM peak envelope (mono mix) → `bin_count` bars, for seekbar display.
+/// Two decode passes: count frames, then fill bins. Returns `None` if probing/decoding fails.
+pub fn derive_waveform_bins_from_audio_bytes(bytes: &[u8], bin_count: usize) -> Option<Vec<u8>> {
+    if bytes.is_empty() || bin_count == 0 {
         return None;
     }
+    let (decoded_frames, timeline_hint) = count_mono_frames_from_audio_bytes(bytes)?;
+    if decoded_frames == 0 {
+        return None;
+    }
+    let scanned = decode_scan_pcm(bytes, bin_count, decoded_frames, timeline_hint, None)?;
+    Some(scanned.bins)
+}
 
+/// Loudness (EBU R128) plus PCM waveform bins in one decode pass after a frame count.
+fn analyze_loudness_and_waveform(
+    bytes: &[u8],
+    target_lufs: f64,
+    bin_count: usize,
+) -> Option<(f64, f64, f64, f64, Vec<u8>)> {
+    if bytes.is_empty() || bin_count == 0 {
+        return None;
+    }
+    let (decoded_frames, timeline_hint) = count_mono_frames_from_audio_bytes(bytes)?;
+    if decoded_frames == 0 {
+        return None;
+    }
+    let scanned = decode_scan_pcm(bytes, bin_count, decoded_frames, timeline_hint, Some(target_lufs))?;
+    let (i, t, r, tgt) = scanned.loudness?;
+    Some((i, t, r, tgt, scanned.bins))
+}
+
+/// Returns `(decoded_mono_frames, container_timeline_frames)` where the second is
+/// `codec_params.n_frames` when the container reports total track length — used
+/// as a **fixed** waveform time axis so partial decodes do not remap every bin
+/// when the buffer grows.
+fn count_mono_frames_from_audio_bytes(bytes: &[u8]) -> Option<(u64, Option<u64>)> {
     let source = Box::new(Cursor::new(bytes.to_vec()));
     let mss = MediaSourceStream::new(source, Default::default());
     let hint = Hint::new();
@@ -388,33 +447,128 @@ fn analyze_loudness_from_audio_bytes(bytes: &[u8], target_lufs: f64) -> Option<(
         .default_track()
         .filter(|t| t.codec_params.codec != CODEC_TYPE_NULL)
         .or_else(|| {
-            format
-                .tracks()
-                .iter()
-                .find(|t| {
-                    t.codec_params.codec != CODEC_TYPE_NULL
-                        && t.codec_params.sample_rate.is_some()
-                        && t.codec_params.channels.is_some()
-                })
+            format.tracks().iter().find(|t| {
+                t.codec_params.codec != CODEC_TYPE_NULL
+                    && t.codec_params.sample_rate.is_some()
+                    && t.codec_params.channels.is_some()
+            })
+        })
+        .or_else(|| format.tracks().iter().find(|t| t.codec_params.codec != CODEC_TYPE_NULL))?;
+    let track_id = track.id;
+    let timeline_hint = track.codec_params.n_frames.filter(|&n| n > 0);
+    let codec_params = track.codec_params.clone();
+    let mut decoder = symphonia::default::get_codecs()
+        .make(&codec_params, &DecoderOptions::default())
+        .ok()?;
+
+    let mut total: u64 = 0;
+    let mut loop_i: u32 = 0;
+    loop {
+        let packet = match format.next_packet() {
+            Ok(packet) => packet,
+            Err(_) => break,
+        };
+        if packet.track_id() != track_id {
+            continue;
+        }
+        let decoded = match decoder.decode(&packet) {
+            Ok(buf) => buf,
+            Err(SymphoniaError::DecodeError(_)) => continue,
+            Err(SymphoniaError::ResetRequired) => break,
+            Err(_) => break,
+        };
+        let spec = *decoded.spec();
+        let n_ch = spec.channels.count();
+        if n_ch == 0 {
+            continue;
+        }
+        let mut samples = SampleBuffer::<f32>::new(decoded.capacity() as u64, spec);
+        samples.copy_interleaved_ref(decoded);
+        let n = samples.samples().len();
+        if n < n_ch || n % n_ch != 0 {
+            continue;
+        }
+        total += (n / n_ch) as u64;
+        loop_i = loop_i.wrapping_add(1);
+        if loop_i % 128 == 0 {
+            std::thread::yield_now();
+        }
+    }
+    if total == 0 {
+        None
+    } else {
+        Some((total, timeline_hint))
+    }
+}
+
+fn normalize_peak_bins(bin_max: &[f32]) -> Vec<u8> {
+    let bin_count = bin_max.len();
+    if bin_count == 0 {
+        return Vec::new();
+    }
+    let mut sorted: Vec<f32> = bin_max.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let p5 = sorted[(sorted.len() * 5 / 100).min(sorted.len().saturating_sub(1))];
+    let p99 = sorted[(sorted.len() * 99 / 100).min(sorted.len().saturating_sub(1))];
+    let range = (p99 - p5).max(1e-8);
+    let mut out = vec![0u8; bin_count];
+    for i in 0..bin_count {
+        let t = ((bin_max[i] - p5) / range).clamp(0.0, 1.0);
+        let shaped = t.powf(0.52);
+        out[i] = (8.0 + shaped * 247.0).min(255.0) as u8;
+    }
+    out
+}
+
+fn decode_scan_pcm(
+    bytes: &[u8],
+    bin_count: usize,
+    decoded_frames: u64,
+    timeline_hint: Option<u64>,
+    loudness_target_lufs: Option<f64>,
+) -> Option<PcmScanResult> {
+    let source = Box::new(Cursor::new(bytes.to_vec()));
+    let mss = MediaSourceStream::new(source, Default::default());
+    let hint = Hint::new();
+    let probed = symphonia::default::get_probe()
+        .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
+        .ok()?;
+    let mut format = probed.format;
+    let track = format
+        .default_track()
+        .filter(|t| t.codec_params.codec != CODEC_TYPE_NULL)
+        .or_else(|| {
+            format.tracks().iter().find(|t| {
+                t.codec_params.codec != CODEC_TYPE_NULL
+                    && t.codec_params.sample_rate.is_some()
+                    && t.codec_params.channels.is_some()
+            })
         })
         .or_else(|| format.tracks().iter().find(|t| t.codec_params.codec != CODEC_TYPE_NULL))?;
     let track_id = track.id;
     let codec_params = track.codec_params.clone();
-
-    let mut decoder = match symphonia::default::get_codecs()
-        .make(&codec_params, &DecoderOptions::default())
-    {
+    let mut decoder = match symphonia::default::get_codecs().make(&codec_params, &DecoderOptions::default()) {
         Ok(v) => v,
         Err(e) => {
             crate::app_deprintln!("[analysis] decoder make failed: {}", e);
             return None;
         }
     };
+
+    let mut bin_max = vec![0.0f32; bin_count];
     let mut ebu: Option<EbuR128> = None;
     let mut ebu_channels: u32 = 0;
     let mut sample_peak_abs = 0.0_f64;
     let mut fed_any_frames = false;
+    let mut sample_idx: u64 = 0;
     let mut loop_i: u32 = 0;
+    // Fixed timeline from metadata when available; otherwise fall back to decoded
+    // length (full-buffer analysis only — partial byte windows still shift, but
+    // then we usually lack n_frames anyway).
+    let bin_grid_frames = timeline_hint
+        .map(|n| n.max(decoded_frames))
+        .unwrap_or(decoded_frames)
+        .max(1);
 
     loop {
         let packet = match format.next_packet() {
@@ -424,7 +578,6 @@ fn analyze_loudness_from_audio_bytes(bytes: &[u8], target_lufs: f64) -> Option<(
         if packet.track_id() != track_id {
             continue;
         }
-
         let decoded = match decoder.decode(&packet) {
             Ok(buf) => buf,
             Err(SymphoniaError::DecodeError(_)) => continue,
@@ -433,7 +586,12 @@ fn analyze_loudness_from_audio_bytes(bytes: &[u8], target_lufs: f64) -> Option<(
         };
 
         let spec = *decoded.spec();
-        if ebu.is_none() {
+        let n_ch = spec.channels.count();
+        if n_ch == 0 {
+            continue;
+        }
+
+        if loudness_target_lufs.is_some() && ebu.is_none() {
             let ch = spec.channels.count() as u32;
             let sr = spec.rate;
             match EbuR128::new(ch, sr, Ebur128Mode::I | Ebur128Mode::TRUE_PEAK) {
@@ -452,70 +610,101 @@ fn analyze_loudness_from_audio_bytes(bytes: &[u8], target_lufs: f64) -> Option<(
                 }
             }
         }
+
         let mut samples = SampleBuffer::<f32>::new(decoded.capacity() as u64, spec);
         samples.copy_interleaved_ref(decoded);
-        for &s in samples.samples() {
-            let v = (s as f64).abs();
-            if v.is_finite() && v > sample_peak_abs {
-                sample_peak_abs = v;
+        let slice = samples.samples();
+        if slice.len() < n_ch || slice.len() % n_ch != 0 {
+            continue;
+        }
+        let frames = slice.len() / n_ch;
+
+        for f in 0..frames {
+            let base = f * n_ch;
+            let mut acc = 0.0f32;
+            for c in 0..n_ch {
+                acc += slice[base + c];
+            }
+            let mono = acc / (n_ch as f32);
+            let mag = mono.abs();
+            if mag.is_finite() {
+                let bin = ((sample_idx * bin_count as u64) / bin_grid_frames) as usize;
+                let bin = bin.min(bin_count.saturating_sub(1));
+                bin_max[bin] = bin_max[bin].max(mag);
+            }
+            for c in 0..n_ch {
+                let v = (slice[base + c] as f64).abs();
+                if v.is_finite() && v > sample_peak_abs {
+                    sample_peak_abs = v;
+                }
+            }
+            sample_idx += 1;
+        }
+
+        if loudness_target_lufs.is_some() {
+            if let Some(e) = ebu.as_mut() {
+                match e.add_frames_f32(samples.samples()) {
+                    Ok(_) => fed_any_frames = true,
+                    Err(err) => {
+                        crate::app_deprintln!("[analysis] loudness add_frames failed: {}", err);
+                        return None;
+                    }
+                }
             }
         }
-        let Some(ref mut ebu) = ebu else {
-            crate::app_deprintln!("[analysis] loudness failed: ebu not initialized");
-            return None;
-        };
-        match ebu.add_frames_f32(samples.samples()) {
-            Ok(_) => fed_any_frames = true,
-            Err(e) => {
-                crate::app_deprintln!("[analysis] loudness add_frames failed: {}", e);
-                return None;
-            }
-        }
+
         loop_i = loop_i.wrapping_add(1);
         if loop_i % 128 == 0 {
             std::thread::yield_now();
         }
     }
 
-    if !fed_any_frames {
-        crate::app_deprintln!("[analysis] loudness failed: no decoded frames");
-        return None;
-    }
-    let Some(ebu) = ebu else {
-        crate::app_deprintln!("[analysis] loudness failed: no decoder output");
-        return None;
-    };
-    let integrated_lufs = match ebu.loudness_global() {
-        Ok(v) => v,
-        Err(e) => {
-            crate::app_deprintln!("[analysis] loudness_global failed: {}", e);
+    let bins = normalize_peak_bins(&bin_max);
+
+    let loudness = if let Some(target_lufs) = loudness_target_lufs {
+        if !fed_any_frames {
+            crate::app_deprintln!("[analysis] loudness failed: no decoded frames");
             return None;
         }
-    };
-    if !integrated_lufs.is_finite() {
-        crate::app_deprintln!("[analysis] loudness failed: integrated_lufs not finite");
-        return None;
-    }
-    let mut true_peak = 0.0_f64;
-    let mut true_peak_ok = true;
-    for ch in 0..ebu_channels {
-        match ebu.true_peak(ch) {
-            Ok(v) if v.is_finite() && v > true_peak => true_peak = v,
-            Ok(_) => {}
+        let Some(ebu) = ebu else {
+            crate::app_deprintln!("[analysis] loudness failed: ebu not initialized");
+            return None;
+        };
+        let integrated_lufs = match ebu.loudness_global() {
+            Ok(v) => v,
             Err(e) => {
-                true_peak_ok = false;
-                crate::app_deprintln!("[analysis] true_peak unavailable: {}", e);
-                break;
+                crate::app_deprintln!("[analysis] loudness_global failed: {}", e);
+                return None;
+            }
+        };
+        if !integrated_lufs.is_finite() {
+            crate::app_deprintln!("[analysis] loudness failed: integrated_lufs not finite");
+            return None;
+        }
+        let mut true_peak = 0.0_f64;
+        let mut true_peak_ok = true;
+        for ch in 0..ebu_channels {
+            match ebu.true_peak(ch) {
+                Ok(v) if v.is_finite() && v > true_peak => true_peak = v,
+                Ok(_) => {}
+                Err(e) => {
+                    true_peak_ok = false;
+                    crate::app_deprintln!("[analysis] true_peak unavailable: {}", e);
+                    break;
+                }
             }
         }
-    }
-    if !true_peak_ok {
-        // Fallback to sample peak if true-peak is not available for this stream/codec.
-        true_peak = sample_peak_abs;
-    }
+        if !true_peak_ok {
+            true_peak = sample_peak_abs;
+        }
+        let recommended_gain_db =
+            recommended_gain_for_target(integrated_lufs, true_peak, target_lufs);
+        Some((integrated_lufs, true_peak, recommended_gain_db, target_lufs))
+    } else {
+        None
+    };
 
-    let recommended_gain_db = recommended_gain_for_target(integrated_lufs, true_peak, target_lufs);
-    Some((integrated_lufs, true_peak, recommended_gain_db, target_lufs))
+    Some(PcmScanResult { bins, loudness })
 }
 
 fn analysis_db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {

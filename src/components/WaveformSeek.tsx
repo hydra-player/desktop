@@ -8,6 +8,8 @@ function fmt(s: number): string {
 
 const BAR_COUNT = 500;
 const SEG_COUNT = 60;
+const FLAT_WAVE_NORM = 0.06;
+const WAVE_MORPH_MS = 1000;
 
 // ── animation state ───────────────────────────────────────────────────────────
 
@@ -96,6 +98,22 @@ export function makeHeights(trackId: string): Float32Array {
 
 // ── draw functions ────────────────────────────────────────────────────────────
 
+function makeFlatWaveHeights(): Float32Array {
+  const h = new Float32Array(BAR_COUNT);
+  h.fill(FLAT_WAVE_NORM);
+  return h;
+}
+
+function easeOutCubic(t: number): number {
+  const x = Math.max(0, Math.min(1, t));
+  return 1 - Math.pow(1 - x, 3);
+}
+
+function waveformBarThickness(logicalH: number, norm: number): number {
+  const safeNorm = Math.max(FLAT_WAVE_NORM, norm);
+  return Math.max(1, safeNorm * logicalH);
+}
+
 function drawWaveform(
   canvas: HTMLCanvasElement,
   heights: Float32Array | null,
@@ -108,9 +126,38 @@ function drawWaveform(
   const { played, buffered: buffCol, unplayed } = getColors();
 
   if (!heights) {
-    ctx.globalAlpha = 0.3;
+    // No waveform data yet: flat rail like `drawLineDot`, but do not return early
+    // before played/buffered — otherwise there is no visible playhead.
+    const cy = h / 2;
+    const lh = 2;
+    const dotR = 5;
+    ctx.globalAlpha = 0.35;
     ctx.fillStyle = unplayed;
-    ctx.fillRect(0, (h - 2) / 2, w, 2);
+    ctx.fillRect(0, cy - lh / 2, w, lh);
+    if (buffered > 0) {
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = buffCol;
+      ctx.fillRect(0, cy - lh / 2, Math.min(1, buffered) * w, lh);
+    }
+    if (progress > 0) {
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = played;
+      ctx.shadowColor = played;
+      ctx.shadowBlur = 5;
+      ctx.fillRect(0, cy - lh / 2, Math.min(1, progress) * w, lh);
+      ctx.shadowBlur = 0;
+    }
+    ctx.globalAlpha = 1;
+    if (w > 0) {
+      const dx = Math.max(dotR, Math.min(w - dotR, Math.min(1, progress) * w));
+      ctx.shadowColor = played;
+      ctx.shadowBlur = 7;
+      ctx.beginPath();
+      ctx.arc(dx, cy, dotR, 0, Math.PI * 2);
+      ctx.fillStyle = played;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
     ctx.globalAlpha = 1;
     return;
   }
@@ -122,7 +169,7 @@ function drawWaveform(
   ctx.fillStyle = unplayed;
   for (let i = 0; i < BAR_COUNT; i++) {
     if (i / BAR_COUNT < buffered) continue;
-    const bh = Math.max(1, heights[i] * h);
+    const bh = waveformBarThickness(h, heights[i]);
     const x = x1Of(i);
     ctx.fillRect(x, (h - bh) / 2, x2Of(i) - x, bh);
   }
@@ -132,7 +179,7 @@ function drawWaveform(
   for (let i = 0; i < BAR_COUNT; i++) {
     const frac = i / BAR_COUNT;
     if (frac < progress || frac >= buffered) continue;
-    const bh = Math.max(1, heights[i] * h);
+    const bh = waveformBarThickness(h, heights[i]);
     const x = x1Of(i);
     ctx.fillRect(x, (h - bh) / 2, x2Of(i) - x, bh);
   }
@@ -140,29 +187,14 @@ function drawWaveform(
   if (progress > 0) {
     ctx.globalAlpha = 1;
     ctx.fillStyle = played;
-    ctx.shadowColor = played;
-    ctx.shadowBlur = 5;
     for (let i = 0; i < BAR_COUNT; i++) {
       if (i / BAR_COUNT >= progress) break;
-      const bh = Math.max(1, heights[i] * h);
+      const bh = waveformBarThickness(h, heights[i]);
       const x = x1Of(i);
       ctx.fillRect(x, (h - bh) / 2, x2Of(i) - x, bh);
     }
-    ctx.shadowBlur = 0;
   }
   ctx.globalAlpha = 1;
-
-  // Fade both edges to transparent using destination-in gradient mask
-  const fadeW = Math.min(22, w * 0.07);
-  const mask = ctx.createLinearGradient(0, 0, w, 0);
-  mask.addColorStop(0, 'transparent');
-  mask.addColorStop(fadeW / w, 'black');
-  mask.addColorStop(1 - fadeW / w, 'black');
-  mask.addColorStop(1, 'transparent');
-  ctx.globalCompositeOperation = 'destination-in';
-  ctx.fillStyle = mask;
-  ctx.fillRect(0, 0, w, h);
-  ctx.globalCompositeOperation = 'source-over';
 }
 
 function drawLineDot(canvas: HTMLCanvasElement, progress: number, buffered: number) {
@@ -824,7 +856,6 @@ export default function WaveformSeek({ trackId }: Props) {
   const SEEK_COMMIT_PROGRESS_EPS = 0.02;
   const canvasRef    = useRef<HTMLCanvasElement>(null);
   const heightsRef   = useRef<Float32Array | null>(null);
-  const lastHeightsTrackIdRef = useRef<string | undefined>(undefined);
   const progressRef  = useRef(usePlayerStore.getState().progress);
   const bufferedRef  = useRef(usePlayerStore.getState().buffered);
   const isDragging   = useRef(false);
@@ -848,43 +879,73 @@ export default function WaveformSeek({ trackId }: Props) {
   useEffect(() => {
     if (!trackId) {
       heightsRef.current = null;
-      lastHeightsTrackIdRef.current = undefined;
       return;
     }
     if (waveformBins && waveformBins.length > 0) {
       const src = waveformBins;
       const h = new Float32Array(BAR_COUNT);
-      const effectiveDur = waveformDurationSec > 0 ? waveformDurationSec : duration;
-      const knownFrac = waveformIsPartial && effectiveDur > 0
-        ? Math.max(0, Math.min(1, waveformKnownUntilSec / effectiveDur))
-        : 1;
-      const knownBars = Math.max(0, Math.min(BAR_COUNT, Math.floor(knownFrac * BAR_COUNT)));
       for (let i = 0; i < BAR_COUNT; i++) {
-        if (i >= knownBars) {
-          h[i] = 0.08; // unknown tail baseline while partial waveform is still loading
-          continue;
-        }
         const idx = Math.min(src.length - 1, Math.floor((i / BAR_COUNT) * src.length));
         const v = src[idx];
         h[i] = Math.max(0.08, Math.min(1, (Number(v) / 255)));
       }
-      // Partial -> full handoff: blend with previous heights for a smoother
-      // visual transition and avoid a hard "jump" in the waveform shape.
-      if (lastHeightsTrackIdRef.current === trackId && heightsRef.current && heightsRef.current.length === BAR_COUNT) {
-        const prev = heightsRef.current;
-        const mixed = new Float32Array(BAR_COUNT);
-        for (let i = 0; i < BAR_COUNT; i++) {
-          mixed[i] = prev[i] * 0.45 + h[i] * 0.55;
-        }
-        heightsRef.current = mixed;
-      } else {
+      const prev = heightsRef.current;
+      if (!prev || prev.length !== BAR_COUNT) {
         heightsRef.current = h;
+        return;
       }
-      lastHeightsTrackIdRef.current = trackId;
-      return;
+      const from = new Float32Array(prev);
+      const to = h;
+      const startedAt = performance.now();
+      let raf = 0;
+      const step = (now: number) => {
+        const p = easeOutCubic((now - startedAt) / WAVE_MORPH_MS);
+        const next = new Float32Array(BAR_COUNT);
+        for (let i = 0; i < BAR_COUNT; i++) {
+          next[i] = from[i] + (to[i] - from[i]) * p;
+        }
+        heightsRef.current = next;
+        if (!ANIMATED_STYLES.has(styleRef.current)) {
+          const canvas = canvasRef.current;
+          if (canvas) drawSeekbar(canvas, styleRef.current, next, progressRef.current, bufferedRef.current, animStateRef.current);
+        }
+        if (p < 1) raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+      return () => cancelAnimationFrame(raf);
     }
-    heightsRef.current = makeHeights(trackId);
-    lastHeightsTrackIdRef.current = trackId;
+    if (heightsRef.current?.length === BAR_COUNT) {
+      const current = heightsRef.current;
+      let isAlreadyFlat = true;
+      for (let i = 0; i < BAR_COUNT; i++) {
+        if (Math.abs(current[i] - FLAT_WAVE_NORM) > 0.0001) {
+          isAlreadyFlat = false;
+          break;
+        }
+      }
+      if (isAlreadyFlat) return;
+      const from = new Float32Array(current);
+      const to = makeFlatWaveHeights();
+      const startedAt = performance.now();
+      let raf = 0;
+      const step = (now: number) => {
+        const p = easeOutCubic((now - startedAt) / WAVE_MORPH_MS);
+        const next = new Float32Array(BAR_COUNT);
+        for (let i = 0; i < BAR_COUNT; i++) {
+          next[i] = from[i] + (to[i] - from[i]) * p;
+        }
+        heightsRef.current = next;
+        if (!ANIMATED_STYLES.has(styleRef.current)) {
+          const canvas = canvasRef.current;
+          if (canvas) drawSeekbar(canvas, styleRef.current, next, progressRef.current, bufferedRef.current, animStateRef.current);
+        }
+        if (p < 1) raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+      return () => cancelAnimationFrame(raf);
+    }
+    // No analysis bins yet: render 500 flat bars immediately.
+    heightsRef.current = makeFlatWaveHeights();
   }, [trackId, waveformBins, waveformIsPartial, waveformKnownUntilSec, waveformDurationSec, duration]);
 
   // Imperative subscription — no React re-renders from progress changes.
@@ -913,12 +974,20 @@ export default function WaveformSeek({ trackId }: Props) {
     });
   }, []);
 
-  // Initial draw for static styles when style or track changes.
+  // Initial draw for static styles when style, track, or waveform payload changes.
   useEffect(() => {
     if (ANIMATED_STYLES.has(seekbarStyle)) return;
     const canvas = canvasRef.current;
     if (canvas) drawSeekbar(canvas, seekbarStyle, heightsRef.current, progressRef.current, bufferedRef.current);
-  }, [seekbarStyle, trackId]);
+  }, [
+    seekbarStyle,
+    trackId,
+    waveformBins,
+    waveformIsPartial,
+    waveformKnownUntilSec,
+    waveformDurationSec,
+    duration,
+  ]);
 
   // rAF loop — animated styles only.
   useEffect(() => {
