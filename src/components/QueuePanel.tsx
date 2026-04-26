@@ -298,6 +298,12 @@ function QueuePanelHostOrSolo() {
   const enqueueAt = usePlayerStore(s => s.enqueueAt);
   const contextMenu = usePlayerStore(s => s.contextMenu);
 
+  // When the user picks a track *from* the queue list, suppress the
+  // upcoming auto-scroll so their click target stays in view instead of
+  // the list rebasing onto the next track. Auto-advance (natural playback)
+  // never sets this flag, so it keeps its original "show what's next" behavior.
+  const suppressNextAutoScrollRef = useRef(false);
+
   const playbackSource = usePlayerStore(s => s.currentPlaybackSource);
   const normalizationNowDb = usePlayerStore(s => s.normalizationNowDb);
   const normalizationTargetLufs = usePlayerStore(s => s.normalizationTargetLufs);
@@ -478,6 +484,10 @@ function QueuePanelHostOrSolo() {
   }, [enqueueAt]);
 
   useEffect(function queueAutoScroll() {
+    if (suppressNextAutoScrollRef.current) {
+      suppressNextAutoScrollRef.current = false;
+      return;
+    }
     if (!queueListRef.current || queueIndex < 0) return;
     if (activeTab !== 'queue') return;
     const songs = queueListRef.current!.querySelectorAll<HTMLElement>('[data-queue-idx]');
@@ -916,7 +926,10 @@ function QueuePanelHostOrSolo() {
               <div
                 data-queue-idx={idx}
                 className={`queue-item ${isPlaying ? 'active' : ''} ${contextMenu.isOpen && contextMenu.type === 'queue-item' && contextMenu.queueIndex === idx ? 'context-active' : ''}`}
-                onClick={() => playTrack(track, queue)}
+                onClick={() => {
+                  suppressNextAutoScrollRef.current = true;
+                  playTrack(track, queue);
+                }}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   usePlayerStore.getState().openContextMenu(e.clientX, e.clientY, track, 'queue-item', idx);
