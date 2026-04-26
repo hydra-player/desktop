@@ -14,8 +14,17 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use tauri::Manager;
 
-pub const WAVEFORM_ALGO_VERSION: i64 = 3;
+pub const WAVEFORM_ALGO_VERSION: i64 = 4;
 pub const LOUDNESS_ALGO_VERSION: i64 = 1;
+
+/// Bins in waveform BLOB: `2 * bin_count` bytes (peak u8, then mean-abs u8 per time bin).
+pub fn waveform_cache_blob_len_ok(bins: &[u8], bin_count: i64) -> bool {
+    if bin_count <= 0 {
+        return false;
+    }
+    let n = bin_count as usize;
+    bins.len() == n.saturating_mul(2)
+}
 
 #[derive(Debug, Clone)]
 pub struct TrackKey {
@@ -200,8 +209,9 @@ impl AnalysisCache {
 
     pub fn get_waveform(&self, key: &TrackKey) -> Result<Option<WaveformEntry>, String> {
         let conn = self.conn.lock().map_err(|_| "analysis_cache lock poisoned".to_string())?;
-        conn.query_row(
-            r#"
+        let row = conn
+            .query_row(
+                r#"
             SELECT w.bins, w.bin_count, w.is_partial, w.known_until_sec, w.duration_sec, w.updated_at
             FROM waveform_cache w
             JOIN analysis_track a
@@ -211,20 +221,21 @@ impl AnalysisCache {
               AND w.md5_16kb = ?2
               AND a.waveform_algo_version = ?3
             "#,
-            params![key.track_id, key.md5_16kb, WAVEFORM_ALGO_VERSION],
-            |row| {
-                Ok(WaveformEntry {
-                    bins: row.get(0)?,
-                    bin_count: row.get(1)?,
-                    is_partial: row.get::<_, i64>(2)? != 0,
-                    known_until_sec: row.get(3)?,
-                    duration_sec: row.get(4)?,
-                    updated_at: row.get(5)?,
-                })
-            },
-        )
-        .optional()
-        .map_err(|e| e.to_string())
+                params![key.track_id, key.md5_16kb, WAVEFORM_ALGO_VERSION],
+                |row| {
+                    Ok(WaveformEntry {
+                        bins: row.get(0)?,
+                        bin_count: row.get(1)?,
+                        is_partial: row.get::<_, i64>(2)? != 0,
+                        known_until_sec: row.get(3)?,
+                        duration_sec: row.get(4)?,
+                        updated_at: row.get(5)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
+        Ok(row.filter(|e| waveform_cache_blob_len_ok(&e.bins, e.bin_count)))
     }
 
     pub fn get_latest_waveform_for_track(&self, track_id: &str) -> Result<Option<WaveformEntry>, String> {
@@ -258,8 +269,10 @@ impl AnalysisCache {
                 )
                 .optional()
                 .map_err(|e| e.to_string())?;
-            if row.is_some() {
-                return Ok(row);
+            if let Some(e) = row {
+                if waveform_cache_blob_len_ok(&e.bins, e.bin_count) {
+                    return Ok(Some(e));
+                }
             }
         }
         Ok(None)
@@ -315,7 +328,7 @@ pub fn recommended_gain_for_target(integrated_lufs: f64, true_peak: f64, target_
     recommended_gain_db.clamp(-24.0, 24.0)
 }
 
-/// Result of [`seed_from_bytes`]: callers use it to avoid redundant UI events.
+/// Result of [`seed_from_bytes_execute`] / CPU seed queue: callers use it to avoid redundant UI events.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SeedFromBytesOutcome {
     /// Wrote waveform (and loudness when PCM decode succeeded).
@@ -326,7 +339,9 @@ pub enum SeedFromBytesOutcome {
     SkippedNoAnalysisCache,
 }
 
-pub fn seed_from_bytes(
+/// Full Symphonia + (optional) EBU decode for waveform + loudness. Call only from the
+/// single CPU-seed worker in `lib.rs` (`spawn_blocking`) so at most one heavy decode runs.
+pub fn seed_from_bytes_execute(
     app: &tauri::AppHandle,
     track_id: &str,
     bytes: &[u8],
@@ -454,8 +469,8 @@ fn derive_waveform_bins(bytes: &[u8], bin_count: usize) -> Vec<u8> {
     if bin_count == 0 || bytes.is_empty() {
         return Vec::new();
     }
-    let mut out = vec![0u8; bin_count];
-    for (i, slot) in out.iter_mut().enumerate() {
+    let mut peak_half = vec![0u8; bin_count];
+    for (i, slot) in peak_half.iter_mut().enumerate() {
         let start = i * bytes.len() / bin_count;
         let end = ((i + 1) * bytes.len() / bin_count).max(start + 1).min(bytes.len());
         let mut peak: u8 = 0;
@@ -467,6 +482,8 @@ fn derive_waveform_bins(bytes: &[u8], bin_count: usize) -> Vec<u8> {
         }
         *slot = ((peak as f32 / 127.0).sqrt().clamp(0.0, 1.0) * 255.0) as u8;
     }
+    let mut out = peak_half.clone();
+    out.extend_from_slice(&peak_half);
     out
 }
 
@@ -618,6 +635,8 @@ fn decode_scan_pcm(
     };
 
     let mut bin_max = vec![0.0f32; bin_count];
+    let mut bin_sum = vec![0.0f32; bin_count];
+    let mut bin_n = vec![0u32; bin_count];
     let mut ebu: Option<EbuR128> = None;
     let mut ebu_channels: u32 = 0;
     let mut sample_peak_abs = 0.0_f64;
@@ -693,6 +712,8 @@ fn decode_scan_pcm(
                 let bin = ((sample_idx * bin_count as u64) / bin_grid_frames) as usize;
                 let bin = bin.min(bin_count.saturating_sub(1));
                 bin_max[bin] = bin_max[bin].max(mag);
+                bin_sum[bin] += mag;
+                bin_n[bin] = bin_n[bin].saturating_add(1);
             }
             for c in 0..n_ch {
                 let v = (slice[base + c] as f64).abs();
@@ -721,7 +742,17 @@ fn decode_scan_pcm(
         }
     }
 
-    let bins = normalize_peak_bins(&bin_max);
+    let mut bin_mean = vec![0.0f32; bin_count];
+    for i in 0..bin_count {
+        if bin_n[i] > 0 {
+            bin_mean[i] = bin_sum[i] / (bin_n[i] as f32);
+        }
+    }
+    let peak_u8 = normalize_peak_bins(&bin_max);
+    let mean_u8 = normalize_peak_bins(&bin_mean);
+    let mut bins = Vec::with_capacity(peak_u8.len().saturating_mul(2));
+    bins.extend_from_slice(&peak_u8);
+    bins.extend_from_slice(&mean_u8);
 
     let loudness = if let Some(target_lufs) = loudness_target_lufs {
         if !fed_any_frames {

@@ -10,6 +10,15 @@ import {
   getDeferHotCachePrefetch,
 } from './utils/hotCacheGate';
 
+/** Settings → Logging → Debug (`frontend_debug_log` → Rust stderr), same as normalization / lucky-mix. */
+function hotCacheFrontendDebug(payload: Record<string, unknown>): void {
+  if (useAuthStore.getState().loggingMode !== 'debug') return;
+  void invoke('frontend_debug_log', {
+    scope: 'hot-cache',
+    message: JSON.stringify(payload),
+  }).catch(() => {});
+}
+
 /** How many upcoming queue tracks may be prefetched (only current + next are eviction-protected). */
 const PREFETCH_AHEAD = 5;
 
@@ -89,11 +98,21 @@ function scheduleEvictAfterPreviousGrace(): void {
 
 function enqueueJobs(jobs: PrefetchJob[]) {
   const seen = new Set(pendingQueue.map(j => `${j.serverId}:${j.trackId}`));
+  let merged = 0;
   for (const j of jobs) {
     const k = `${j.serverId}:${j.trackId}`;
     if (seen.has(k)) continue;
     seen.add(k);
     pendingQueue.push(j);
+    merged++;
+  }
+  if (merged > 0) {
+    hotCacheFrontendDebug({
+      event: 'prefetch-queue-jobs',
+      added: merged,
+      pendingTotal: pendingQueue.length,
+      trackIds: jobs.map(j => j.trackId),
+    });
   }
   void runWorker();
 }
@@ -105,6 +124,11 @@ async function runWorker() {
     while (pendingQueue.length > 0) {
       const auth = useAuthStore.getState();
       if (!auth.isLoggedIn || !auth.hotCacheEnabled || !auth.activeServerId) {
+        hotCacheFrontendDebug({
+          event: 'prefetch-worker-stop',
+          reason: 'auth-disabled-or-logged-out',
+          clearedPending: pendingQueue.length,
+        });
         pendingQueue.length = 0;
         break;
       }
@@ -117,11 +141,24 @@ async function runWorker() {
       if (!job) break;
 
       const maxBytes = Math.max(0, auth.hotCacheMaxMb) * 1024 * 1024;
-      if (maxBytes <= 0) continue;
+      if (maxBytes <= 0) {
+        hotCacheFrontendDebug({ event: 'prefetch-skip-job', trackId: job.trackId, reason: 'max-mb-zero' });
+        continue;
+      }
 
       const offline = useOfflineStore.getState();
-      if (offline.isDownloaded(job.trackId, job.serverId)) continue;
-      if (useHotCacheStore.getState().entries[entryKey(job.serverId, job.trackId)]) continue;
+      if (offline.isDownloaded(job.trackId, job.serverId)) {
+        hotCacheFrontendDebug({ event: 'prefetch-skip-job', trackId: job.trackId, reason: 'offline-library' });
+        continue;
+      }
+      if (useHotCacheStore.getState().entries[entryKey(job.serverId, job.trackId)]) {
+        hotCacheFrontendDebug({
+          event: 'prefetch-skip-job',
+          trackId: job.trackId,
+          reason: 'already-in-hot-index',
+        });
+        continue;
+      }
 
       const player = usePlayerStore.getState();
       const { queue, queueIndex } = player;
@@ -130,19 +167,46 @@ async function runWorker() {
           .slice(queueIndex + 1, queueIndex + 1 + PREFETCH_AHEAD)
           .map(t => t.id),
       );
-      if (!wantIds.has(job.trackId)) continue;
+      if (!wantIds.has(job.trackId)) {
+        hotCacheFrontendDebug({
+          event: 'prefetch-skip-job',
+          trackId: job.trackId,
+          reason: 'not-in-upcoming-window',
+          queueIndex,
+          window: PREFETCH_AHEAD,
+        });
+        continue;
+      }
 
       const track = queue.find(t => t.id === job.trackId);
-      if (!track) continue;
+      if (!track) {
+        hotCacheFrontendDebug({
+          event: 'prefetch-skip-job',
+          trackId: job.trackId,
+          reason: 'track-not-in-queue',
+        });
+        continue;
+      }
       const hotEntries = useHotCacheStore.getState().entries;
       const occupied = sumCachedBytesInProtectedWindow(queue, queueIndex, job.serverId, hotEntries);
       const est = estimateTrackHotCacheBytes(track);
       const isImmediateNext = queue[queueIndex + 1]?.id === job.trackId;
-      if (!isImmediateNext && occupied + est > maxBytes) continue;
+      if (!isImmediateNext && occupied + est > maxBytes) {
+        hotCacheFrontendDebug({
+          event: 'prefetch-skip-job',
+          trackId: job.trackId,
+          reason: 'budget-protected-window-plus-estimate',
+          occupied,
+          estimateBytes: est,
+          maxBytes,
+        });
+        continue;
+      }
 
       const url = buildStreamUrl(job.trackId);
       try {
         const customDir = auth.hotCacheDownloadDir || null;
+        hotCacheFrontendDebug({ event: 'prefetch-invoke', trackId: job.trackId });
         const res = await invoke<{ path: string; size: number }>('download_track_hot_cache', {
           trackId: job.trackId,
           serverId: job.serverId,
@@ -150,7 +214,8 @@ async function runWorker() {
           suffix: job.suffix,
           customDir,
         });
-        useHotCacheStore.getState().setEntry(job.trackId, job.serverId, res.path, res.size);
+        useHotCacheStore.getState().setEntry(job.trackId, job.serverId, res.path, res.size, 'prefetch');
+        hotCacheFrontendDebug({ event: 'prefetch-stored', trackId: job.trackId, sizeBytes: res.size });
         const fresh = usePlayerStore.getState();
         const authAfter = useAuthStore.getState();
         const maxAfter = Math.max(0, authAfter.hotCacheMaxMb) * 1024 * 1024;
@@ -161,8 +226,8 @@ async function runWorker() {
           authAfter.activeServerId ?? '',
           authAfter.hotCacheDownloadDir || null,
         );
-      } catch {
-        /* network / HTTP — skip */
+      } catch (e: unknown) {
+        hotCacheFrontendDebug({ event: 'prefetch-download-failed', trackId: job.trackId, error: String(e) });
       }
     }
   } finally {
@@ -199,30 +264,55 @@ async function replanNow() {
   if (maxBytes <= 0) return;
 
   const { queue, queueIndex, currentRadio } = usePlayerStore.getState();
-  if (currentRadio) return;
+  if (currentRadio) {
+    hotCacheFrontendDebug({ event: 'replan-skip', reason: 'radio-mode' });
+    return;
+  }
 
   const offline = useOfflineStore.getState();
-  const hot = useHotCacheStore.getState();
 
-  await hot.evictToFit(queue, queueIndex, maxBytes, serverId, customDir);
+  await useHotCacheStore.getState().evictToFit(queue, queueIndex, maxBytes, serverId, customDir);
+
+  // Must read entries after eviction: the pre-evict snapshot still lists removed keys and would
+  // skip prefetch for upcoming tracks that no longer have on-disk rows.
+  const hotEntries = useHotCacheStore.getState().entries;
 
   const targets = queue.slice(queueIndex + 1, queueIndex + 1 + PREFETCH_AHEAD);
   const immediateNextId = queue[queueIndex + 1]?.id;
-  let projectedOccupied = sumCachedBytesInProtectedWindow(queue, queueIndex, serverId, hot.entries);
+  let projectedOccupied = sumCachedBytesInProtectedWindow(queue, queueIndex, serverId, hotEntries);
   const jobs: PrefetchJob[] = [];
+  const skipped: { trackId: string; reason: string }[] = [];
   for (const t of targets) {
-    if (offline.isDownloaded(t.id, serverId)) continue;
-    if (hot.entries[entryKey(serverId, t.id)]) continue;
+    if (offline.isDownloaded(t.id, serverId)) {
+      skipped.push({ trackId: t.id, reason: 'offline-library' });
+      continue;
+    }
+    if (hotEntries[entryKey(serverId, t.id)]) {
+      skipped.push({ trackId: t.id, reason: 'already-in-hot-index' });
+      continue;
+    }
     const isImmediateNext = t.id === immediateNextId;
     if (isImmediateNext) {
       jobs.push({ trackId: t.id, serverId, suffix: t.suffix || 'mp3' });
       continue;
     }
     const est = estimateTrackHotCacheBytes(t);
-    if (projectedOccupied + est > maxBytes) break;
+    if (projectedOccupied + est > maxBytes) {
+      skipped.push({ trackId: t.id, reason: 'budget-cap-rest-deferred' });
+      break;
+    }
     projectedOccupied += est;
     jobs.push({ trackId: t.id, serverId, suffix: t.suffix || 'mp3' });
   }
+  hotCacheFrontendDebug({
+    event: 'replan',
+    queueIndex,
+    aheadCount: targets.length,
+    scheduledIds: jobs.map(j => j.trackId),
+    skipped,
+    projectedOccupiedBytes: projectedOccupied,
+    maxBytes,
+  });
   enqueueJobs(jobs);
 }
 
@@ -266,6 +356,7 @@ export function initHotCachePrefetch(): () => void {
     }
 
     if (!state.hotCacheEnabled || !state.isLoggedIn) {
+      hotCacheFrontendDebug({ event: 'prefetch-auth-off', clearedPending: pendingQueue.length });
       pendingQueue.length = 0;
       clearHotCachePreviousGrace();
       return;
@@ -286,6 +377,13 @@ export function initHotCachePrefetch(): () => void {
 
     if (budgetSettingsChanged) {
       if (prev && state.hotCacheMaxMb < prev.hotCacheMaxMb) {
+        hotCacheFrontendDebug({
+          event: 'prefetch-pending-cleared',
+          reason: 'hot-cache-max-mb-decreased',
+          prevMb: prev.hotCacheMaxMb,
+          nextMb: state.hotCacheMaxMb,
+          droppedJobs: pendingQueue.length,
+        });
         pendingQueue.length = 0;
       }
       void replanNow();

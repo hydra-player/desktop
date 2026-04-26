@@ -5,6 +5,7 @@ import { listen } from '@tauri-apps/api/event';
 import { showToast } from '../utils/toast';
 import { buildCoverArtUrl, buildStreamUrl, getPlayQueue, savePlayQueue, reportNowPlaying, scrobbleSong, SubsonicSong, getSong, getRandomSongs, getSimilarSongs2, getTopSongs, InternetRadioStation, setRating } from '../api/subsonic';
 import { resolvePlaybackUrl, streamUrlTrackId, getPlaybackSourceKind, type PlaybackSourceKind } from '../utils/resolvePlaybackUrl';
+import { redactSubsonicUrlForLog } from '../utils/redactSubsonicUrl';
 import { setDeferHotCachePrefetch } from '../utils/hotCacheGate';
 import { lastfmScrobble, lastfmUpdateNowPlaying, lastfmLoveTrack, lastfmUnloveTrack, lastfmGetTrackLoved, lastfmGetAllLovedTracks } from '../api/lastfm';
 import { useAuthStore } from './authStore';
@@ -270,25 +271,34 @@ type WaveformCachePayload = {
   updatedAt: number;
 };
 
+/** v4: `500` peak + `500` mean-abs = `1000` bytes. Legacy single curve: `500` (treated as mean=max). */
+function waveformBlobLenOk(len: number): boolean {
+  return len === 500 || len === 1000;
+}
+
 /** `Vec<u8>` from Rust often arrives as `Uint8Array`, not `Array.isArray`. */
 function coerceWaveformBins(bins: unknown): number[] | null {
   if (bins == null) return null;
+  let raw: number[] | null = null;
   if (Array.isArray(bins)) {
-    return bins.length > 0 ? bins.map(x => Number(x) & 255) : null;
-  }
-  if (bins instanceof Uint8Array) {
-    return bins.length > 0 ? Array.from(bins) : null;
-  }
-  if (typeof bins === 'object' && 'length' in bins && typeof (bins as { length: unknown }).length === 'number') {
+    if (bins.length === 0) return null;
+    raw = bins.map(x => Number(x) & 255);
+  } else if (bins instanceof Uint8Array) {
+    if (bins.length === 0) return null;
+    raw = Array.from(bins);
+  } else if (typeof bins === 'object' && 'length' in bins && typeof (bins as { length: unknown }).length === 'number') {
     const len = (bins as { length: number }).length;
     if (len === 0) return null;
     try {
-      return Array.from(bins as ArrayLike<number>).map(x => Number(x) & 255);
+      raw = Array.from(bins as ArrayLike<number>).map(x => Number(x) & 255);
     } catch {
       return null;
     }
+  } else {
+    return null;
   }
-  return null;
+  if (!waveformBlobLenOk(raw.length)) return null;
+  return raw;
 }
 
 type LoudnessCachePayload = {
@@ -608,8 +618,22 @@ function touchHotCacheOnPlayback(trackId: string, serverId: string) {
   useHotCacheStore.getState().touchPlayed(trackId, serverId);
 }
 
-/** Coalesce concurrent `analysis_get_waveform_for_track` for one id (StrictMode double mount, init + queue restore). */
-const waveformRefreshInflight = new Map<string, Promise<void>>();
+/** Last-write-wins generation per track: avoids applying a stale empty waveform read when
+ * `analysis:waveform-updated` bumps gen after SQLite commit while an older `analysis_get_waveform_for_track`
+ * is still in flight. Gen is bumped only on explicit invalidation (waveform-updated, analysis storage),
+ * not on every `refreshWaveformForTrack` call — otherwise bursts (Lucky Mix, queue) cancel each other. */
+const waveformRefreshGenByTrackId: Record<string, number> = {};
+
+function bumpWaveformRefreshGen(trackId: string) {
+  if (!trackId) return;
+  waveformRefreshGenByTrackId[trackId] = (waveformRefreshGenByTrackId[trackId] ?? 0) + 1;
+}
+
+/** Coalesce concurrent `analysis_get_loudness_for_track` for one id+mode pair. The
+ *  analysis:waveform-updated listener fires refreshWaveform + refreshLoudness in
+ *  parallel for every full-track analysis completion; without coalescing, gapless
+ *  preload + current-track completion can stack two SQLite reads + two state writes. */
+const loudnessRefreshInflight = new Map<string, Promise<void>>();
 
 /** Skip redundant `audio_set_normalization` IPC when the same payload is sent twice within a short window (e.g. StrictMode). */
 let lastNormAudioInvokeKey = '';
@@ -628,6 +652,42 @@ function invokeAudioSetNormalizationDeduped(payload: {
   lastNormAudioInvokeKey = key;
   lastNormAudioInvokeAtMs = now;
   void invoke('audio_set_normalization', payload).catch(() => {});
+}
+
+/**
+ * Skip redundant `audio_update_replay_gain` IPC when the same payload was sent
+ * recently. updateReplayGainForCurrentTrack runs from the analysis:loudness-partial
+ * listener (~every 900 ms while LUFS is on); without dedupe each tick triggers a
+ * full IPC roundtrip + backend audio:normalization-state echo + frontend setState,
+ * which saturates the WebView2 renderer thread on Windows after a few minutes.
+ */
+let lastRgInvokeKey = '';
+let lastRgInvokeAtMs = 0;
+
+function invokeAudioUpdateReplayGainDeduped(payload: {
+  volume: number;
+  replayGainDb: number | null;
+  replayGainPeak: number | null;
+  loudnessGainDb: number | null;
+  preGainDb: number;
+  fallbackDb: number;
+}) {
+  const fmt = (v: number | null) => (v == null || !Number.isFinite(v) ? 'null' : v.toFixed(3));
+  const key = [
+    payload.volume.toFixed(4),
+    fmt(payload.replayGainDb),
+    fmt(payload.replayGainPeak),
+    fmt(payload.loudnessGainDb),
+    payload.preGainDb.toFixed(2),
+    payload.fallbackDb.toFixed(2),
+  ].join('|');
+  const now = Date.now();
+  if (key === lastRgInvokeKey && now - lastRgInvokeAtMs < 250) {
+    return;
+  }
+  lastRgInvokeKey = key;
+  lastRgInvokeAtMs = now;
+  invoke('audio_update_replay_gain', payload).catch(console.error);
 }
 
 function isReplayGainActive() {
@@ -698,42 +758,44 @@ async function reseedLoudnessForTrackId(trackId: string) {
 
 async function refreshWaveformForTrack(trackId: string) {
   if (!trackId) return;
-  let job = waveformRefreshInflight.get(trackId);
-  if (!job) {
-    const p = (async () => {
-      try {
-        const row = await invoke<WaveformCachePayload | null>('analysis_get_waveform_for_track', { trackId });
-        // Never apply bins for a non-current track (e.g. gapless byte-preload fetches the neighbour).
-        if (usePlayerStore.getState().currentTrack?.id !== trackId) return;
-        const bins = row ? coerceWaveformBins(row.bins) : null;
-        if (!bins || bins.length === 0) {
-          usePlayerStore.setState({
-            waveformBins: null,
-          });
-          return;
-        }
-        usePlayerStore.setState({
-          waveformBins: bins,
-        });
-      } catch {
-        // best-effort; seekbar falls back to placeholder waveform
-      }
-    })();
-    job = p.finally(() => {
-      waveformRefreshInflight.delete(trackId);
+  const gen = waveformRefreshGenByTrackId[trackId] ?? 0;
+  try {
+    const row = await invoke<WaveformCachePayload | null>('analysis_get_waveform_for_track', { trackId });
+    if ((waveformRefreshGenByTrackId[trackId] ?? 0) !== gen) return;
+    // Never apply bins for a non-current track (e.g. gapless byte-preload fetches the neighbour).
+    if (usePlayerStore.getState().currentTrack?.id !== trackId) return;
+    const bins = row ? coerceWaveformBins(row.bins) : null;
+    if (!bins || bins.length === 0) {
+      usePlayerStore.setState({
+        waveformBins: null,
+      });
+      return;
+    }
+    usePlayerStore.setState({
+      waveformBins: bins,
     });
-    waveformRefreshInflight.set(trackId, job);
+  } catch {
+    // best-effort; seekbar falls back to placeholder waveform
   }
-  await job;
 }
 
 /** When `syncPlayingEngine` is false, only update `cachedLoudnessGainByTrackId` (e.g. queue neighbour) — do not call `audio_update_replay_gain` for the already-playing track. */
 async function refreshLoudnessForTrack(
   trackId: string,
   opts?: { syncPlayingEngine?: boolean },
-) {
+): Promise<void> {
   if (!trackId) return;
   const syncEngine = opts?.syncPlayingEngine !== false;
+  const inflightKey = `${trackId}|${syncEngine ? 'sync' : 'no-sync'}`;
+  const existing = loudnessRefreshInflight.get(inflightKey);
+  if (existing) return existing;
+  const job = (async () => { await runRefreshLoudnessForTrack(trackId, syncEngine); })()
+    .finally(() => { loudnessRefreshInflight.delete(inflightKey); });
+  loudnessRefreshInflight.set(inflightKey, job);
+  return job;
+}
+
+async function runRefreshLoudnessForTrack(trackId: string, syncEngine: boolean): Promise<void> {
   emitNormalizationDebug('refresh:start', { trackId });
   usePlayerStore.setState({ normalizationDbgSource: 'refresh:start', normalizationDbgTrackId: trackId });
   try {
@@ -753,7 +815,11 @@ async function refreshLoudnessForTrack(
         analysisBackfillInFlightByTrackId[trackId] = true;
         analysisBackfillAttemptsByTrackId[trackId] = attempts + 1;
         const url = buildStreamUrl(trackId);
-        emitNormalizationDebug('backfill:enqueue', { trackId, url, attempt: attempts + 1 });
+        emitNormalizationDebug('backfill:enqueue', {
+          trackId,
+          url: redactSubsonicUrlForLog(url),
+          attempt: attempts + 1,
+        });
         void invoke('analysis_enqueue_seed_from_url', { trackId, url })
           .then(() => emitNormalizationDebug('backfill:queued', { trackId, attempt: attempts + 1 }))
           .catch((e) => emitNormalizationDebug('backfill:error', { trackId, error: String(e) }))
@@ -832,7 +898,7 @@ async function promoteCompletedStreamToHotCache(track: Track, serverId: string, 
       },
     );
     if (!res || !res.path) return;
-    useHotCacheStore.getState().setEntry(track.id, serverId, res.path, res.size || 0);
+    useHotCacheStore.getState().setEntry(track.id, serverId, res.path, res.size || 0, 'stream-promote');
   } catch {
     // best-effort promotion; normal hot-cache prefetch remains fallback
   }
@@ -1227,6 +1293,12 @@ export function initAudioListeners(): () => void {
       if (payloadTrackId && payloadTrackId !== current.id) return;
       if (!Number.isFinite(payload.gainDb)) return;
       if (stableLoudnessGainByTrackId[current.id]) return;
+      // Skip when the cached gain is already within ~0.05 dB of the new payload —
+      // float jitter from the partial-loudness heuristic would otherwise re-trigger
+      // updateReplayGainForCurrentTrack → audio_update_replay_gain → backend echo
+      // every PARTIAL_LOUDNESS_EMIT_INTERVAL_MS even when nothing audibly changed.
+      const existing = cachedLoudnessGainByTrackId[current.id];
+      if (Number.isFinite(existing) && Math.abs(existing - payload.gainDb) < 0.05) return;
       cachedLoudnessGainByTrackId[current.id] = payload.gainDb;
       emitNormalizationDebug('partial-loudness:apply', {
         trackId: current.id,
@@ -1242,6 +1314,7 @@ export function initAudioListeners(): () => void {
       const currentRaw = usePlayerStore.getState().currentTrack?.id;
       const currentId = currentRaw ? normalizeAnalysisTrackId(currentRaw) : null;
       if (currentId && payloadTrackId === currentId) {
+        bumpWaveformRefreshGen(currentRaw!);
         void refreshWaveformForTrack(currentRaw!);
         void refreshLoudnessForTrack(currentId);
         emitNormalizationDebug('backfill:applied', { trackId: currentId });
@@ -1410,6 +1483,7 @@ export function initAudioListeners(): () => void {
     const currentId = usePlayerStore.getState().currentTrack?.id;
     if (!currentId) return;
     if (detail.trackId && detail.trackId !== currentId) return;
+    bumpWaveformRefreshGen(currentId);
     void refreshWaveformForTrack(currentId);
     void refreshLoudnessForTrack(currentId);
   });
@@ -2620,14 +2694,14 @@ export const usePlayerStore = create<PlayerState>()(
           normalizationTargetLufs: normalization.normalizationTargetLufs,
           normalizationEngineLive: normalization.normalizationEngineLive,
         }));
-        invoke('audio_update_replay_gain', {
-           volume,
-           replayGainDb,
-           replayGainPeak,
-           loudnessGainDb: currentTrack ? (cachedLoudnessGainByTrackId[currentTrack.id] ?? null) : null,
-           preGainDb: authState.replayGainPreGainDb,
-           fallbackDb: authState.replayGainFallbackDb,
-         }).catch(console.error);
+        invokeAudioUpdateReplayGainDeduped({
+          volume,
+          replayGainDb,
+          replayGainPeak,
+          loudnessGainDb: currentTrack ? (cachedLoudnessGainByTrackId[currentTrack.id] ?? null) : null,
+          preGainDb: authState.replayGainPreGainDb,
+          fallbackDb: authState.replayGainFallbackDb,
+        });
        },
     }),
     {

@@ -7,6 +7,11 @@ function fmt(s: number): string {
 }
 
 const BAR_COUNT = 500;
+/** Stored waveform bins per track (matches backend `bin_count` / PCM bins). */
+const WAVE_BIN_COUNT = 500;
+/** `0.7 * mean + 0.3 * max` in normalized 0..1 space (v4 cache: first half = peak, second = mean-abs). */
+const WAVE_MIX_MEAN = 0.7;
+const WAVE_MIX_MAX = 0.3;
 const SEG_COUNT = 60;
 const FLAT_WAVE_NORM = 0.06;
 const WAVE_MORPH_MS = 1000;
@@ -111,8 +116,27 @@ function easeOutCubic(t: number): number {
 
 function binsToHeights(src: number[]): Float32Array {
   const h = new Float32Array(BAR_COUNT);
+  const n = src.length;
+  if (n === WAVE_BIN_COUNT * 2) {
+    for (let i = 0; i < BAR_COUNT; i++) {
+      const idx = Math.min(WAVE_BIN_COUNT - 1, Math.floor((i / BAR_COUNT) * WAVE_BIN_COUNT));
+      const maxNorm = Number(src[idx]) / 255;
+      const meanNorm = Number(src[WAVE_BIN_COUNT + idx]) / 255;
+      const v = WAVE_MIX_MEAN * meanNorm + WAVE_MIX_MAX * maxNorm;
+      h[i] = Math.max(0.08, Math.min(1, v));
+    }
+    return h;
+  }
+  if (n === WAVE_BIN_COUNT) {
+    for (let i = 0; i < BAR_COUNT; i++) {
+      const idx = Math.min(WAVE_BIN_COUNT - 1, Math.floor((i / BAR_COUNT) * WAVE_BIN_COUNT));
+      const v = src[idx];
+      h[i] = Math.max(0.08, Math.min(1, (Number(v) / 255)));
+    }
+    return h;
+  }
   for (let i = 0; i < BAR_COUNT; i++) {
-    const idx = Math.min(src.length - 1, Math.floor((i / BAR_COUNT) * src.length));
+    const idx = Math.min(n - 1, Math.floor((i / BAR_COUNT) * n));
     const v = src[idx];
     h[i] = Math.max(0.08, Math.min(1, (Number(v) / 255)));
   }
