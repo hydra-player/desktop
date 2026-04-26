@@ -33,13 +33,6 @@ struct PartialLoudnessPayload {
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct WaveformUpdatedPayload {
-    track_id: String,
-    is_partial: bool,
-}
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
 struct NormalizationStatePayload {
     engine: String,
     current_gain_db: Option<f32>,
@@ -528,6 +521,10 @@ const TRACK_STREAM_MIN_BUF_CAPACITY: usize = 1024 * 1024;
 const TRACK_STREAM_MAX_BUF_CAPACITY: usize = 32 * 1024 * 1024;
 /// Max bytes kept in memory to promote a completed streamed track for fast replay/seek recovery.
 const TRACK_STREAM_PROMOTE_MAX_BYTES: usize = 64 * 1024 * 1024;
+/// Hot/offline `psysonic-local://` files are read from disk for waveform/LUFS seeding — not the
+/// same heap pressure as retaining a full HTTP capture. FLAC/DSD tracks often exceed 64 MiB;
+/// using the stream-promote cap here skipped analysis entirely (empty seekbar).
+const LOCAL_FILE_PLAYBACK_SEED_MAX_BYTES: usize = 512 * 1024 * 1024;
 /// Consecutive body-stream failures tolerated for track streaming before abort.
 const TRACK_STREAM_MAX_RECONNECTS: u32 = 3;
 /// Seconds at stall threshold while paused before hard-disconnect.
@@ -1226,22 +1223,15 @@ async fn track_download_task(
         if !capture_over_limit && !capture.is_empty() {
             if let Some(track_id) = cache_track_id {
                 crate::app_deprintln!(
-                    "[stream] legacy stream: capture complete track_id={} capture_mib={:.2} — invoking full-track analysis (blocks until seed_from_bytes returns)",
+                    "[stream] legacy stream: capture complete track_id={} capture_mib={:.2} — full-track analysis (cpu-seed queue)",
                     track_id,
                     capture.len() as f64 / (1024.0 * 1024.0)
                 );
-                match crate::analysis_cache::seed_from_bytes(&app, &track_id, &capture) {
-                    Err(e) => crate::app_eprintln!("[analysis] track seed failed for {}: {}", track_id, e),
-                    Ok(crate::analysis_cache::SeedFromBytesOutcome::Upserted) => {
-                        let _ = app.emit(
-                            "analysis:waveform-updated",
-                            WaveformUpdatedPayload {
-                                track_id: track_id.clone(),
-                                is_partial: false,
-                            },
-                        );
-                    }
-                    Ok(_) => {}
+                let high = analysis_seed_high_priority_for_track(&app, &track_id);
+                if let Err(e) =
+                    crate::submit_analysis_cpu_seed(app.clone(), track_id.clone(), capture.clone(), high).await
+                {
+                    crate::app_eprintln!("[analysis] track seed failed for {}: {}", track_id, e);
                 }
             }
             *promote_cache_slot.lock().unwrap() = Some(PreloadedTrack {
@@ -1274,7 +1264,25 @@ async fn ranged_download_task(
     normalization_target_lufs: Arc<AtomicU32>,
     loudness_pre_analysis_attenuation_db: Arc<AtomicU32>,
     cache_track_id: Option<String>,
+    // When `Some`, ranged playback seeds on completion — defer HTTP backfill for that
+    // track; `None` for large files where ranged skips seed (needs backfill).
+    loudness_seed_hold: Option<Arc<Mutex<Option<(String, u64)>>>>,
 ) {
+    let _ranged_loudness_hold_clear = match (loudness_seed_hold.as_ref(), cache_track_id.as_ref()) {
+        (Some(slot), Some(tid)) => {
+            let t = tid.clone();
+            {
+                let mut g = slot.lock().unwrap();
+                *g = Some((t.clone(), gen));
+            }
+            Some(RangedLoudnessSeedHoldClear {
+                slot: Arc::clone(slot),
+                tid: t,
+                gen,
+            })
+        }
+        _ => None,
+    };
     let total_size = buf.lock().unwrap().len();
     let mut downloaded: usize = 0;
     let mut reconnects: u32 = 0;
@@ -1415,7 +1423,7 @@ async fn ranged_download_task(
     if downloaded == total_size && total_size > 0 && total_size <= TRACK_STREAM_PROMOTE_MAX_BYTES {
         if let Some(ref tid) = cache_track_id {
             crate::app_deprintln!(
-                "[stream] ranged: HTTP buffer full track_id={} size_mib={:.2} — cloning {} bytes then full-track analysis (blocks this download task until complete)",
+                "[stream] ranged: HTTP buffer full track_id={} size_mib={:.2} — cloning {} bytes then full-track analysis (cpu-seed queue; this task awaits completion)",
                 tid,
                 total_size as f64 / (1024.0 * 1024.0),
                 total_size
@@ -1430,18 +1438,9 @@ async fn ranged_download_task(
             );
         }
         if let Some(track_id) = cache_track_id {
-            match crate::analysis_cache::seed_from_bytes(&app, &track_id, &data) {
-                Err(e) => crate::app_eprintln!("[analysis] ranged seed failed for {}: {}", track_id, e),
-                Ok(crate::analysis_cache::SeedFromBytesOutcome::Upserted) => {
-                    let _ = app.emit(
-                        "analysis:waveform-updated",
-                        WaveformUpdatedPayload {
-                            track_id: track_id.clone(),
-                            is_partial: false,
-                        },
-                    );
-                }
-                Ok(_) => {}
+            let high = analysis_seed_high_priority_for_track(&app, &track_id);
+            if let Err(e) = crate::submit_analysis_cpu_seed(app.clone(), track_id.clone(), data.clone(), high).await {
+                crate::app_eprintln!("[analysis] ranged seed failed for {}: {}", track_id, e);
             }
         }
         *promote_cache_slot.lock().unwrap() = Some(PreloadedTrack { url, data });
@@ -2285,6 +2284,12 @@ pub struct AudioEngine {
     /// Subsonic song id last passed from JS with `audio_play` (trimmed). Used
     /// for loudness/waveform cache when the URL is `psysonic-local://…`.
     pub(crate) current_analysis_track_id: Arc<Mutex<Option<String>>>,
+    /// While a `RangedHttpSource` download task is filling the buffer for this
+    /// `(track_id, play_generation)`, skip `analysis_enqueue_seed_from_url` for the
+    /// same id — otherwise a parallel full GET + Symphonia competes with playback
+    /// decode (ALSA underruns). The ranged task clears this on exit; `gen` avoids a
+    /// late drop clearing a newer play of the same track.
+    pub(crate) ranged_loudness_seed_hold: Arc<Mutex<Option<(String, u64)>>>,
 }
 
 pub struct AudioCurrent {
@@ -2559,9 +2564,61 @@ pub fn create_engine() -> (AudioEngine, std::thread::JoinHandle<()>) {
         radio_state: Mutex::new(None),
         current_playback_url: Arc::new(Mutex::new(None)),
         current_analysis_track_id: Arc::new(Mutex::new(None)),
+        ranged_loudness_seed_hold: Arc::new(Mutex::new(None)),
     };
 
     (engine, thread)
+}
+
+/// Clears [`AudioEngine::ranged_loudness_seed_hold`] only if it still matches this play.
+struct RangedLoudnessSeedHoldClear {
+    slot: Arc<Mutex<Option<(String, u64)>>>,
+    tid: String,
+    gen: u64,
+}
+
+impl Drop for RangedLoudnessSeedHoldClear {
+    fn drop(&mut self) {
+        if let Ok(mut g) = self.slot.lock() {
+            if matches!(&*g, Some((t, gen)) if t == &self.tid && *gen == self.gen) {
+                *g = None;
+            }
+        }
+    }
+}
+
+/// `analysis_enqueue_seed_from_url` should bail while this track's ranged HTTP buffer
+/// is still filling — playback will seed on completion with the same bytes.
+pub(crate) fn ranged_loudness_backfill_should_defer(engine: &AudioEngine, track_id: &str) -> bool {
+    let tid = track_id.trim();
+    if tid.is_empty() {
+        return false;
+    }
+    let Ok(g) = engine.ranged_loudness_seed_hold.lock() else {
+        return false;
+    };
+    matches!(&*g, Some((t, _)) if t.as_str() == tid)
+}
+
+/// Subsonic id pinned for the playing source (`audio_play`). Used to prioritize
+/// HTTP loudness backfill for the track the user is listening to.
+pub(crate) fn analysis_track_id_is_current_playback(engine: &AudioEngine, track_id: &str) -> bool {
+    let needle = track_id.trim();
+    if needle.is_empty() {
+        return false;
+    }
+    let Ok(guard) = engine.current_analysis_track_id.lock() else {
+        return false;
+    };
+    let Some(cur) = guard.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
+        return false;
+    };
+    cur == needle
+}
+
+fn analysis_seed_high_priority_for_track(app: &AppHandle, track_id: &str) -> bool {
+    app.try_state::<AudioEngine>()
+        .is_some_and(|e| analysis_track_id_is_current_playback(&e, track_id))
 }
 
 fn audio_http_client(state: &AudioEngine) -> reqwest::Client {
@@ -2632,30 +2689,71 @@ fn same_playback_target(a_url: &str, b_url: &str) -> bool {
     }
 }
 
+#[derive(Clone, Copy)]
+struct ResolveLoudnessCacheOpts {
+    /// When false, skip `get_latest_waveform_for_track` — `audio_update_replay_gain` runs
+    /// on every partial-LUFS tick; loudness gain does not depend on waveform, and the extra
+    /// SQLite read was pure overhead on the IPC path.
+    touch_waveform: bool,
+    /// When false, omit `cache-miss` / `cache-invalid` debug lines (still log hits and errors).
+    log_soft_misses: bool,
+}
+
+impl Default for ResolveLoudnessCacheOpts {
+    fn default() -> Self {
+        Self {
+            touch_waveform: true,
+            log_soft_misses: true,
+        }
+    }
+}
+
 fn resolve_loudness_gain_from_cache(
     app: &AppHandle,
     url: &str,
     target_lufs: f32,
     logical_track_id: Option<&str>,
 ) -> Option<f32> {
+    resolve_loudness_gain_from_cache_impl(
+        app,
+        url,
+        target_lufs,
+        logical_track_id,
+        ResolveLoudnessCacheOpts::default(),
+    )
+}
+
+fn resolve_loudness_gain_from_cache_impl(
+    app: &AppHandle,
+    url: &str,
+    target_lufs: f32,
+    logical_track_id: Option<&str>,
+    opts: ResolveLoudnessCacheOpts,
+) -> Option<f32> {
     // Only a SQLite loudness row counts here. Ephemeral JS hints (`analysis:loudness-partial`)
     // are applied in `audio_update_replay_gain` via `loudness_gain_db_or_startup(..., true, _)`.
     let Some(track_id) = analysis_cache_track_id(logical_track_id, url) else {
-        crate::app_deprintln!(
-            "[normalization] resolve_loudness_gain source=no-identity url_len={}",
-            url.len()
-        );
+        if opts.log_soft_misses {
+            crate::app_deprintln!(
+                "[normalization] resolve_loudness_gain source=no-identity url_len={}",
+                url.len()
+            );
+        }
         return None;
     };
     let Some(cache) = app.try_state::<crate::analysis_cache::AnalysisCache>() else {
-        crate::app_deprintln!(
-            "[normalization] resolve_loudness_gain source=no-analysis-cache track_id={}",
-            track_id
-        );
+        if opts.log_soft_misses {
+            crate::app_deprintln!(
+                "[normalization] resolve_loudness_gain source=no-analysis-cache track_id={}",
+                track_id
+            );
+        }
         return None;
     };
-    // Also touch waveform row here so playback path verifies current context is present.
-    let _ = cache.get_latest_waveform_for_track(&track_id);
+    if opts.touch_waveform {
+        // Bind / preload: verify waveform context exists alongside loudness lookup.
+        let _ = cache.get_latest_waveform_for_track(&track_id);
+    }
     match cache.get_latest_loudness_for_track(&track_id) {
         Ok(Some(row)) if row.integrated_lufs.is_finite() => {
             let recommended = crate::analysis_cache::recommended_gain_for_target(
@@ -2674,18 +2772,22 @@ fn resolve_loudness_gain_from_cache(
             Some(recommended)
         }
         Ok(Some(row)) => {
-            crate::app_deprintln!(
-                "[normalization] resolve_loudness_gain source=cache-invalid track_id={} integrated_lufs={}",
-                track_id,
-                row.integrated_lufs
-            );
+            if opts.log_soft_misses {
+                crate::app_deprintln!(
+                    "[normalization] resolve_loudness_gain source=cache-invalid track_id={} integrated_lufs={}",
+                    track_id,
+                    row.integrated_lufs
+                );
+            }
             None
         }
         Ok(None) => {
-            crate::app_deprintln!(
-                "[normalization] resolve_loudness_gain source=cache-miss track_id={}",
-                track_id
-            );
+            if opts.log_soft_misses {
+                crate::app_deprintln!(
+                    "[normalization] resolve_loudness_gain source=cache-miss track_id={}",
+                    track_id
+                );
+            }
             None
         }
         Err(e) => {
@@ -2695,6 +2797,30 @@ fn resolve_loudness_gain_from_cache(
                 e
             );
             None
+        }
+    }
+}
+
+/// LUFS gain after a single `resolve_loudness_gain_from_cache` result (`None` = miss).
+/// Keeps `audio_update_replay_gain` / `audio_play` from resolving twice on the same URL.
+fn loudness_gain_db_after_resolve(
+    resolved_from_cache: Option<f32>,
+    pre_analysis_attenuation_db: f32,
+    allow_js_when_uncached: bool,
+    js_gain_db: Option<f32>,
+) -> Option<f32> {
+    let pre = pre_analysis_attenuation_db.clamp(-24.0, 0.0).min(0.0);
+    match resolved_from_cache {
+        Some(g) => Some(g),
+        None => {
+            if allow_js_when_uncached {
+                match js_gain_db {
+                    Some(r) if r.is_finite() => Some(r),
+                    _ => Some(pre),
+                }
+            } else {
+                Some(pre)
+            }
         }
     }
 }
@@ -2711,20 +2837,19 @@ fn loudness_gain_db_or_startup(
     allow_js_when_uncached: bool,
     js_gain_db: Option<f32>,
 ) -> Option<f32> {
-    let pre = pre_analysis_attenuation_db.clamp(-24.0, 0.0).min(0.0);
-    match resolve_loudness_gain_from_cache(app, url, target_lufs, logical_track_id) {
-        Some(g) => Some(g),
-        None => {
-            if allow_js_when_uncached {
-                match js_gain_db {
-                    Some(r) if r.is_finite() => Some(r),
-                    _ => Some(pre),
-                }
-            } else {
-                Some(pre)
-            }
-        }
-    }
+    let resolved = resolve_loudness_gain_from_cache_impl(
+        app,
+        url,
+        target_lufs,
+        logical_track_id,
+        ResolveLoudnessCacheOpts::default(),
+    );
+    loudness_gain_db_after_resolve(
+        resolved,
+        pre_analysis_attenuation_db,
+        allow_js_when_uncached,
+        js_gain_db,
+    )
 }
 
 #[inline]
@@ -2831,7 +2956,7 @@ async fn fetch_data(
 
 /// When playback uses full track bytes already in RAM (gapless `reuse_chained_bytes`,
 /// `preloaded`, or `stream_completed_cache` via `fetch_data`), the `psysonic-local`
-/// disk-read seed path never runs. Spawn the same `seed_from_bytes` work so waveform /
+/// disk-read seed path never runs. Submit the same full-buffer analysis via the cpu-seed queue so waveform /
 /// loudness SQLite can fill **offline** without `analysis_enqueue_seed_from_url` HTTP.
 fn spawn_analysis_seed_from_in_memory_bytes(
     app: &AppHandle,
@@ -2855,26 +2980,17 @@ fn spawn_analysis_seed_from_in_memory_bytes(
         track_id,
         bytes.len() as f64 / (1024.0 * 1024.0)
     );
+    let high = analysis_seed_high_priority_for_track(&app, &track_id);
     tokio::spawn(async move {
         if gen_arc.load(Ordering::SeqCst) != gen {
             return;
         }
-        match crate::analysis_cache::seed_from_bytes(&app, &track_id, &bytes) {
-            Err(e) => crate::app_eprintln!(
+        if let Err(e) = crate::submit_analysis_cpu_seed(app.clone(), track_id.clone(), bytes, high).await {
+            crate::app_eprintln!(
                 "[analysis] in-memory play path seed failed for {}: {}",
                 track_id,
                 e
-            ),
-            Ok(crate::analysis_cache::SeedFromBytesOutcome::Upserted) => {
-                let _ = app.emit(
-                    "analysis:waveform-updated",
-                    WaveformUpdatedPayload {
-                        track_id: track_id.clone(),
-                        is_partial: false,
-                    },
-                );
-            }
-            Ok(_) => {}
+            );
         }
     });
 }
@@ -3177,30 +3293,29 @@ pub async fn audio_play(
                     if gen_arc_seed.load(Ordering::SeqCst) != gen_seed {
                         return;
                     }
-                    if data.is_empty() || data.len() > TRACK_STREAM_PROMOTE_MAX_BYTES {
+                    if data.is_empty() || data.len() > LOCAL_FILE_PLAYBACK_SEED_MAX_BYTES {
+                        crate::app_deprintln!(
+                            "[stream] psysonic-local: skip analysis seed track_id={} bytes={} (over {} MiB cap)",
+                            seed_id,
+                            data.len(),
+                            LOCAL_FILE_PLAYBACK_SEED_MAX_BYTES / (1024 * 1024)
+                        );
                         return;
                     }
                     crate::app_deprintln!(
-                        "[stream] psysonic-local: file read complete track_id={} size_mib={:.2} — invoking full-track analysis (async)",
+                        "[stream] psysonic-local: file read complete track_id={} size_mib={:.2} — full-track analysis (cpu-seed queue)",
                         seed_id,
                         data.len() as f64 / (1024.0 * 1024.0)
                     );
-                    match crate::analysis_cache::seed_from_bytes(&app_seed, &seed_id, &data) {
-                        Err(e) => crate::app_eprintln!(
+                    let high = analysis_seed_high_priority_for_track(&app_seed, &seed_id);
+                    if let Err(e) =
+                        crate::submit_analysis_cpu_seed(app_seed.clone(), seed_id.clone(), data, high).await
+                    {
+                        crate::app_eprintln!(
                             "[analysis] local-file seed failed for {}: {}",
                             seed_id,
                             e
-                        ),
-                        Ok(crate::analysis_cache::SeedFromBytesOutcome::Upserted) => {
-                            let _ = app_seed.emit(
-                                "analysis:waveform-updated",
-                                WaveformUpdatedPayload {
-                                    track_id: seed_id.clone(),
-                                    is_partial: false,
-                                },
-                            );
-                        }
-                        Ok(_) => {}
+                        );
                     }
                 });
             }
@@ -3250,6 +3365,8 @@ pub async fn audio_play(
                 let buf = Arc::new(Mutex::new(vec![0u8; total_usize]));
                 let downloaded_to = Arc::new(AtomicUsize::new(0));
                 let done = Arc::new(AtomicBool::new(false));
+                let loudness_hold_for_defer = (total_usize <= TRACK_STREAM_PROMOTE_MAX_BYTES)
+                    .then_some(state.ranged_loudness_seed_hold.clone());
                 tokio::spawn(ranged_download_task(
                     gen,
                     state.generation.clone(),
@@ -3266,6 +3383,7 @@ pub async fn audio_play(
                     state.normalization_target_lufs.clone(),
                     state.loudness_pre_analysis_attenuation_db.clone(),
                     cache_id_for_tasks.clone(),
+                    loudness_hold_for_defer,
                 ));
                 let reader = RangedHttpSource {
                     buf,
@@ -3348,26 +3466,19 @@ pub async fn audio_play(
     }
 
     let target_lufs = f32::from_bits(state.normalization_target_lufs.load(Ordering::Relaxed));
-    let resolved_loudness_gain_db = resolve_loudness_gain_from_cache(
+    let cache_loudness = resolve_loudness_gain_from_cache(
         &app,
         &url,
         target_lufs,
         logical_trim.as_deref(),
     );
+    let resolved_loudness_gain_db = cache_loudness;
     let norm_mode = state.normalization_engine.load(Ordering::Relaxed);
     let pre_analysis_db = loudness_pre_analysis_db_for_engine(&state);
     let startup_loudness_gain_db = if norm_mode == 2 {
-        loudness_gain_db_or_startup(
-            &app,
-            &url,
-            target_lufs,
-            logical_trim.as_deref(),
-            pre_analysis_db,
-            false,
-            loudness_gain_db,
-        )
+        loudness_gain_db_after_resolve(cache_loudness, pre_analysis_db, false, loudness_gain_db)
     } else {
-        resolved_loudness_gain_db
+        cache_loudness
     };
     let (gain_linear, effective_volume) = compute_gain(
         norm_mode,
@@ -4284,24 +4395,23 @@ pub fn audio_update_replay_gain(
     // If `current_playback_url` is not pinned yet, still honour JS `loudness_gain_db`
     // so `loudness_ui_current_gain_db` can show a number (otherwise `and_then`
     // drops the requested gain entirely).
-    let resolved_loudness_gain_db = url_for_loudness
-        .as_deref()
-        .and_then(|u| {
-            resolve_loudness_gain_from_cache(
-                &app,
-                u,
-                target_lufs,
-                logical_for_loudness.as_deref(),
-            )
-        })
-        .or(loudness_gain_db);
+    let cache_loudness = url_for_loudness.as_deref().and_then(|u| {
+        resolve_loudness_gain_from_cache_impl(
+            &app,
+            u,
+            target_lufs,
+            logical_for_loudness.as_deref(),
+            ResolveLoudnessCacheOpts {
+                touch_waveform: false,
+                log_soft_misses: false,
+            },
+        )
+    });
+    let resolved_loudness_gain_db = cache_loudness.or(loudness_gain_db);
     let effective_loudness_db = if norm_mode == 2 {
         match url_for_loudness.as_deref() {
-            Some(u) => loudness_gain_db_or_startup(
-                &app,
-                u,
-                target_lufs,
-                logical_for_loudness.as_deref(),
+            Some(_u) => loudness_gain_db_after_resolve(
+                cache_loudness,
                 pre_analysis_db,
                 true,
                 loudness_gain_db,
@@ -4449,18 +4559,9 @@ pub async fn audio_preload(
             track_id,
             data.len() as f64 / (1024.0 * 1024.0)
         );
-        match crate::analysis_cache::seed_from_bytes(&app, &track_id, &data) {
-            Err(e) => crate::app_eprintln!("[analysis] preload seed failed for {}: {}", track_id, e),
-            Ok(crate::analysis_cache::SeedFromBytesOutcome::Upserted) => {
-                let _ = app.emit(
-                    "analysis:waveform-updated",
-                    WaveformUpdatedPayload {
-                        track_id: track_id.clone(),
-                        is_partial: false,
-                    },
-                );
-            }
-            Ok(_) => {}
+        let high = analysis_track_id_is_current_playback(&state, &track_id);
+        if let Err(e) = crate::submit_analysis_cpu_seed(app.clone(), track_id.clone(), data.clone(), high).await {
+            crate::app_eprintln!("[analysis] preload seed failed for {}: {}", track_id, e);
         }
     }
     let url_for_emit = url.clone();

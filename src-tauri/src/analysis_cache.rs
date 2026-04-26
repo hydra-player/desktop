@@ -1,7 +1,6 @@
-use std::collections::HashSet;
 use std::path::PathBuf;
 use std::io::Cursor;
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use ebur128::{EbuR128, Mode as Ebur128Mode};
@@ -316,7 +315,7 @@ pub fn recommended_gain_for_target(integrated_lufs: f64, true_peak: f64, target_
     recommended_gain_db.clamp(-24.0, 24.0)
 }
 
-/// Result of [`seed_from_bytes`]: callers use it to avoid redundant UI events.
+/// Result of [`seed_from_bytes_execute`] / CPU seed queue: callers use it to avoid redundant UI events.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SeedFromBytesOutcome {
     /// Wrote waveform (and loudness when PCM decode succeeded).
@@ -325,63 +324,15 @@ pub enum SeedFromBytesOutcome {
     SkippedWaveformCacheHit,
     /// `AnalysisCache` was not registered on the app handle.
     SkippedNoAnalysisCache,
-    /// Another seed for the same `track_id` is already running on a different
-    /// thread; this caller bails out so the winner's result is used.
-    SkippedConcurrent,
 }
 
-/// Track-ids whose `seed_from_bytes` is currently running. There are six
-/// independent producers (legacy stream capture, ranged stream completion,
-/// audio_preload, psysonic-local file read, in-memory play paths, and the
-/// frontend-triggered `analysis_enqueue_seed_from_url` backfill) that can
-/// fire for the same id concurrently when LUFS is on. Without this guard
-/// the same MP3 gets fully decoded by Symphonia + EBU R128 twice — ~30 s
-/// of wasted CPU per cache-miss track. First caller wins; the rest return
-/// `SkippedConcurrent` immediately.
-static SEEDS_IN_FLIGHT: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
-
-fn seeds_in_flight() -> &'static Mutex<HashSet<String>> {
-    SEEDS_IN_FLIGHT.get_or_init(|| Mutex::new(HashSet::new()))
-}
-
-/// RAII helper: removes the in-flight marker on drop. Survives panics and
-/// any early `?`-returns inside `seed_from_bytes`.
-struct SeedInFlightGuard {
-    track_id: String,
-}
-
-impl Drop for SeedInFlightGuard {
-    fn drop(&mut self) {
-        if let Some(set) = SEEDS_IN_FLIGHT.get() {
-            if let Ok(mut g) = set.lock() {
-                g.remove(&self.track_id);
-            }
-        }
-    }
-}
-
-pub fn seed_from_bytes(
+/// Full Symphonia + (optional) EBU decode for waveform + loudness. Call only from the
+/// single CPU-seed worker in `lib.rs` (`spawn_blocking`) so at most one heavy decode runs.
+pub fn seed_from_bytes_execute(
     app: &tauri::AppHandle,
     track_id: &str,
     bytes: &[u8],
 ) -> Result<SeedFromBytesOutcome, String> {
-    // Reserve the slot for this track_id. Atomic under the mutex: insert()
-    // returns false if the id was already present.
-    let track_key = track_id.to_string();
-    let claimed = {
-        let mut guard = seeds_in_flight().lock().map_err(|_| "seeds-in-flight lock poisoned".to_string())?;
-        guard.insert(track_key.clone())
-    };
-    if !claimed {
-        crate::app_deprintln!(
-            "[analysis] full-track analysis skip track_id={} reason=concurrent_seed_in_flight bytes={}",
-            track_id,
-            bytes.len()
-        );
-        return Ok(SeedFromBytesOutcome::SkippedConcurrent);
-    }
-    let _flight_guard = SeedInFlightGuard { track_id: track_key };
-
     let started = Instant::now();
     let Some(cache) = app.try_state::<AnalysisCache>() else {
         crate::app_deprintln!(

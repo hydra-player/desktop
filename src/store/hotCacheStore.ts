@@ -20,7 +20,13 @@ interface HotCacheState {
   /** Persisted map `${serverId}:${trackId}` → file meta */
   entries: Record<string, HotCacheEntry>;
   getLocalUrl: (trackId: string, serverId: string) => string | null;
-  setEntry: (trackId: string, serverId: string, localPath: string, sizeBytes: number) => void;
+  setEntry: (
+    trackId: string,
+    serverId: string,
+    localPath: string,
+    sizeBytes: number,
+    debugSource?: string,
+  ) => void;
   /** Bump LRU when the user actually plays this track (if it is in the hot cache). */
   touchPlayed: (trackId: string, serverId: string) => void;
   removeEntry: (trackId: string, serverId: string) => void;
@@ -51,6 +57,29 @@ function lruStamp(meta: HotCacheEntry | undefined): number {
   return meta.lastPlayedAt ?? meta.cachedAt ?? 0;
 }
 
+function evictionReasonForTier(tier: number): string {
+  const labels: Record<number, string> = {
+    0: 'inactive-server',
+    1: 'not-in-queue',
+    2: 'ahead-of-protected-window',
+    3: 'behind-current-in-queue',
+  };
+  return labels[tier] ?? `tier-${tier}`;
+}
+
+/** Settings → Logging → Debug, same as `emitNormalizationDebug` / lucky-mix. Dynamic `authStore` import avoids a static cycle (auth → player → hot-cache). */
+function hotCacheFrontendDebug(payload: Record<string, unknown>): void {
+  void import('./authStore')
+    .then(({ useAuthStore }) => {
+      if (useAuthStore.getState().loggingMode !== 'debug') return;
+      return invoke('frontend_debug_log', {
+        scope: 'hot-cache',
+        message: JSON.stringify(payload),
+      });
+    })
+    .catch(() => {});
+}
+
 export const useHotCacheStore = create<HotCacheState>()(
   persist(
     (set, get) => ({
@@ -62,7 +91,7 @@ export const useHotCacheStore = create<HotCacheState>()(
         return `psysonic-local://${e.localPath}`;
       },
 
-      setEntry: (trackId, serverId, localPath, sizeBytes) => {
+      setEntry: (trackId, serverId, localPath, sizeBytes, debugSource) => {
         const now = Date.now();
         set(s => ({
           entries: {
@@ -75,6 +104,13 @@ export const useHotCacheStore = create<HotCacheState>()(
             },
           },
         }));
+        hotCacheFrontendDebug({
+          event: 'index-add',
+          trackId,
+          serverId,
+          sizeBytes,
+          source: debugSource ?? 'unknown',
+        });
       },
 
       touchPlayed: (trackId, serverId) => {
@@ -96,6 +132,12 @@ export const useHotCacheStore = create<HotCacheState>()(
           const next = { ...s.entries };
           delete next[entryKey(serverId, trackId)];
           return { entries: next };
+        });
+        hotCacheFrontendDebug({
+          event: 'index-remove',
+          trackId,
+          serverId,
+          reason: 'explicit-removeEntry',
         });
         emitAnalysisStorageChanged({ trackId, reason: 'hotcache-delete' });
       },
@@ -157,8 +199,31 @@ export const useHotCacheStore = create<HotCacheState>()(
           return a.lru - b.lru;
         });
 
-        for (const { key } of cands) {
+        if (cands.length === 0) {
+          hotCacheFrontendDebug({
+            event: 'evict-no-candidates',
+            sumBytes: sum,
+            maxBytes,
+            queueIndex,
+            entryKeys: keys.length,
+            reason: 'all-protected-or-grace-or-parse-fail',
+          });
+          return;
+        }
+
+        hotCacheFrontendDebug({
+          event: 'evict-start',
+          sumBytes: sum,
+          maxBytes,
+          queueIndex,
+          protectLo,
+          protectHi,
+          candidateCount: cands.length,
+        });
+
+        for (const cand of cands) {
           if (sum <= maxBytes) break;
+          const { key, tier } = cand;
           const meta = entries[key];
           if (!meta) continue;
           const parsed = parseKey(key);
@@ -166,7 +231,24 @@ export const useHotCacheStore = create<HotCacheState>()(
           await invoke('delete_hot_cache_track', {
             localPath: meta.localPath,
             customDir: hotCacheCustomDir || null,
-          }).catch(() => {});
+          }).catch((e: unknown) => {
+            hotCacheFrontendDebug({
+              event: 'evict-disk-delete-failed',
+              trackId: parsed.trackId,
+              serverId: parsed.serverId,
+              error: String(e),
+            });
+          });
+          hotCacheFrontendDebug({
+            event: 'evict-remove',
+            trackId: parsed.trackId,
+            serverId: parsed.serverId,
+            reason: `budget:${evictionReasonForTier(tier)}`,
+            tier,
+            bytes: meta.sizeBytes,
+            sumBytesAfter: sum - (meta.sizeBytes || 0),
+            maxBytes,
+          });
           sum -= meta.sizeBytes || 0;
           delete entries[key];
           emitAnalysisStorageChanged({ trackId: parsed.trackId, reason: 'hotcache-delete' });
@@ -176,6 +258,10 @@ export const useHotCacheStore = create<HotCacheState>()(
       },
 
       clearAllDisk: async (customDir: string | null) => {
+        hotCacheFrontendDebug({
+          event: 'purge-all',
+          customDir: customDir && customDir.length > 0 ? '(custom)' : 'default',
+        });
         await invoke('purge_hot_cache', { customDir: customDir || null }).catch(() => {});
         set({ entries: {} });
         emitAnalysisStorageChanged({ trackId: null, reason: 'hotcache-purge' });

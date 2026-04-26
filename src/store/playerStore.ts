@@ -5,6 +5,7 @@ import { listen } from '@tauri-apps/api/event';
 import { showToast } from '../utils/toast';
 import { buildCoverArtUrl, buildStreamUrl, getPlayQueue, savePlayQueue, reportNowPlaying, scrobbleSong, SubsonicSong, getSong, getRandomSongs, getSimilarSongs2, getTopSongs, InternetRadioStation, setRating } from '../api/subsonic';
 import { resolvePlaybackUrl, streamUrlTrackId, getPlaybackSourceKind, type PlaybackSourceKind } from '../utils/resolvePlaybackUrl';
+import { redactSubsonicUrlForLog } from '../utils/redactSubsonicUrl';
 import { setDeferHotCachePrefetch } from '../utils/hotCacheGate';
 import { lastfmScrobble, lastfmUpdateNowPlaying, lastfmLoveTrack, lastfmUnloveTrack, lastfmGetTrackLoved, lastfmGetAllLovedTracks } from '../api/lastfm';
 import { useAuthStore } from './authStore';
@@ -608,8 +609,16 @@ function touchHotCacheOnPlayback(trackId: string, serverId: string) {
   useHotCacheStore.getState().touchPlayed(trackId, serverId);
 }
 
-/** Coalesce concurrent `analysis_get_waveform_for_track` for one id (StrictMode double mount, init + queue restore). */
-const waveformRefreshInflight = new Map<string, Promise<void>>();
+/** Last-write-wins generation per track: avoids applying a stale empty waveform read when
+ * `analysis:waveform-updated` bumps gen after SQLite commit while an older `analysis_get_waveform_for_track`
+ * is still in flight. Gen is bumped only on explicit invalidation (waveform-updated, analysis storage),
+ * not on every `refreshWaveformForTrack` call — otherwise bursts (Lucky Mix, queue) cancel each other. */
+const waveformRefreshGenByTrackId: Record<string, number> = {};
+
+function bumpWaveformRefreshGen(trackId: string) {
+  if (!trackId) return;
+  waveformRefreshGenByTrackId[trackId] = (waveformRefreshGenByTrackId[trackId] ?? 0) + 1;
+}
 
 /** Coalesce concurrent `analysis_get_loudness_for_track` for one id+mode pair. The
  *  analysis:waveform-updated listener fires refreshWaveform + refreshLoudness in
@@ -740,33 +749,25 @@ async function reseedLoudnessForTrackId(trackId: string) {
 
 async function refreshWaveformForTrack(trackId: string) {
   if (!trackId) return;
-  let job = waveformRefreshInflight.get(trackId);
-  if (!job) {
-    const p = (async () => {
-      try {
-        const row = await invoke<WaveformCachePayload | null>('analysis_get_waveform_for_track', { trackId });
-        // Never apply bins for a non-current track (e.g. gapless byte-preload fetches the neighbour).
-        if (usePlayerStore.getState().currentTrack?.id !== trackId) return;
-        const bins = row ? coerceWaveformBins(row.bins) : null;
-        if (!bins || bins.length === 0) {
-          usePlayerStore.setState({
-            waveformBins: null,
-          });
-          return;
-        }
-        usePlayerStore.setState({
-          waveformBins: bins,
-        });
-      } catch {
-        // best-effort; seekbar falls back to placeholder waveform
-      }
-    })();
-    job = p.finally(() => {
-      waveformRefreshInflight.delete(trackId);
+  const gen = waveformRefreshGenByTrackId[trackId] ?? 0;
+  try {
+    const row = await invoke<WaveformCachePayload | null>('analysis_get_waveform_for_track', { trackId });
+    if ((waveformRefreshGenByTrackId[trackId] ?? 0) !== gen) return;
+    // Never apply bins for a non-current track (e.g. gapless byte-preload fetches the neighbour).
+    if (usePlayerStore.getState().currentTrack?.id !== trackId) return;
+    const bins = row ? coerceWaveformBins(row.bins) : null;
+    if (!bins || bins.length === 0) {
+      usePlayerStore.setState({
+        waveformBins: null,
+      });
+      return;
+    }
+    usePlayerStore.setState({
+      waveformBins: bins,
     });
-    waveformRefreshInflight.set(trackId, job);
+  } catch {
+    // best-effort; seekbar falls back to placeholder waveform
   }
-  await job;
 }
 
 /** When `syncPlayingEngine` is false, only update `cachedLoudnessGainByTrackId` (e.g. queue neighbour) — do not call `audio_update_replay_gain` for the already-playing track. */
@@ -805,7 +806,11 @@ async function runRefreshLoudnessForTrack(trackId: string, syncEngine: boolean):
         analysisBackfillInFlightByTrackId[trackId] = true;
         analysisBackfillAttemptsByTrackId[trackId] = attempts + 1;
         const url = buildStreamUrl(trackId);
-        emitNormalizationDebug('backfill:enqueue', { trackId, url, attempt: attempts + 1 });
+        emitNormalizationDebug('backfill:enqueue', {
+          trackId,
+          url: redactSubsonicUrlForLog(url),
+          attempt: attempts + 1,
+        });
         void invoke('analysis_enqueue_seed_from_url', { trackId, url })
           .then(() => emitNormalizationDebug('backfill:queued', { trackId, attempt: attempts + 1 }))
           .catch((e) => emitNormalizationDebug('backfill:error', { trackId, error: String(e) }))
@@ -884,7 +889,7 @@ async function promoteCompletedStreamToHotCache(track: Track, serverId: string, 
       },
     );
     if (!res || !res.path) return;
-    useHotCacheStore.getState().setEntry(track.id, serverId, res.path, res.size || 0);
+    useHotCacheStore.getState().setEntry(track.id, serverId, res.path, res.size || 0, 'stream-promote');
   } catch {
     // best-effort promotion; normal hot-cache prefetch remains fallback
   }
@@ -1300,6 +1305,7 @@ export function initAudioListeners(): () => void {
       const currentRaw = usePlayerStore.getState().currentTrack?.id;
       const currentId = currentRaw ? normalizeAnalysisTrackId(currentRaw) : null;
       if (currentId && payloadTrackId === currentId) {
+        bumpWaveformRefreshGen(currentRaw!);
         void refreshWaveformForTrack(currentRaw!);
         void refreshLoudnessForTrack(currentId);
         emitNormalizationDebug('backfill:applied', { trackId: currentId });
@@ -1468,6 +1474,7 @@ export function initAudioListeners(): () => void {
     const currentId = usePlayerStore.getState().currentTrack?.id;
     if (!currentId) return;
     if (detail.trackId && detail.trackId !== currentId) return;
+    bumpWaveformRefreshGen(currentId);
     void refreshWaveformForTrack(currentId);
     void refreshLoudnessForTrack(currentId);
   });
