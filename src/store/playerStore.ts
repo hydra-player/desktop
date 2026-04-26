@@ -271,25 +271,34 @@ type WaveformCachePayload = {
   updatedAt: number;
 };
 
+/** v4: `500` peak + `500` mean-abs = `1000` bytes. Legacy single curve: `500` (treated as mean=max). */
+function waveformBlobLenOk(len: number): boolean {
+  return len === 500 || len === 1000;
+}
+
 /** `Vec<u8>` from Rust often arrives as `Uint8Array`, not `Array.isArray`. */
 function coerceWaveformBins(bins: unknown): number[] | null {
   if (bins == null) return null;
+  let raw: number[] | null = null;
   if (Array.isArray(bins)) {
-    return bins.length > 0 ? bins.map(x => Number(x) & 255) : null;
-  }
-  if (bins instanceof Uint8Array) {
-    return bins.length > 0 ? Array.from(bins) : null;
-  }
-  if (typeof bins === 'object' && 'length' in bins && typeof (bins as { length: unknown }).length === 'number') {
+    if (bins.length === 0) return null;
+    raw = bins.map(x => Number(x) & 255);
+  } else if (bins instanceof Uint8Array) {
+    if (bins.length === 0) return null;
+    raw = Array.from(bins);
+  } else if (typeof bins === 'object' && 'length' in bins && typeof (bins as { length: unknown }).length === 'number') {
     const len = (bins as { length: number }).length;
     if (len === 0) return null;
     try {
-      return Array.from(bins as ArrayLike<number>).map(x => Number(x) & 255);
+      raw = Array.from(bins as ArrayLike<number>).map(x => Number(x) & 255);
     } catch {
       return null;
     }
+  } else {
+    return null;
   }
-  return null;
+  if (!waveformBlobLenOk(raw.length)) return null;
+  return raw;
 }
 
 type LoudnessCachePayload = {
