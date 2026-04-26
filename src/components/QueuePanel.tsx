@@ -1,6 +1,12 @@
 import React, { useState, useRef, useMemo, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Track, usePlayerStore, songToTrack } from '../store/playerStore';
+import {
+  Track,
+  usePlayerStore,
+  songToTrack,
+  registerQueueListScrollTopReader,
+  consumePendingQueueListScrollTop,
+} from '../store/playerStore';
 import { useOrbitStore } from '../store/orbitStore';
 import OrbitGuestQueue from './OrbitGuestQueue';
 import OrbitQueueHead from './OrbitQueueHead';
@@ -413,6 +419,21 @@ function QueuePanelHostOrSolo() {
   const psyDragFromIdxRef = useRef<number | null>(null);
 
   const queueListRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    registerQueueListScrollTopReader(() => queueListRef.current?.scrollTop);
+    return () => registerQueueListScrollTopReader(null);
+  }, []);
+
+  useLayoutEffect(() => {
+    const top = consumePendingQueueListScrollTop();
+    if (top === undefined) return;
+    const el = queueListRef.current;
+    if (!el) return;
+    suppressNextAutoScrollRef.current = true;
+    el.scrollTop = top;
+    el.dispatchEvent(new Event('scroll', { bubbles: false }));
+  }, [queue, queueIndex, currentTrack?.id]);
 
   const asideRef = useRef<HTMLElement>(null);
 

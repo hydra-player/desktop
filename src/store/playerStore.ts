@@ -362,15 +362,38 @@ type QueueUndoSnapshot = {
   currentTime?: number;
   progress?: number;
   isPlaying?: boolean;
+  /** Main queue panel list `scrollTop` when the snapshot was taken. */
+  queueListScrollTop?: number;
 };
 const queueUndoStack: QueueUndoSnapshot[] = [];
 const queueRedoStack: QueueUndoSnapshot[] = [];
+
+/** QueuePanel registers a reader so undo snapshots capture list scroll position. */
+let queueListScrollTopReader: (() => number | undefined) | null = null;
+
+export function registerQueueListScrollTopReader(reader: (() => number | undefined) | null): void {
+  queueListScrollTopReader = reader;
+}
+
+function readQueueListScrollTopForUndo(): number | undefined {
+  return queueListScrollTopReader?.() ?? undefined;
+}
+
+/** Set in applyQueueHistorySnapshot; QueuePanel consumes in useLayoutEffect after commit. */
+let pendingQueueListScrollTop: number | undefined;
+
+export function consumePendingQueueListScrollTop(): number | undefined {
+  const v = pendingQueueListScrollTop;
+  pendingQueueListScrollTop = undefined;
+  return v;
+}
 
 function shallowCloneQueueTracks(queue: Track[]): Track[] {
   return queue.map(t => ({ ...t }));
 }
 
 function queueUndoSnapshotFromState(s: PlayerState): QueueUndoSnapshot {
+  const scrollTop = readQueueListScrollTopForUndo();
   return {
     queue: shallowCloneQueueTracks(s.queue),
     queueIndex: s.queueIndex,
@@ -378,6 +401,7 @@ function queueUndoSnapshotFromState(s: PlayerState): QueueUndoSnapshot {
     currentTime: s.currentTime,
     progress: s.progress,
     isPlaying: s.isPlaying,
+    ...(scrollTop !== undefined ? { queueListScrollTop: scrollTop } : {}),
   };
 }
 
@@ -1926,6 +1950,9 @@ export const usePlayerStore = create<PlayerState>()(
           invoke('audio_stop').catch(console.error);
           isAudioPaused = false;
           syncQueueToServer(nextQueue, null, 0);
+          if (typeof snap.queueListScrollTop === 'number' && Number.isFinite(snap.queueListScrollTop)) {
+            pendingQueueListScrollTop = Math.max(0, snap.queueListScrollTop);
+          }
           return true;
         }
 
@@ -1945,6 +1972,9 @@ export const usePlayerStore = create<PlayerState>()(
             atSeconds: tRestore,
             wantPlaying: playingRestore,
           });
+        }
+        if (typeof snap.queueListScrollTop === 'number' && Number.isFinite(snap.queueListScrollTop)) {
+          pendingQueueListScrollTop = Math.max(0, snap.queueListScrollTop);
         }
         syncQueueToServer(nextQueue, nextTrack, tRestore);
         return true;
