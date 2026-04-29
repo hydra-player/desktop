@@ -1172,7 +1172,7 @@ export default function DeviceSync() {
                   {migrationOldTemplate ? (
                     t('deviceSync.migrateNothingToDo', { defaultValue: 'All existing files already match the new scheme — nothing to do.' })
                   ) : (
-                    t('deviceSync.migrateNoTemplate', { defaultValue: 'No legacy filename template found on the device. Migration only applies when the stick was synced with a Psysonic version that supported custom templates.' })
+                    t('deviceSync.migrateNoTemplate', { defaultValue: 'No legacy filename template found on the device. Migration only applies when the device was synced with a Hydra-compatible version that supported custom templates.' })
                   )}
                 </div>
               )}

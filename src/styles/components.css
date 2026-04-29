@@ -3884,7 +3884,7 @@
   gap: var(--space-4);
 }
 
-.about-psysonic-logo-lol-hit {
+.about-hydra-logo-lol-hit {
   flex-shrink: 0;
   margin: 0;
   padding: 0;
@@ -3895,12 +3895,12 @@
   line-height: 0;
 }
 
-.about-psysonic-logo-lol-hit:focus-visible {
+.about-hydra-logo-lol-hit:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 
-.about-psysonic-lol-close {
+.about-hydra-lol-close {
   position: fixed;
   top: max(12px, env(safe-area-inset-top, 0px));
   right: max(12px, env(safe-area-inset-right, 0px));
@@ -3923,18 +3923,18 @@
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.about-psysonic-lol-close:hover {
+.about-hydra-lol-close:hover {
   background: #334155;
   border-color: #f8fafc;
   color: #fff;
 }
 
-.about-psysonic-lol-close:focus-visible {
+.about-hydra-lol-close:focus-visible {
   outline: 3px solid #38bdf8;
   outline-offset: 2px;
 }
 
-.about-psysonic-lol-overlay {
+.about-hydra-lol-overlay {
   position: fixed;
   inset: 0;
   z-index: 100000;
@@ -3948,7 +3948,7 @@
 }
 
 /* Opaque panel + fixed palette so contrast holds on every app theme. */
-.about-psysonic-lol-panel {
+.about-hydra-lol-panel {
   width: min(26rem, calc(100vw - 2.5rem));
   max-width: 100%;
   display: flex;
@@ -3967,7 +3967,7 @@
   --logo-color-end: #38bdf8;
 }
 
-.about-psysonic-lol-logo-slot {
+.about-hydra-lol-logo-slot {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3978,29 +3978,38 @@
   box-shadow: none;
 }
 
-.about-psysonic-lol-logo-mark {
+.about-hydra-lol-logo-mark {
   flex-shrink: 0;
   filter: drop-shadow(0 2px 16px rgba(0, 0, 0, 0.55));
 }
 
-.about-psysonic-lol-copy {
+.about-hydra-lol-logo-mark .hydra-wordmark-mark {
+  width: clamp(3rem, 12vw, 4.75rem);
+  height: clamp(3rem, 12vw, 4.75rem);
+}
+
+.about-hydra-lol-logo-mark .hydra-wordmark-text {
+  font-size: clamp(2.5rem, 11vw, 4.5rem);
+}
+
+.about-hydra-lol-copy {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   color: #f8fafc;
 }
 
-.about-psysonic-lol-title {
+.about-hydra-lol-title {
   margin: 0;
   font-family: var(--font-display);
   font-size: clamp(1.5rem, 4.5vw, 1.9rem);
   font-weight: 700;
   line-height: 1.15;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: #ffffff;
 }
 
-.about-psysonic-lol-lede {
+.about-hydra-lol-lede {
   margin: 0;
   font-size: clamp(0.9rem, 2.4vw, 1rem);
   line-height: 1.55;
@@ -4010,7 +4019,7 @@
   text-wrap: balance;
 }
 
-.about-psysonic-lol-inline-link {
+.about-hydra-lol-inline-link {
   display: inline;
   margin: 0;
   padding: 0;
@@ -4025,11 +4034,11 @@
   text-underline-offset: 3px;
 }
 
-.about-psysonic-lol-inline-link:hover {
+.about-hydra-lol-inline-link:hover {
   color: #7dd3fc;
 }
 
-.about-psysonic-lol-signoff {
+.about-hydra-lol-signoff {
   margin: 0;
   font-size: 0.875rem;
   line-height: 1.45;
@@ -4037,7 +4046,7 @@
   font-style: italic;
 }
 
-.about-psysonic-lol-ps {
+.about-hydra-lol-ps {
   margin: 0;
   font-size: 0.8125rem;
   line-height: 1.45;
@@ -4134,6 +4143,21 @@
   display: flex;
   justify-content: center;
   margin-bottom: var(--space-5);
+}
+
+.login-hydra-logo {
+  --logo-color-start: var(--text-primary);
+  --logo-color-end: var(--ctp-sky);
+  gap: 12px;
+}
+
+.login-hydra-logo .hydra-wordmark-mark {
+  width: 54px;
+  height: 54px;
+}
+
+.login-hydra-logo .hydra-wordmark-text {
+  font-size: 34px;
 }
 
 .login-lang-picker {

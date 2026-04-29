@@ -51,7 +51,7 @@ function sanitizeFilename(name: string): string {
     .substring(0, 200) || 'download';
 }
 
-/** Psysonic smart playlists (Navidrome); not valid targets for manual add-to-playlist. */
+/** Navidrome smart playlists; not valid targets for manual add-to-playlist. */
 const SMART_PLAYLIST_PREFIX = 'psy-smart-';
 
 function isSmartPlaylistName(name: string | undefined | null): boolean {

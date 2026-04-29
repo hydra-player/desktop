@@ -1,7 +1,7 @@
 {
   "$schema": "./schema.json",
-  "project": "Hydra Player Desktop",
-  "purpose": "Generate consistent React UI scaffolds for the Hydra Player desktop app.",
+  "project": "Hydra Desktop",
+  "purpose": "Generate consistent React UI scaffolds for the Hydra desktop app.",
   "defaultStack": {
     "framework": "react",
     "language": "typescript",
@@ -19,6 +19,7 @@
     "AGENTS.md",
     "CLAUDE.md",
     "docs/ai/uncodixfy.md",
+    "docs/design/hydra-branding.md",
     "src/App.tsx",
     "src/components/Sidebar.tsx",
     "src/components/PlayerBar.tsx",
@@ -37,13 +38,17 @@
   },
   "designRules": [
     "Build the usable desktop app surface, not a marketing landing page.",
+    "Use Hydra as the product name in UI copy; use lowercase hydra only for the wordmark.",
+    "Use the Hydra default palette for new first-run UI: neutral gray surfaces, purple highlights, and sparse prism/rainbow accents.",
+    "Use the Hydra mark/wordmark from src/components/HydraLogo.tsx for product branding; do not introduce Psysonic logos in new UI.",
     "Reuse existing CSS variables and layout conventions before adding new styling.",
     "Use lucide-react icons for common actions and controls.",
     "Keep cards at 8px border radius or less unless matching an existing local pattern.",
     "Do not create nested cards or decorative gradient/orb backgrounds.",
     "Every generated stateful surface must include loading, empty, error, and success states where applicable.",
     "Every generated implementation plan must include automated tests or a manual verification checklist.",
-    "Do not add telemetry, analytics, account creation, or external-service assumptions."
+    "Do not add telemetry, analytics, account creation, or external-service assumptions.",
+    "Do not rename compatibility-sensitive storage keys, custom share schemes, CLI names, updater endpoints, or package identifiers without a human checkpoint."
   ],
   "componentDefaults": {
     "exportStyle": "default",

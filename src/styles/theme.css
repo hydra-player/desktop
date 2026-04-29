@@ -1,6 +1,6 @@
 /* ─────────────────────────────────────────────────────────────
-   Psysonic – Design System
-   Catppuccin Mocha Color Palette + Inter Typography
+   Hydra Design System
+   Neutral gray base + prism accents + Inter Typography
    ───────────────────────────────────────────────────────────── */
 
 @import '@fontsource-variable/inter';
@@ -25,8 +25,79 @@
 @import '@fontsource-variable/golos-text';
 @import '@fontsource-variable/unbounded';
 
-/* ─── Catppuccin Mocha Variables ─── */
+/* ─── Hydra Default Variables ─── */
 :root,
+[data-theme='hydra'] {
+  color-scheme: dark;
+  --select-arrow: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23bfc0c5%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
+  --ctp-rosewater: #f5f5f5;
+  --ctp-flamingo: #ff7a7a;
+  --ctp-pink: #f069d6;
+  --ctp-mauve: #9b5cff;
+  --ctp-red: #ff5c7a;
+  --ctp-maroon: #d94f76;
+  --ctp-peach: #ff9f43;
+  --ctp-yellow: #ffe66d;
+  --ctp-green: #5cff9d;
+  --ctp-teal: #4de3d8;
+  --ctp-sky: #00c8ff;
+  --ctp-sapphire: #4f8cff;
+  --ctp-blue: #6f7dff;
+  --ctp-lavender: #c7b9ff;
+  --ctp-text: #f1f1f3;
+  --ctp-subtext1: #c9c9cf;
+  --ctp-subtext0: #9e9ea7;
+  --ctp-overlay2: #777780;
+  --ctp-overlay1: #63636b;
+  --ctp-overlay0: #4f4f56;
+  --ctp-surface2: #3c3c42;
+  --ctp-surface1: #303035;
+  --ctp-surface0: #242428;
+  --ctp-base: #18181b;
+  --ctp-mantle: #121214;
+  --ctp-crust: #0c0c0e;
+
+  --bg-app: #18181b;
+  --bg-sidebar: #111113;
+  --bg-card: #242428;
+  --bg-hover: #303035;
+  --bg-player: #0f0f11;
+  --bg-glass: rgba(24, 24, 27, 0.86);
+  --accent: #9b5cff;
+  --accent-dim: rgba(155, 92, 255, 0.16);
+  --accent-glow: rgba(155, 92, 255, 0.34);
+  --text-primary: #f1f1f3;
+  --text-secondary: #c9c9cf;
+  --text-muted: #9e9ea7;
+  --border: #303035;
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --positive: #5cff9d;
+  --warning: #ffe66d;
+  --danger: #ff5c7a;
+
+  --logo-color-start: #f5f5f5;
+  --logo-color-end: #00c8ff;
+  --waveform-played: #9b5cff;
+  --waveform-buffered: rgba(255, 255, 255, 0.12);
+  --waveform-unplayed: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme='hydra'] .player-bar {
+  border-top: 1px solid transparent;
+  border-image: linear-gradient(90deg, #ff5c7a, #ff9f43, #ffe66d, #5cff9d, #00c8ff, #6f7dff, #9b5cff) 1;
+}
+
+[data-theme='hydra'] .nav-link.active {
+  background: linear-gradient(90deg, rgba(155, 92, 255, 0.24), rgba(0, 200, 255, 0.10));
+}
+
+[data-theme='hydra'] .player-btn-primary,
+[data-theme='hydra'] .btn-primary {
+  background: linear-gradient(135deg, #8f52ff, #b26bff);
+  box-shadow: 0 0 18px rgba(155, 92, 255, 0.24);
+}
+
+/* ─── Catppuccin Mocha Variables ─── */
 [data-theme='mocha'] {
   color-scheme: dark;
   --select-arrow: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23bac2de%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");

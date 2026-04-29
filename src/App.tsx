@@ -307,12 +307,12 @@ function AppShell() {
         const appWindow = getCurrentWindow();
         if (currentTrack) {
           const state = isPlaying ? '▶' : '⏸';
-          const title = `${state} ${currentTrack.artist} - ${currentTrack.title} | Psysonic`;
+          const title = `${state} ${currentTrack.artist} - ${currentTrack.title} | Hydra`;
           document.title = title;
           await appWindow.setTitle(title);
         } else {
-          document.title = 'Psysonic';
-          await appWindow.setTitle('Psysonic');
+          document.title = 'Hydra';
+          await appWindow.setTitle('Hydra');
         }
       } catch (err) {}
     };

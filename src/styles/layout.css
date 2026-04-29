@@ -1,4 +1,4 @@
-/* ─── Psysonic App Shell ─── */
+/* ─── Hydra App Shell ─── */
 
 *, *::before, *::after {
   user-select: none;
@@ -245,6 +245,41 @@ body.is-overlay-scrollbar-thumb-drag .resizer {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+.hydra-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.hydra-wordmark-mark {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 0 14px var(--accent-glow));
+}
+
+.hydra-wordmark-text {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: lowercase;
+  background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent) 54%, var(--ctp-sky) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hydra-sidebar-logo {
+  max-width: 100%;
+}
+
+.hydra-sidebar-mark {
+  filter: drop-shadow(0 0 12px var(--accent-glow));
 }
 
 .sidebar-nav {

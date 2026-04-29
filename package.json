@@ -1,7 +1,7 @@
 {
   "name": "hydra-player",
   "version": "1.44.0-dev",
-  "description": "Hydra Player desktop music player",
+  "description": "Hydra desktop music player",
   "private": true,
   "license": "GPL-3.0-only",
   "scripts": {

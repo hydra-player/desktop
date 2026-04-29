@@ -5,13 +5,14 @@ Load these files first:
 - `AGENTS.md`
 - `CLAUDE.md`
 - `docs/ai/uncodixfy.md`
+- `docs/design/hydra-branding.md`
 - `src/App.tsx`
 - `src/pages/Login.tsx`
 - `src/styles/theme.css`
 - `src/styles/layout.css`
 - `src/styles/components.css`
 
-Generate a first-run onboarding page for Hydra Player's local-library MVP.
+Generate a first-run onboarding page for Hydra's local-library MVP.
 
 ## Outputs
 
@@ -24,6 +25,7 @@ Generate a first-run onboarding page for Hydra Player's local-library MVP.
 ## Requirements
 
 - Use React, TypeScript, existing app styles, and lucide-react icons.
+- Use Hydra product copy and the Hydra default palette rules from `docs/design/hydra-branding.md`.
 - Keep the first screen operational: library mode selection, folder selection, scan state, first playback state.
 - Include loading, empty, success, and error states for scan-related surfaces.
 - Do not create a marketing hero, decorative gradients, telemetry copy, or account/signup assumptions.

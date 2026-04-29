@@ -22,7 +22,7 @@ import { lastfmGetToken, lastfmAuthUrl, lastfmGetSession, lastfmGetUserInfo, Las
 import LastfmIcon from '../components/LastfmIcon';
 import CustomSelect from '../components/CustomSelect';
 import SettingsSubSection from '../components/SettingsSubSection';
-import { AboutPsysonicBrandHeader } from '../components/AboutPsysonicLol';
+import { AboutHydraBrandHeader } from '../components/AboutHydraLol';
 import { useLuckyMixAvailable } from '../hooks/useLuckyMixAvailable';
 import ThemePicker, { THEME_GROUPS } from '../components/ThemePicker';
 import { useShallow } from 'zustand/react/shallow';
@@ -290,7 +290,7 @@ const CONTRIBUTORS = [
       'Device Sync — fixed cross-OS naming scheme + playlist folders (v1.40)',
       'macOS signing + notarization + Tauri auto-updater (v1.40)',
       'Mini player — floating window, custom titlebar, queue DnD, persistent geometry, keyboard shortcut, WebView2 lifecycle fix (PR #162, v1.42.x)',
-      '67 themes across 8 groups (Mediaplayer, OS, Games, Movies, Series, Social Media, OSS Classics, Psysonic)',
+      'Hydra branding and theme foundations; 67+ themes across app, media, OS, games, movies, series, social, and OSS groups',
       'Admin-gated User Management tab with per-user library assignment (PR #222)',
       'Comprehensive mobile UI overhaul (PR #238)',
       'Runtime log levels and debug log export (PR #241)',
@@ -4245,7 +4245,7 @@ export default function Settings() {
             icon={<Info size={16} />}
           >
             <div className="settings-card settings-about">
-              <AboutPsysonicBrandHeader appVersion={appVersion} aboutVersionLabel={t('settings.aboutVersion')} />
+              <AboutHydraBrandHeader appVersion={appVersion} aboutVersionLabel={t('settings.aboutVersion')} />
 
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, margin: '1rem 0 0.5rem' }}>
                 {t('settings.aboutDesc')}
@@ -4988,4 +4988,3 @@ function BackupSection() {
     </section>
   );
 }
-

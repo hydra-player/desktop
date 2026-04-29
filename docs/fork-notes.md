@@ -12,7 +12,7 @@ Hydra Player is a GPLv3 desktop music player forked from Psysonic. This file tra
 
 - npm package metadata: `package.json` and `package-lock.json` now use `hydra-player` and GPLv3 metadata.
 - Rust package metadata: `src-tauri/Cargo.toml` now uses `hydra-player`, `Hydra Player Desktop Music Player`, and GPLv3 metadata.
-- Tauri display metadata: `productName`, main window title, bundle short description, and bundle long description now present Hydra Player.
+- Tauri display metadata: `productName`, main window title, bundle short description, and bundle long description now present Hydra.
 - Tauri capability description: `src-tauri/capabilities/default.json` now names Hydra Player.
 
 ## Intentionally Still Upstream-Branded
@@ -25,7 +25,7 @@ These Psysonic names remain in place during the transition because changing them
 | Updater configuration | `src-tauri/tauri.conf.json` keeps the upstream public key and GitHub release endpoint | Updater endpoints and signing are release-sensitive and require approval before changing. |
 | Rust binary and library names | `src-tauri/Cargo.toml` keeps `default-run = "psysonic"`, `[[bin]].name = "psysonic"`, and `psysonic_lib` | CLI name, build output names, imports, scripts, and completions still depend on these names. |
 | CLI completions | `completions/psysonic.bash`, `completions/_psysonic`, and completion generation paths | Should be renamed with the binary and install scripts in one CLI migration PR. |
-| Icons and image assets | `public/psysonic-inapp-logo.svg`, `public/logo-psysonic.png`, Tauri icon assets, and `app-icon.png` | Visual identity needs replacement assets; existing files are retained to avoid broken UI and package icons. |
+| Legacy image assets | `public/psysonic-inapp-logo.svg`, `public/logo-psysonic.png`, Tauri icon assets, and `app-icon.png` | Runtime shell surfaces now use Hydra web assets; package icons still need a dedicated icon-generation and platform review pass. |
 | Release artifacts and distro packaging | `RELEASE_PROCESS.md`, `scripts/`, `nix/psysonic.nix`, `nixos-install.md`, `packages/aur/PKGBUILD`, and flake references | Publishing names, cache names, AUR package names, and install commands need separate release/packaging review. |
 | Documentation and changelog | `README.md`, `PRIVACY.md`, `ORBIT.md`, `CHANGELOG.md`, and historical release notes | Historical upstream references and privacy/legal copy should be migrated deliberately. |
 | App strings and source identifiers | React components, locales, localStorage keys, custom URL schemes, Subsonic client IDs, logs, and DBus/media names | These affect user data migration, deep links, protocol compatibility, and debugging expectations. |

@@ -13,8 +13,7 @@ import {
   PanelLeftClose, PanelLeft, AudioLines, HardDriveDownload, HardDriveUpload,
   ChevronDown, Check, Music2, X, ChevronRight, PlayCircle, Sparkles, Trash2,
 } from 'lucide-react';
-import PsysonicLogo from './PsysonicLogo';
-import PSmallLogo from './PSmallLogo';
+import HydraLogo, { HydraMark } from './HydraLogo';
 import WhatsNewBanner from './WhatsNewBanner';
 import { getPlaylists } from '../api/subsonic';
 import { usePlaylistStore } from '../store/playlistStore';
@@ -404,8 +403,8 @@ export default function Sidebar({
     <aside className={`sidebar animate-slide-in ${isCollapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-brand">
         {isCollapsed
-          ? <PSmallLogo style={{ height: '32px', width: 'auto' }} />
-          : <PsysonicLogo style={{ height: '28px', width: 'auto' }} />
+          ? <HydraMark className="hydra-sidebar-mark" style={{ height: '34px', width: '34px' }} />
+          : <HydraLogo className="hydra-sidebar-logo" />
         }
       </div>
 

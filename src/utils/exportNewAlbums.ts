@@ -48,7 +48,7 @@ async function loadImage(url: string): Promise<ImageBitmap | null> {
 
 async function loadLogo(): Promise<HTMLImageElement | null> {
   try {
-    const res = await fetch('/psysonic-inapp-logo.svg');
+    const res = await fetch('/hydra-inapp-logo.svg');
     if (!res.ok) return null;
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -235,7 +235,7 @@ async function renderPage(
   ctx.textAlign = 'center';
   ctx.font = '400 13px system-ui, sans-serif';
   ctx.fillStyle = M.overlay2;
-  ctx.fillText('www.psysonic.de', W / 2, H - FOOTER_H / 2 + 6);
+  ctx.fillText('Hydra', W / 2, H - FOOTER_H / 2 + 6);
 
   return new Promise(resolve => canvas.toBlob(b => resolve(b!), 'image/png'));
 }

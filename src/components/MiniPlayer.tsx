@@ -436,7 +436,7 @@ export default function MiniPlayer() {
       >
         {IS_LINUX ? (
           <span className="mini-player__titlebar-title" data-tauri-drag-region>
-            {track?.title ?? 'Psysonic Mini'}
+            {track?.title ?? 'Hydra Mini'}
           </span>
         ) : (
           // macOS/Windows already render a native titlebar with the window

@@ -11,6 +11,12 @@ interface ThemeDef {
 
 export const THEME_GROUPS: { group: string; themes: ThemeDef[] }[] = [
   {
+    group: 'Hydra',
+    themes: [
+      { id: 'hydra', label: 'Hydra Default', bg: '#18181b', card: '#242428', accent: '#9b5cff' },
+    ],
+  },
+  {
     group: 'Games',
     themes: [
       { id: 'gw1',               label: 'GW1',               bg: '#0e0b08', card: '#1a1208', accent: '#c8960c' },
@@ -84,7 +90,7 @@ export const THEME_GROUPS: { group: string; themes: ThemeDef[] }[] = [
     ],
   },
   {
-    group: 'Psysonic Themes',
+    group: 'Hydra Themes',
     themes: [
       { id: 'neon-drift',         label: 'Neon Drift',  bg: '#12132c', card: '#080916', accent: '#00f2ff' },
       { id: 'nucleo',             label: 'Nucleo',      bg: '#f5e4c3', card: '#dfc08f', accent: '#7a5218' },

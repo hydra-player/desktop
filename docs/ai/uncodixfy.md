@@ -6,6 +6,7 @@ Uncodixfy is used in this repository as the UI-scaffolding prompt/config layer f
 
 - Config: `.uncodixfy/config.json`
 - Schema: `.uncodixfy/schema.json`
+- Branding manual: `docs/design/hydra-branding.md`
 - Page prompt: `.uncodixfy/templates/onboarding-page.prompt.md`
 - Component prompt: `.uncodixfy/templates/onboarding-component.prompt.md`
 
@@ -21,6 +22,9 @@ Uncodixfy is used in this repository as the UI-scaffolding prompt/config layer f
 ## Design Contract
 
 - Hydra is a desktop music player. Generate app surfaces, not marketing pages.
+- Product UI uses `Hydra`; the wordmark uses lowercase `hydra`.
+- New UI should start from the Hydra default palette: neutral gray surfaces, purple highlight, and sparse prism/rainbow accents.
+- Use `src/components/HydraLogo.tsx` for product branding and do not introduce Psysonic logos in generated UI.
 - Prefer existing CSS variables, spacing, typography, and route layout patterns.
 - Keep onboarding compact and practical: choose mode, select folder, scan, play.
 - Use lucide-react icons where icons are needed.
