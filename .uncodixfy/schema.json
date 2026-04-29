@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Hydra Player Uncodixfy Config",
+  "type": "object",
+  "required": [
+    "project",
+    "purpose",
+    "defaultStack",
+    "contextFiles",
+    "outputRoots",
+    "designRules",
+    "recipes"
+  ],
+  "properties": {
+    "project": {
+      "type": "string"
+    },
+    "purpose": {
+      "type": "string"
+    },
+    "defaultStack": {
+      "type": "object"
+    },
+    "contextFiles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "outputRoots": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "designRules": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "componentDefaults": {
+      "type": "object"
+    },
+    "recipes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "prompt",
+          "outputs"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "humanCheckpoints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

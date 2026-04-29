@@ -1,0 +1,88 @@
+version: 1
+name: phase-1-local-library
+description: First Ruflo base flow for Hydra Player desktop Phase 1.
+
+stages:
+  - id: repo-baseline
+    agent: repo_steward
+    goal: Document fork state and identify safe Hydra rename surfaces.
+    outputs:
+      - docs/fork-notes.md
+    verification:
+      - Docs-only verification unless code changes are made.
+    checkpoints:
+      - Confirm package identifiers and release signing before binary/app renames.
+
+  - id: ci-scaffold
+    agent: ci_builder
+    goal: Replace sentinel CI with practical build/test jobs.
+    depends_on:
+      - repo-baseline
+    outputs:
+      - .github/workflows/ci.yml
+    verification:
+      - npm run build
+      - npm run test
+      - cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+      - cargo test --manifest-path src-tauri/Cargo.toml
+    checkpoints:
+      - Document Linux Tauri system packages if CI needs them.
+
+  - id: local-library-domain
+    agent: onboarding_ui
+    goal: Add local-library TypeScript domain types and sorting helpers.
+    outputs:
+      - src/types/localLibrary.ts
+      - src/utils/localLibrarySort.ts
+      - src/utils/localLibrarySort.test.ts
+    verification:
+      - npm run test
+
+  - id: local-library-rust-boundary
+    agent: local_library_rust
+    goal: Add Rust command stubs and pure helpers for scanning local libraries.
+    depends_on:
+      - local-library-domain
+    outputs:
+      - src-tauri/src/local_library.rs
+      - src-tauri/src/local_library_db.rs
+      - src-tauri/src/lib.rs
+    verification:
+      - cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+      - cargo test --manifest-path src-tauri/Cargo.toml
+    checkpoints:
+      - Confirm filesystem capability model.
+      - Confirm symlink traversal policy.
+
+  - id: onboarding-ui
+    agent: onboarding_ui
+    goal: Generate onboarding screens using Uncodixfy rules.
+    depends_on:
+      - local-library-domain
+      - local-library-rust-boundary
+    uses:
+      - .uncodixfy/config.json
+      - .uncodixfy/templates/onboarding-page.prompt.md
+    outputs:
+      - src/pages/Onboarding.tsx
+      - src/components/onboarding/LibraryModeStep.tsx
+      - src/components/onboarding/FolderPickerStep.tsx
+      - src/components/onboarding/ScanProgressStep.tsx
+      - src/components/onboarding/FirstPlaybackStep.tsx
+    verification:
+      - npm run build
+      - npm run test
+    checkpoints:
+      - Confirm first-run route behavior.
+
+  - id: security-pass
+    agent: security_test
+    goal: Review filesystem, CI, and local-path privacy risks before merge.
+    depends_on:
+      - ci-scaffold
+      - local-library-rust-boundary
+      - onboarding-ui
+    outputs:
+      - docs/ai/security-hardening.md
+    verification:
+      - Manual review checklist with findings and unresolved risk.

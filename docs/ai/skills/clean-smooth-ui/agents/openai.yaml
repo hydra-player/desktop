@@ -1,0 +1,4 @@
+interface:
+  display_name: "Clean Smooth UI"
+  short_description: "Clean, polished app UI guidance."
+  default_prompt: "Use this skill to create or refine clean, smooth Hydra Player UI."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tauri UI Best Practices"
+  short_description: "Tauri v2 frontend and desktop integration guidance."
+  default_prompt: "Use this skill when building Hydra Player Tauri UI or command integration."

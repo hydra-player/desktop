@@ -1,0 +1,89 @@
+{
+  "$schema": "./schema.json",
+  "project": "Hydra Player Desktop",
+  "purpose": "Generate consistent React UI scaffolds for the Hydra Player desktop app.",
+  "defaultStack": {
+    "framework": "react",
+    "language": "typescript",
+    "runtime": "tauri-v2",
+    "state": "zustand",
+    "routing": "react-router-dom",
+    "icons": "lucide-react",
+    "styles": [
+      "src/styles/theme.css",
+      "src/styles/layout.css",
+      "src/styles/components.css"
+    ]
+  },
+  "contextFiles": [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "docs/ai/uncodixfy.md",
+    "src/App.tsx",
+    "src/components/Sidebar.tsx",
+    "src/components/PlayerBar.tsx",
+    "src/pages/Login.tsx",
+    "src/styles/theme.css",
+    "src/styles/layout.css",
+    "src/styles/components.css"
+  ],
+  "outputRoots": {
+    "pages": "src/pages",
+    "components": "src/components",
+    "onboardingComponents": "src/components/onboarding",
+    "stores": "src/store",
+    "types": "src/types",
+    "tests": "src"
+  },
+  "designRules": [
+    "Build the usable desktop app surface, not a marketing landing page.",
+    "Reuse existing CSS variables and layout conventions before adding new styling.",
+    "Use lucide-react icons for common actions and controls.",
+    "Keep cards at 8px border radius or less unless matching an existing local pattern.",
+    "Do not create nested cards or decorative gradient/orb backgrounds.",
+    "Every generated stateful surface must include loading, empty, error, and success states where applicable.",
+    "Every generated implementation plan must include automated tests or a manual verification checklist.",
+    "Do not add telemetry, analytics, account creation, or external-service assumptions."
+  ],
+  "componentDefaults": {
+    "exportStyle": "default",
+    "props": "type-alias",
+    "accessibility": [
+      "keyboard-reachable controls",
+      "visible focus styles from existing CSS",
+      "aria-labels for icon-only buttons",
+      "semantic headings"
+    ],
+    "responsiveTargets": [
+      "desktop",
+      "narrow desktop",
+      "mobile shell"
+    ]
+  },
+  "recipes": [
+    {
+      "id": "hydra-onboarding-page",
+      "prompt": ".uncodixfy/templates/onboarding-page.prompt.md",
+      "outputs": [
+        "src/pages/Onboarding.tsx",
+        "src/components/onboarding/LibraryModeStep.tsx",
+        "src/components/onboarding/FolderPickerStep.tsx",
+        "src/components/onboarding/ScanProgressStep.tsx",
+        "src/components/onboarding/FirstPlaybackStep.tsx"
+      ]
+    },
+    {
+      "id": "hydra-onboarding-component",
+      "prompt": ".uncodixfy/templates/onboarding-component.prompt.md",
+      "outputs": [
+        "src/components/onboarding/<ComponentName>.tsx"
+      ]
+    }
+  ],
+  "humanCheckpoints": [
+    "Ask before changing Tauri filesystem permissions.",
+    "Ask before introducing a new UI package or CSS framework.",
+    "Ask before changing first-run network behavior.",
+    "Ask before adding persistent storage of local media paths beyond the local-library index."
+  ]
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Music Client UI/UX"
+  short_description: "Simple, practical UI/UX guidance for desktop music clients."
+  default_prompt: "Use this skill to design or review Hydra Player music-client screens and workflows."

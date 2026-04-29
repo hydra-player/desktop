@@ -34,7 +34,7 @@ src-tauri/target/
 src-tauri/gen/
 
 # Documentation
-CLAUDE.md
+!CLAUDE.md
 
 # Claude Code memory (local only)
 memory/

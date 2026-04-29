@@ -1,0 +1,73 @@
+version: 1
+project: hydra-player-desktop
+purpose: Coordinate AI-agent work for the Hydra Player Phase 1 desktop baseline.
+
+context:
+  required:
+    - AGENTS.md
+    - CLAUDE.md
+    - docs/ai/phase-1-action-plan.md
+    - docs/ai/ruflo.md
+  optional:
+    - docs/ai/uncodixfy.md
+    - .uncodixfy/config.json
+
+defaults:
+  branch_prefix: ai/
+  pr_size: small
+  require_tests_or_manual_verification: true
+  require_human_checkpoints: true
+  forbid:
+    - telemetry
+    - copyrighted-media-fixtures
+    - release-signing-changes-without-approval
+    - updater-endpoint-changes-without-approval
+    - unrelated-formatting-churn
+
+agents:
+  repo_steward:
+    prompt: .ruflo/agents/repo-steward.md
+    owns:
+      - AGENTS.md
+      - CLAUDE.md
+      - docs/**
+      - README.md
+      - package.json
+      - src-tauri/Cargo.toml
+      - src-tauri/tauri.conf.json
+  ci_builder:
+    prompt: .ruflo/agents/ci-builder.md
+    owns:
+      - .github/workflows/**
+      - package.json
+      - package-lock.json
+      - flake.nix
+      - flake.lock
+  local_library_rust:
+    prompt: .ruflo/agents/local-library-rust.md
+    owns:
+      - src-tauri/src/local_library.rs
+      - src-tauri/src/local_library_db.rs
+      - src-tauri/src/lib.rs
+      - src-tauri/Cargo.toml
+  onboarding_ui:
+    prompt: .ruflo/agents/onboarding-ui.md
+    owns:
+      - src/pages/Onboarding.tsx
+      - src/components/onboarding/**
+      - src/store/localLibraryStore.ts
+      - src/types/localLibrary.ts
+      - src/utils/localLibrarySort.ts
+      - src/utils/localLibrarySort.test.ts
+      - .uncodixfy/**
+  security_test:
+    prompt: .ruflo/agents/security-test.md
+    owns:
+      - docs/ai/security-hardening.md
+      - src-tauri/capabilities/**
+      - src-tauri/src/**/*.rs
+      - .github/workflows/**
+
+flows:
+  phase_1_local_library:
+    file: .ruflo/flows/phase-1-local-library.yaml

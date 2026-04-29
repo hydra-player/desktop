@@ -1,0 +1,4 @@
+interface:
+  display_name: "Audio EQ Enhancement"
+  short_description: "Music equalization, loudness, and audio enhancement guidance."
+  default_prompt: "Use this skill when designing or implementing Hydra Player EQ and audio enhancement features."
