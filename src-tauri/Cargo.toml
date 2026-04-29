@@ -1,9 +1,9 @@
 [package]
-name = "psysonic"
+name = "hydra-player"
 version = "1.44.0-rc1"
-description = "Psysonic Desktop Music Player"
+description = "Hydra Player Desktop Music Player"
 authors = []
-license = ""
+license = "GPL-3.0-only"
 repository = ""
 default-run = "psysonic"
 edition = "2021"

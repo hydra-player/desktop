@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/capability-schema.json",
   "identifier": "default",
-  "description": "Default capabilities for Psysonic",
+  "description": "Default capabilities for Hydra Player",
   "platforms": ["linux", "macOS", "windows"],
   "windows": ["main", "mini"],
   "permissions": [
