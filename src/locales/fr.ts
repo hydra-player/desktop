@@ -1712,4 +1712,12 @@ export const frTranslation = {
     exitEndedBody: '« {{name}} » est terminée. J\'espère que tu t\'es bien amusé.',
     exitOk: 'OK',
   },
+  tray: {
+    playPause: 'Lecture / Pause',
+    nextTrack: 'Piste suivante',
+    previousTrack: 'Piste précédente',
+    showHide: 'Afficher / Masquer',
+    exitPsysonic: 'Quitter Psysonic',
+    nothingPlaying: 'Aucune lecture',
+  },
 };

@@ -1737,4 +1737,12 @@ export const enTranslation = {
     exitEndedBody: '"{{name}}" has ended. Hope you had fun.',
     exitOk: 'OK',
   },
+  tray: {
+    playPause: 'Play / Pause',
+    nextTrack: 'Next Track',
+    previousTrack: 'Previous Track',
+    showHide: 'Show / Hide',
+    exitPsysonic: 'Exit Psysonic',
+    nothingPlaying: 'Nothing playing',
+  },
 };
