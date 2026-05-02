@@ -785,6 +785,10 @@ export function drawSeekbar(
     case 'particletrail': drawParticleTrail(canvas, progress, buffered, anim); break;
     case 'liquidfill':    drawLiquidFill(canvas, progress, buffered, anim); break;
     case 'retrotape':     drawRetroTape(canvas, progress, buffered, anim); break;
+    // Safety net: if a legacy or tampered persisted style sneaks past the
+    // authStore migration, fall back to the truewave renderer instead of
+    // leaving a blank canvas.
+    default:              drawWaveform(canvas, heights, progress, buffered); break;
   }
 }
 
@@ -825,7 +829,7 @@ export function SeekbarPreview({
       }
     };
     const tick = () => {
-      if (document.hidden || window.__psyHidden) {
+      if (document.hidden || window.__psyHidden || window.__psyBlurred) {
         pollId = window.setTimeout(() => {
           pollId = null;
           tick();
@@ -897,6 +901,8 @@ export default function WaveformSeek({ trackId }: Props) {
   const SEEK_COMMIT_GUARD_MS = 900;
   const SEEK_COMMIT_MIN_HOLD_MS = 320;
   const SEEK_COMMIT_PROGRESS_EPS = 0.02;
+  const WHEEL_SEEK_STEP_SECONDS = 10;
+  const WHEEL_SEEK_DEBOUNCE_MS = 1000;
   const canvasRef    = useRef<HTMLCanvasElement>(null);
   const heightsRef   = useRef<Float32Array | null>(null);
   const progressRef  = useRef(usePlayerStore.getState().progress);
@@ -910,11 +916,14 @@ export default function WaveformSeek({ trackId }: Props) {
   const waveformBins = usePlayerStore(s => s.waveformBins);
   const duration     = usePlayerStore(s => s.currentTrack?.duration ?? 0);
   const seekbarStyle = useAuthStore(s => s.seekbarStyle);
+  const reducedAnimations = useAuthStore(s => s.reducedAnimations);
 
   // Ref so the subscription callback (closed over at mount) can read the
   // current style without stale-closure issues.
   const styleRef = useRef(seekbarStyle);
   styleRef.current = seekbarStyle;
+  const reducedRef = useRef(reducedAnimations);
+  reducedRef.current = reducedAnimations;
 
   useEffect(() => {
     if (!trackId) {
@@ -1005,6 +1014,12 @@ export default function WaveformSeek({ trackId }: Props) {
       // While user drags, keep the local preview stable. External progress ticks
       // during streaming/recovery would otherwise fight the cursor and flicker.
       if (isDragging.current) return;
+      const now = Date.now();
+      const wheelPreviewFraction = wheelPreviewFractionRef.current;
+      if (wheelPreviewFraction != null) {
+        if (now < wheelPreviewUntilRef.current) return;
+        wheelPreviewFractionRef.current = null;
+      }
       const pendingCommit = pendingCommittedSeekRef.current;
       if (pendingCommit) {
         const ageMs = Date.now() - pendingCommit.setAtMs;
@@ -1043,6 +1058,7 @@ export default function WaveformSeek({ trackId }: Props) {
     animStateRef.current = makeAnimState();
     let rafId: number | null = null;
     let pollId: number | null = null;
+    let skip = false;
     const stop = () => {
       if (rafId !== null) {
         cancelAnimationFrame(rafId);
@@ -1054,14 +1070,22 @@ export default function WaveformSeek({ trackId }: Props) {
       }
     };
     const tick = () => {
-      if (document.hidden || window.__psyHidden) {
+      if (document.hidden || window.__psyHidden || window.__psyBlurred) {
         pollId = window.setTimeout(() => {
           pollId = null;
           tick();
         }, 400);
         return;
       }
-      animStateRef.current.time += 0.016;
+      // 30 fps cap when reducedAnimations is on: skip every other rAF, advance
+      // animation time by a doubled delta so wave speed stays the same.
+      if (reducedRef.current && skip) {
+        skip = false;
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
+      skip = reducedRef.current;
+      animStateRef.current.time += reducedRef.current ? 0.032 : 0.016;
       drawSeekbar(canvas, seekbarStyle, heightsRef.current, progressRef.current, bufferedRef.current, animStateRef.current);
       rafId = requestAnimationFrame(tick);
     };
@@ -1097,6 +1121,19 @@ export default function WaveformSeek({ trackId }: Props) {
   seekRef.current = seek;
   const pendingSeekRef = useRef<number | null>(null);
   const pendingCommittedSeekRef = useRef<{ fraction: number; setAtMs: number } | null>(null);
+  const wheelSeekTimerRef = useRef<number | null>(null);
+  const queuedWheelSeekFractionRef = useRef<number | null>(null);
+  const wheelPreviewFractionRef = useRef<number | null>(null);
+  const wheelPreviewUntilRef = useRef(0);
+
+  useEffect(() => () => {
+    if (wheelSeekTimerRef.current != null) {
+      window.clearTimeout(wheelSeekTimerRef.current);
+      wheelSeekTimerRef.current = null;
+    }
+    wheelPreviewFractionRef.current = null;
+    wheelPreviewUntilRef.current = 0;
+  }, []);
 
   // Preview a 0–1 fraction while dragging: draw immediately for 1:1
   // responsiveness; the actual seek is committed on mouseup.
@@ -1151,6 +1188,44 @@ export default function WaveformSeek({ trackId }: Props) {
       <canvas
         ref={canvasRef}
         style={{ width: '100%', height: '24px', cursor: trackId ? 'pointer' : 'default', display: 'block' }}
+        onWheel={e => {
+          if (!trackIdRef.current || duration <= 0 || isDragging.current) return;
+          e.preventDefault();
+
+          const wheelSteps = Math.max(1, Math.round(Math.abs(e.deltaY) / 100));
+          if (wheelSteps <= 0) return;
+
+          const now = Date.now();
+          const currentSeconds = progressRef.current * duration;
+          const deltaSeconds = (e.deltaY > 0 ? -1 : 1) * WHEEL_SEEK_STEP_SECONDS * wheelSteps;
+          const nextSeconds = Math.max(0, Math.min(duration, currentSeconds + deltaSeconds));
+          const nextFraction = Math.max(0, Math.min(1, nextSeconds / duration));
+
+          // Preventive UI update: move visual playhead immediately on every wheel event.
+          progressRef.current = nextFraction;
+          wheelPreviewFractionRef.current = nextFraction;
+          wheelPreviewUntilRef.current = now + WHEEL_SEEK_DEBOUNCE_MS;
+          const canvas = canvasRef.current;
+          if (canvas && !ANIMATED_STYLES.has(styleRef.current)) {
+            drawSeekbar(canvas, styleRef.current, heightsRef.current, nextFraction, bufferedRef.current);
+          }
+
+          // Trailing debounce: commit seek only after wheel activity settles.
+          queuedWheelSeekFractionRef.current = nextFraction;
+          if (wheelSeekTimerRef.current != null) {
+            window.clearTimeout(wheelSeekTimerRef.current);
+          }
+          wheelSeekTimerRef.current = window.setTimeout(() => {
+            wheelSeekTimerRef.current = null;
+            const queuedFraction = queuedWheelSeekFractionRef.current;
+            queuedWheelSeekFractionRef.current = null;
+            if (queuedFraction == null) return;
+            wheelPreviewFractionRef.current = null;
+            wheelPreviewUntilRef.current = 0;
+            pendingCommittedSeekRef.current = { fraction: queuedFraction, setAtMs: Date.now() };
+            seekRef.current(queuedFraction);
+          }, WHEEL_SEEK_DEBOUNCE_MS);
+        }}
         onMouseDown={e => {
           isDragging.current = true;
           const rect = e.currentTarget.getBoundingClientRect();

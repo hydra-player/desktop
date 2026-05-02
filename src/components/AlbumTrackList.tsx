@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Heart, ListPlus, X, ChevronDown, Check, RotateCcw } from 'lucide-react';
+import { Play, ChevronRight, Heart, ChevronDown, Check, RotateCcw, Square } from 'lucide-react';
 import { useTracklistColumns, type ColDef } from '../utils/useTracklistColumns';
 import { SubsonicSong } from '../api/subsonic';
 import { Track, usePlayerStore, songToTrack } from '../store/playerStore';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useDragDrop } from '../contexts/DragDropContext';
-import { AddToPlaylistSubmenu } from './ContextMenu';
 import { useIsMobile } from '../hooks/useIsMobile';
 import StarRating from './StarRating';
 import { useSelectionStore } from '../store/selectionStore';
 import { useThemeStore } from '../store/themeStore';
+import { usePreviewStore } from '../store/previewStore';
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -117,6 +117,9 @@ const TrackRow = React.memo(function TrackRow({
   // Fine-grained: only re-renders when THIS row's selection boolean flips.
   const isSelected = useSelectionStore(s => s.selectedIds.has(song.id));
   const isActive = currentTrackId === song.id;
+  // Primitive selector: row only re-renders when *this song's* preview state flips.
+  const isPreviewing = usePreviewStore(s => s.previewingId === song.id);
+  const isPreviewAudioStarted = usePreviewStore(s => s.previewingId === song.id && s.audioStarted);
 
   const renderCell = (colDef: ColDef) => {
     const key = colDef.key as ColKey;
@@ -125,26 +128,51 @@ const TrackRow = React.memo(function TrackRow({
         return (
           <div
             key="num"
-            className={`track-num${isActive ? ' track-num-active' : ''}${isActive && !isPlaying ? ' track-num-paused' : ''}`}
-            style={{ cursor: 'pointer' }}
-            onClick={e => { e.stopPropagation(); onPlaySong(song); }}
+            className={`track-num${isActive ? ' track-num-active' : ''}`}
           >
             <span
               className={`bulk-check${isSelected ? ' checked' : ''}${inSelectMode ? ' bulk-check-visible' : ''}`}
               onClick={e => { e.stopPropagation(); onToggleSelect(song.id, globalIdx, e.shiftKey); }}
             />
-            {isActive && isPlaying && (
+            {isActive && isPlaying ? (
               <span className="track-num-eq">
                 <div className="eq-bars"><span className="eq-bar" /><span className="eq-bar" /><span className="eq-bar" /></div>
               </span>
+            ) : (
+              <span className="track-num-number">{song.track ?? '—'}</span>
             )}
-            <span className="track-num-play"><Play size={13} fill="currentColor" /></span>
-            <span className="track-num-number">{song.track ?? '—'}</span>
           </div>
         );
       case 'title':
         return (
-          <div key="title" className="track-info">
+          <div key="title" className="track-info track-info-suggestion">
+            <button
+              type="button"
+              className="playlist-suggestion-play-btn"
+              onClick={e => { e.stopPropagation(); onPlaySong(song); }}
+              data-tooltip={t('common.play')}
+              aria-label={t('common.play')}
+            >
+              <Play size={10} fill="currentColor" strokeWidth={0} className="playlist-suggestion-play-icon" />
+            </button>
+            <button
+              type="button"
+              className={`playlist-suggestion-preview-btn${isPreviewing ? ' is-previewing' : ''}${isPreviewAudioStarted ? ' audio-started' : ''}`}
+              onClick={e => {
+                e.stopPropagation();
+                usePreviewStore.getState().startPreview({ id: song.id, title: song.title, artist: song.artist, coverArt: song.coverArt, duration: song.duration }, 'albums');
+              }}
+              data-tooltip={isPreviewing ? t('playlists.previewStop') : t('playlists.preview')}
+              aria-label={isPreviewing ? t('playlists.previewStop') : t('playlists.preview')}
+            >
+              <svg className="playlist-suggestion-preview-ring" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="10.5" className="playlist-suggestion-preview-ring-track" />
+                <circle cx="12" cy="12" r="10.5" className="playlist-suggestion-preview-ring-progress" />
+              </svg>
+              {isPreviewing
+                ? <Square size={9} fill="currentColor" strokeWidth={0} className="playlist-suggestion-preview-icon" />
+                : <ChevronRight size={14} className="playlist-suggestion-preview-icon playlist-suggestion-preview-icon-play" />}
+            </button>
             <span className="track-title">{song.title}</span>
           </div>
         );
@@ -216,7 +244,7 @@ const TrackRow = React.memo(function TrackRow({
 
   return (
     <div
-      className={`track-row track-row-va${isActive ? ' active' : ''}${isContextMenuSong ? ' context-active' : ''}${isSelected ? ' bulk-selected' : ''}`}
+      className={`track-row track-row-va track-row-with-actions${isActive ? ' active' : ''}${isContextMenuSong ? ' context-active' : ''}${isSelected ? ' bulk-selected' : ''}`}
       style={gridStyle}
       onClick={e => {
         if ((e.target as HTMLElement).closest('button, a, input')) return;
@@ -295,8 +323,6 @@ export default function AlbumTrackList({
   const allSelected = selectedCount === songs.length && songs.length > 0;
   const lastSelectedIdxRef = useRef<number | null>(null);
 
-  const [showPlPicker, setShowPlPicker] = useState(false);
-
   // ── Column state ──────────────────────────────────────────────────────────
   const {
     colVisible, visibleCols, gridStyle,
@@ -325,15 +351,6 @@ export default function AlbumTrackList({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [inSelectMode, tracklistRef]);
-
-  useEffect(() => {
-    if (!showPlPicker) return;
-    const handler = (e: MouseEvent) => {
-      if (!(e.target as HTMLElement).closest('.bulk-pl-picker-wrap')) setShowPlPicker(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showPlPicker]);
 
   // ── Stable callbacks passed to memoised TrackRow ──────────────────────────
 
@@ -585,42 +602,11 @@ export default function AlbumTrackList({
     <div
         className="tracklist"
         ref={tracklistRef}
+        data-preview-loc="albums"
         onClick={e => {
           if (inSelectMode && e.target === e.currentTarget) useSelectionStore.getState().clearAll();
         }}
       >
-
-      {/* ── Bulk action bar ── */}
-      {inSelectMode && (
-        <div className="bulk-action-bar">
-          <span className="bulk-action-count">
-            {t('common.bulkSelected', { count: selectedCount })}
-          </span>
-          <div className="bulk-pl-picker-wrap">
-            <button
-              className="btn btn-surface btn-sm"
-              onClick={() => setShowPlPicker(v => !v)}
-            >
-              <ListPlus size={14} />
-              {t('common.bulkAddToPlaylist')}
-            </button>
-            {showPlPicker && (
-              <AddToPlaylistSubmenu
-                songIds={[...useSelectionStore.getState().selectedIds]}
-                onDone={() => { setShowPlPicker(false); useSelectionStore.getState().clearAll(); }}
-                dropDown
-              />
-            )}
-          </div>
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => useSelectionStore.getState().clearAll()}
-          >
-            <X size={13} />
-            {t('common.bulkClear')}
-          </button>
-        </div>
-      )}
 
       {/* ── Header ── */}
       <div className="tracklist-header-wrapper">

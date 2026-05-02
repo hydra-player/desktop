@@ -189,20 +189,32 @@ function LoadPlaylistModal({ onClose, onLoad }: { onClose: () => void, onLoad: (
   );
 }
 
+type DurationMode = 'total' | 'remaining' | 'eta';
+
 interface QueueHeaderProps {
   queue: Track[];
   queueIndex: number;
-  showRemainingTime: boolean;
-  setShowRemainingTime: React.Dispatch<React.SetStateAction<boolean>>;
   activePlaylist: { id: string; name: string } | null;
+  isNowPlayingCollapsed: boolean;
+  setIsNowPlayingCollapsed: (v: boolean) => void;
+  durationMode: DurationMode;
+  setDurationMode: (m: DurationMode) => void;
   t: TFunction;
 }
-function QueueHeader({ queue, queueIndex, showRemainingTime, setShowRemainingTime, activePlaylist, t }: QueueHeaderProps) {
-  const currentTime = usePlayerStore((s) => s.currentTime);
+function QueueHeader({ queue, queueIndex, activePlaylist, isNowPlayingCollapsed, setIsNowPlayingCollapsed, durationMode, setDurationMode, t }: QueueHeaderProps) {
+  const currentTime = usePlayerStore((s) => Math.floor(s.currentTime / 30) * 30);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
 
-  if (queue.length === 0) return null;
-  const totalSecs = queue.reduce((acc: number, t: any) => acc + (t.duration || 0), 0);
-  const remainingSecs = Math.max(0, (queue[queueIndex]?.duration ?? 0) - currentTime + queue.slice(queueIndex + 1).reduce((acc: number, t: any) => acc + (t.duration || 0), 0));
+  const totalSecs = useMemo(() =>
+    queue.reduce((acc: number, track: Track) => acc + (track.duration || 0), 0),
+    [queue]
+  );
+  const futureTracksDuration = useMemo(() =>
+    queue.slice(queueIndex + 1).reduce((acc: number, track: Track) => acc + (track.duration || 0), 0),
+    [queue, queueIndex]
+  );
+
+  const remainingSecs = Math.max(0, (queue[queueIndex]?.duration ?? 0) - currentTime + futureTracksDuration);
 
   const fmt = (secs: number) => {
     const h = Math.floor(secs / 3600);
@@ -210,27 +222,53 @@ function QueueHeader({ queue, queueIndex, showRemainingTime, setShowRemainingTim
     const s = secs % 60;
     return h > 0 ? `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}` : `${m}:${s.toString().padStart(2, "0")}`;
   };
+  const fmtEta = (secs: number) => {
+    const finishTime = new Date(Date.now() + secs * 1000);
+    return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(finishTime);
+  };
 
-  const dur = showRemainingTime ? `-${fmt(Math.floor(remainingSecs))}` : fmt(Math.floor(totalSecs));
+  let dur: string | null = null;
+  if (queue.length > 0) {
+    if (durationMode === 'total') dur = fmt(Math.floor(totalSecs));
+    else if (durationMode === 'remaining') dur = `-${fmt(Math.floor(remainingSecs))}`;
+    else dur = fmtEta(remainingSecs);
+  }
+
+  const nextMode: DurationMode =
+    durationMode === 'total' ? 'remaining' :
+    durationMode === 'remaining' ? 'eta' : 'total';
+  const nextTooltipKey =
+    nextMode === 'total' ? 'queue.showTotal' :
+    nextMode === 'remaining' ? 'queue.showRemaining' : 'queue.showEta';
+
+  const isEta = durationMode === 'eta';
 
   return (
     <div className="queue-header">
       <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: "8px", minWidth: 0 }}>
           <h2 style={{ fontSize: "16px", fontWeight: 700, margin: 0, flexShrink: 0 }}>{t("queue.title")}</h2>
-          <span
-            onClick={() => setShowRemainingTime((v: boolean) => !v)}
-            data-tooltip={showRemainingTime ? t("queue.showTotal") : t("queue.showRemaining")}
-            style={{
-              fontSize: "13px",
-              color: "var(--accent)",
-              whiteSpace: "nowrap",
-              cursor: "pointer",
-              userSelect: "none",
-            }}
-          >
-            {queue.length} {queue.length === 1 ? t("queue.trackSingular") : t("queue.trackPlural")} · {dur}
-          </span>
+          {queue.length > 0 && (
+            <span style={{ fontSize: "13px", color: "var(--text-muted)", whiteSpace: "nowrap", userSelect: "none" }}>
+              ({queueIndex + 1}/{queue.length})
+            </span>
+          )}
+          {dur !== null && (
+            <span
+              onClick={() => setDurationMode(nextMode)}
+              data-tooltip={t(nextTooltipKey)}
+              style={{
+                fontSize: "13px",
+                color: isEta ? (isPlaying ? "var(--accent)" : "var(--text-muted)") : "var(--accent)",
+                opacity: isEta && !isPlaying ? 0.5 : 1,
+                whiteSpace: "nowrap",
+                cursor: "pointer",
+                userSelect: "none",
+              }}
+            >
+              · {dur}
+            </span>
+          )}
         </div>
         {activePlaylist && (
           <div className="truncate" style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px", display: "flex", alignItems: "center", gap: "4px" }}>
@@ -239,6 +277,17 @@ function QueueHeader({ queue, queueIndex, showRemainingTime, setShowRemainingTim
           </div>
         )}
       </div>
+      <button
+        className="queue-action-btn"
+        onClick={() => queue.length > 0 && setIsNowPlayingCollapsed(!isNowPlayingCollapsed)}
+        disabled={queue.length === 0}
+        data-tooltip={queue.length === 0 ? t('queue.emptyQueue') : (isNowPlayingCollapsed ? t('queue.showNowPlaying') : t('queue.hideNowPlaying'))}
+        aria-label={queue.length === 0 ? t('queue.emptyQueue') : (isNowPlayingCollapsed ? t('queue.showNowPlaying') : t('queue.hideNowPlaying'))}
+        aria-expanded={!isNowPlayingCollapsed}
+        style={{ marginLeft: '8px', opacity: queue.length === 0 ? 0.3 : 1, cursor: queue.length === 0 ? 'not-allowed' : 'pointer' }}
+      >
+        <ChevronDown size={18} style={{ transform: isNowPlayingCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.2s ease' }} />
+      </button>
     </div>
   );
 }
@@ -332,7 +381,9 @@ function QueuePanelHostOrSolo() {
   const setTab     = useLyricsStore(s => s.setTab);
   const luckyRolling = useLuckyMixStore(s => s.isRolling);
 
-  const [showRemainingTime, setShowRemainingTime] = useState(false);
+  const isNowPlayingCollapsed = useAuthStore(s => s.queueNowPlayingCollapsed);
+  const setIsNowPlayingCollapsed = useAuthStore(s => s.setQueueNowPlayingCollapsed);
+  const [durationMode, setDurationMode] = useState<DurationMode>('total');
   const [showCrossfadePopover, setShowCrossfadePopover] = useState(false);
   const [lufsTgtOpen, setLufsTgtOpen] = useState(false);
   const [lufsTgtPopStyle, setLufsTgtPopStyle] = useState<React.CSSProperties>({});
@@ -343,6 +394,7 @@ function QueuePanelHostOrSolo() {
   const crossfadeBtnRef = useRef<HTMLButtonElement>(null);
   const crossfadePopoverRef = useRef<HTMLDivElement>(null);
   const reanalyzeLoudnessForTrack = usePlayerStore(s => s.reanalyzeLoudnessForTrack);
+  const isStorePlaying = usePlayerStore(s => s.isPlaying);
   const authLoudnessTargetLufs = useAuthStore(s => s.loudnessTargetLufs);
   const setLoudnessTargetLufs = useAuthStore(s => s.setLoudnessTargetLufs);
   const loudnessPreAnalysisAttenuationDb = useAuthStore(s => s.loudnessPreAnalysisAttenuationDb);
@@ -605,13 +657,15 @@ function QueuePanelHostOrSolo() {
       <QueueHeader
         queue={queue}
         queueIndex={queueIndex}
-        showRemainingTime={showRemainingTime}
-        setShowRemainingTime={setShowRemainingTime}
         activePlaylist={activePlaylist}
+        isNowPlayingCollapsed={isNowPlayingCollapsed}
+        setIsNowPlayingCollapsed={setIsNowPlayingCollapsed}
+        durationMode={durationMode}
+        setDurationMode={setDurationMode}
         t={t}
       />
 
-      {currentTrack && (
+      {currentTrack && !isNowPlayingCollapsed && (
         <div className="queue-current-track">
           {(() => {
             const baseParts = [
@@ -827,95 +881,97 @@ function QueuePanelHostOrSolo() {
       )}
 
       {activeTab === 'queue' ? (<>
-        <div className="queue-toolbar">
-        <button className="queue-round-btn" onClick={() => shuffleQueue()} disabled={queue.length < 2} data-tooltip={t('queue.shuffle')} aria-label={t('queue.shuffle')}>
-          <Shuffle size={13} />
-        </button>
-        <button
-          className={`queue-round-btn${saveState === 'saved' ? ' active' : ''}`}
-          onClick={handleSave}
-          disabled={saveState === 'saving'}
-          data-tooltip={activePlaylist ? `${t('queue.updatePlaylist')}: ${activePlaylist.name}` : t('queue.savePlaylist')}
-          aria-label={t('queue.savePlaylist')}
-        >
-          {saveState === 'saved' ? <Check size={13} /> : <Save size={13} />}
-        </button>
-        <button className="queue-round-btn" onClick={handleLoad} data-tooltip={t('queue.loadPlaylist')} aria-label={t('queue.loadPlaylist')}>
-          <FolderOpen size={13} />
-        </button>
-        <button
-          className="queue-round-btn"
-          onClick={() => void handleCopyQueueShare()}
-          data-tooltip={t('queue.shareQueue')}
-          aria-label={t('queue.shareQueue')}
-        >
-          <Share2 size={13} />
-        </button>
-        <button className="queue-round-btn" onClick={handleClear} data-tooltip={t('queue.clear')} aria-label={t('queue.clear')}>
-          <Trash2 size={13} />
-        </button>
-        <div className="queue-toolbar-sep" />
-        <button
-          className={`queue-round-btn${gaplessEnabled ? ' active' : ''}`}
-          onClick={() => { setCrossfadeEnabled(false); setShowCrossfadePopover(false); setGaplessEnabled(!gaplessEnabled); }}
-          data-tooltip={t('queue.gapless')}
-          aria-label={t('queue.gapless')}
-        >
-          <MoveRight size={13} />
-        </button>
-        <div style={{ position: 'relative' }}>
-          <button
-            ref={crossfadeBtnRef}
-            className={`queue-round-btn${crossfadeEnabled || showCrossfadePopover ? ' active' : ''}`}
-            onClick={() => {
-              if (crossfadeEnabled) {
-                setCrossfadeEnabled(false);
-                setShowCrossfadePopover(false);
-              } else {
-                setGaplessEnabled(false);
-                setCrossfadeEnabled(true);
-                setShowCrossfadePopover(true);
-              }
-            }}
-            data-tooltip={showCrossfadePopover ? undefined : t('queue.crossfade')}
-            aria-label={t('queue.crossfade')}
-          >
-            <Waves size={13} />
-          </button>
-          {showCrossfadePopover && (
-            <div className="crossfade-popover" ref={crossfadePopoverRef}>
-              <div className="crossfade-popover-label">
-                <Waves size={11} />
-                {t('queue.crossfade')}
-                <span className="crossfade-popover-value">{crossfadeSecs.toFixed(1)} s</span>
-              </div>
-              <input
-                type="range"
-                min={0.1}
-                max={10}
-                step={0.1}
-                value={crossfadeSecs}
-                onChange={e => {
-                  setCrossfadeSecs(parseFloat(e.target.value));
-                  setCrossfadeEnabled(true);
+        {!isNowPlayingCollapsed && (
+          <div className="queue-toolbar">
+            <button className="queue-round-btn" onClick={() => shuffleQueue()} disabled={queue.length < 2} data-tooltip={t('queue.shuffle')} aria-label={t('queue.shuffle')}>
+              <Shuffle size={13} />
+            </button>
+            <button
+              className={`queue-round-btn${saveState === 'saved' ? ' active' : ''}`}
+              onClick={handleSave}
+              disabled={saveState === 'saving'}
+              data-tooltip={activePlaylist ? `${t('queue.updatePlaylist')}: ${activePlaylist.name}` : t('queue.savePlaylist')}
+              aria-label={t('queue.savePlaylist')}
+            >
+              {saveState === 'saved' ? <Check size={13} /> : <Save size={13} />}
+            </button>
+            <button className="queue-round-btn" onClick={handleLoad} data-tooltip={t('queue.loadPlaylist')} aria-label={t('queue.loadPlaylist')}>
+              <FolderOpen size={13} />
+            </button>
+            <button
+              className="queue-round-btn"
+              onClick={() => void handleCopyQueueShare()}
+              data-tooltip={t('queue.shareQueue')}
+              aria-label={t('queue.shareQueue')}
+            >
+              <Share2 size={13} />
+            </button>
+            <button className="queue-round-btn" onClick={handleClear} data-tooltip={t('queue.clear')} aria-label={t('queue.clear')}>
+              <Trash2 size={13} />
+            </button>
+            <div className="queue-toolbar-sep" />
+            <button
+              className={`queue-round-btn${gaplessEnabled ? ' active' : ''}`}
+              onClick={() => { setCrossfadeEnabled(false); setShowCrossfadePopover(false); setGaplessEnabled(!gaplessEnabled); }}
+              data-tooltip={t('queue.gapless')}
+              aria-label={t('queue.gapless')}
+            >
+              <MoveRight size={13} />
+            </button>
+            <div style={{ position: 'relative' }}>
+              <button
+                ref={crossfadeBtnRef}
+                className={`queue-round-btn${crossfadeEnabled || showCrossfadePopover ? ' active' : ''}`}
+                onClick={() => {
+                  if (crossfadeEnabled) {
+                    setCrossfadeEnabled(false);
+                    setShowCrossfadePopover(false);
+                  } else {
+                    setGaplessEnabled(false);
+                    setCrossfadeEnabled(true);
+                    setShowCrossfadePopover(true);
+                  }
                 }}
-                className="crossfade-popover-slider"
-              />
-              <div className="crossfade-popover-range">
-                <span>0.1s</span><span>10s</span>
-              </div>
+                data-tooltip={showCrossfadePopover ? undefined : t('queue.crossfade')}
+                aria-label={t('queue.crossfade')}
+              >
+                <Waves size={13} />
+              </button>
+              {showCrossfadePopover && (
+                <div className="crossfade-popover" ref={crossfadePopoverRef}>
+                  <div className="crossfade-popover-label">
+                    <Waves size={11} />
+                    {t('queue.crossfade')}
+                    <span className="crossfade-popover-value">{crossfadeSecs.toFixed(1)} s</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0.1}
+                    max={10}
+                    step={0.1}
+                    value={crossfadeSecs}
+                    onChange={e => {
+                      setCrossfadeSecs(parseFloat(e.target.value));
+                      setCrossfadeEnabled(true);
+                    }}
+                    className="crossfade-popover-slider"
+                  />
+                  <div className="crossfade-popover-range">
+                    <span>0.1s</span><span>10s</span>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-        <button
-          className={`queue-round-btn${infiniteQueueEnabled ? ' active' : ''}`}
-          onClick={() => setInfiniteQueueEnabled(!infiniteQueueEnabled)}
-          data-tooltip={t('queue.infiniteQueue')}
-          aria-label={t('queue.infiniteQueue')}
-        >
-          <Infinity size={13} />
-        </button>
-      </div>
+            <button
+              className={`queue-round-btn${infiniteQueueEnabled ? ' active' : ''}`}
+              onClick={() => setInfiniteQueueEnabled(!infiniteQueueEnabled)}
+              data-tooltip={t('queue.infiniteQueue')}
+              aria-label={t('queue.infiniteQueue')}
+            >
+              <Infinity size={13} />
+            </button>
+          </div>
+        )}
 
       {currentTrack && queue.length > 0 && <div className="queue-divider"><span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>{t('queue.nextTracks')}</span></div>}
 
@@ -994,9 +1050,15 @@ function QueuePanelHostOrSolo() {
                 }}
                 style={dragStyle}
               >
+                {isPlaying && (
+                  <div className={`eq-bars${isStorePlaying ? '' : ' paused'}`} style={{ marginRight: '8px', flexShrink: 0 }}>
+                    <div className="eq-bar" />
+                    <div className="eq-bar" />
+                    <div className="eq-bar" />
+                  </div>
+                )}
                 <div className="queue-item-info">
                   <div className="queue-item-title truncate" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {isPlaying && <Play size={10} fill="currentColor" style={{ flexShrink: 0 }} />}
                     <span className="truncate">{track.title}</span>
                   </div>
                   <div className="queue-item-artist truncate">{track.artist}</div>

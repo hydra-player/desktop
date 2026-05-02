@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Music,
   Square, Repeat, Repeat1, Maximize2, SlidersVertical, X, Heart, Cast,
-  PictureInPicture2, ArrowLeftRight, Moon, Sunrise,
+  PictureInPicture2, ArrowLeftRight, Moon, Sunrise, Ellipsis,
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { usePlayerStore } from '../store/playerStore';
@@ -25,6 +25,7 @@ import { usePlaybackDelayPress } from '../hooks/usePlaybackDelayPress';
 import PlaybackDelayModal from './PlaybackDelayModal';
 import PlaybackScheduleBadge from './PlaybackScheduleBadge';
 import { usePlaybackScheduleRemaining } from '../utils/playbackScheduleFormat';
+import { usePreviewStore } from '../store/previewStore';
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds)) return '0:00';
@@ -107,6 +108,15 @@ export default function PlayerBar() {
   const { lastfmSessionKey } = useAuthStore();
   const floatingPlayerBar = useThemeStore(s => s.floatingPlayerBar);
   const [floatingStyle, setFloatingStyle] = useState<React.CSSProperties>({});
+  const playerBarRef = useRef<HTMLElement>(null);
+  const [utilityOverflow, setUtilityOverflow] = useState(false);
+  const [utilityMenuOpen, setUtilityMenuOpen] = useState(false);
+  const [utilityMenuMode, setUtilityMenuMode] = useState<'full' | 'volume'>('full');
+  const utilityMenuRef = useRef<HTMLDivElement>(null);
+  const utilityBtnRef = useRef<HTMLButtonElement>(null);
+  const [utilityMenuStyle, setUtilityMenuStyle] = useState<React.CSSProperties>({});
+  const volumeWheelMenuTimerRef = useRef<number | null>(null);
+  const [suppressOverflowTooltip, setSuppressOverflowTooltip] = useState(false);
 
   useEffect(() => {
     if (!floatingPlayerBar) return;
@@ -140,10 +150,95 @@ export default function PlayerBar() {
     };
   }, [floatingPlayerBar]);
 
+  useEffect(() => {
+    const updateOverflow = () => {
+      const width = playerBarRef.current?.clientWidth ?? window.innerWidth;
+      const threshold = floatingPlayerBar ? 980 : 1140;
+      setUtilityOverflow(width < threshold);
+    };
+
+    updateOverflow();
+    const ro = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(updateOverflow)
+      : null;
+    const el = playerBarRef.current;
+    if (ro && el) ro.observe(el);
+    window.addEventListener('resize', updateOverflow);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', updateOverflow);
+    };
+  }, [floatingPlayerBar]);
+
+  useEffect(() => {
+    if (!utilityOverflow) setUtilityMenuOpen(false);
+    if (!utilityOverflow && volumeWheelMenuTimerRef.current != null) {
+      window.clearTimeout(volumeWheelMenuTimerRef.current);
+      volumeWheelMenuTimerRef.current = null;
+    }
+  }, [utilityOverflow]);
+
+  useEffect(() => {
+    if (!utilityMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (utilityBtnRef.current?.contains(target)) return;
+      if (utilityMenuRef.current?.contains(target)) return;
+      setUtilityMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setUtilityMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [utilityMenuOpen]);
+
+  useEffect(() => () => {
+    if (volumeWheelMenuTimerRef.current != null) {
+      window.clearTimeout(volumeWheelMenuTimerRef.current);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!utilityMenuOpen) return;
+    const MENU_WIDTH = 238;
+    const MARGIN = 8;
+    const updateMenuPos = () => {
+      const btn = utilityBtnRef.current;
+      if (!btn) return;
+      const r = btn.getBoundingClientRect();
+      const left = Math.min(
+        Math.max(r.right - MENU_WIDTH, MARGIN),
+        window.innerWidth - MENU_WIDTH - MARGIN,
+      );
+      setUtilityMenuStyle({
+        position: 'fixed',
+        left,
+        width: MENU_WIDTH,
+        bottom: window.innerHeight - r.top + 8,
+        zIndex: 10050,
+      });
+    };
+    updateMenuPos();
+    window.addEventListener('resize', updateMenuPos);
+    window.addEventListener('scroll', updateMenuPos, true);
+    return () => {
+      window.removeEventListener('resize', updateMenuPos);
+      window.removeEventListener('scroll', updateMenuPos, true);
+    };
+  }, [utilityMenuOpen]);
+
   const { delayModalOpen, setDelayModalOpen, playPauseBind } = usePlaybackDelayPress(togglePlay);
   const transportAnchorRef = useRef<HTMLDivElement>(null);
   const playSlotRef = useRef<HTMLSpanElement>(null);
   const scheduleRemaining = usePlaybackScheduleRemaining();
+  const isPreviewing = usePreviewStore(s => s.previewingId !== null);
+  const previewAudioStarted = usePreviewStore(s => s.audioStarted);
+  const previewingTrack = usePreviewStore(s => s.previewingTrack);
 
   const isRadio = !!currentRadio;
 
@@ -176,18 +271,39 @@ export default function PlayerBar() {
     [currentRadio?.coverArt, currentRadio?.id]
   );
   const radioCoverKey = currentRadio?.coverArt ? coverArtCacheKey(`ra-${currentRadio.id}`, 128) : '';
-  const coverSrc = useMemo(() => currentTrack?.coverArt ? buildCoverArtUrl(currentTrack.coverArt, 128) : '', [currentTrack?.coverArt]);
-  const coverKey = currentTrack?.coverArt ? coverArtCacheKey(currentTrack.coverArt, 128) : '';
+  // Preview takes visual priority over the queued track in the player-bar info
+  // cell, but only when not in radio mode (radio has its own meta layout).
+  const showPreviewMeta = isPreviewing && !isRadio && previewingTrack !== null;
+  const displayCoverArt = showPreviewMeta ? previewingTrack!.coverArt : currentTrack?.coverArt;
+  const displayTitle = showPreviewMeta ? previewingTrack!.title : (currentTrack?.title ?? t('player.noTitle'));
+  const displayArtist = showPreviewMeta ? previewingTrack!.artist : (currentTrack?.artist ?? '—');
+
+  const coverSrc = useMemo(() => displayCoverArt ? buildCoverArtUrl(displayCoverArt, 128) : '', [displayCoverArt]);
+  const coverKey = displayCoverArt ? coverArtCacheKey(displayCoverArt, 128) : '';
 
   const handleVolume = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setVolume(parseFloat(e.target.value));
   }, [setVolume]);
 
-  const handleVolumeWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+  const handleVolumeWheel = useCallback((e: React.WheelEvent<HTMLElement>) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.05 : 0.05;
     setVolume(Math.max(0, Math.min(1, volume + delta)));
-  }, [volume, setVolume]);
+
+    if (utilityOverflow) {
+      setSuppressOverflowTooltip(true);
+      setUtilityMenuMode('volume');
+      setUtilityMenuOpen(true);
+      if (volumeWheelMenuTimerRef.current != null) {
+        window.clearTimeout(volumeWheelMenuTimerRef.current);
+      }
+      volumeWheelMenuTimerRef.current = window.setTimeout(() => {
+        setUtilityMenuOpen(false);
+        setSuppressOverflowTooltip(false);
+        volumeWheelMenuTimerRef.current = null;
+      }, 1000);
+    }
+  }, [volume, setVolume, utilityOverflow]);
 
   const volumeStyle = {
     background: `linear-gradient(to right, var(--volume-accent, var(--accent)) ${volume * 100}%, var(--ctp-surface2) ${volume * 100}%)`,
@@ -196,7 +312,8 @@ export default function PlayerBar() {
   const playerBarContent = (
     <>
     <footer
-      className={`player-bar ${floatingPlayerBar ? 'floating' : ''}`}
+      ref={playerBarRef}
+      className={`player-bar ${floatingPlayerBar ? 'floating' : ''}${showPreviewMeta ? ' is-previewing' : ''}${showPreviewMeta && previewAudioStarted ? ' audio-started' : ''}`}
       style={floatingPlayerBar ? floatingStyle : undefined}
       role="region"
       aria-label={t('player.regionLabel')}
@@ -205,9 +322,9 @@ export default function PlayerBar() {
       {/* Track Info */}
       <div className="player-track-info">
         <div
-          className={`player-album-art-wrap ${currentTrack && !isRadio ? 'clickable' : ''}`}
-          onClick={() => !isRadio && currentTrack && toggleFullscreen()}
-          data-tooltip={!isRadio && currentTrack ? t('player.openFullscreen') : undefined}
+          className={`player-album-art-wrap ${currentTrack && !isRadio && !showPreviewMeta ? 'clickable' : ''}`}
+          onClick={() => !isRadio && !showPreviewMeta && currentTrack && toggleFullscreen()}
+          data-tooltip={!isRadio && !showPreviewMeta && currentTrack ? t('player.openFullscreen') : undefined}
         >
           {isRadio ? (
             currentRadio?.coverArt ? (
@@ -222,25 +339,30 @@ export default function PlayerBar() {
                 <Cast size={20} />
               </div>
             )
-          ) : currentTrack?.coverArt ? (
+          ) : displayCoverArt ? (
             <CachedImage
               className="player-album-art"
               src={coverSrc}
               cacheKey={coverKey}
-              alt={`${currentTrack.album} Cover`}
+              alt={showPreviewMeta ? `${previewingTrack!.title} Cover` : `${currentTrack?.album ?? ''} Cover`}
             />
           ) : (
             <div className="player-album-art-placeholder">
               <Music size={22} />
             </div>
           )}
-          {currentTrack && !isRadio && (
+          {currentTrack && !isRadio && !showPreviewMeta && (
             <div className="player-art-expand-hint" aria-hidden="true">
               <Maximize2 size={16} />
             </div>
           )}
         </div>
         <div className="player-track-meta">
+          {showPreviewMeta && (
+            <span className="player-preview-label" aria-label={t('player.previewActive')}>
+              {t('player.previewLabel')}
+            </span>
+          )}
           <MarqueeText
             text={isRadio
               ? (radioMeta.currentTitle
@@ -248,22 +370,22 @@ export default function PlayerBar() {
                       ? `${radioMeta.currentArtist} — ${radioMeta.currentTitle}`
                       : radioMeta.currentTitle)
                   : (currentRadio?.name ?? '—'))
-              : (currentTrack?.title ?? t('player.noTitle'))}
+              : displayTitle}
             className="player-track-name"
-            style={{ cursor: !isRadio && currentTrack?.albumId ? 'pointer' : 'default' }}
-            onClick={() => !isRadio && currentTrack?.albumId && navigate(`/album/${currentTrack.albumId}`)}
+            style={{ cursor: !isRadio && !showPreviewMeta && currentTrack?.albumId ? 'pointer' : 'default' }}
+            onClick={() => !isRadio && !showPreviewMeta && currentTrack?.albumId && navigate(`/album/${currentTrack.albumId}`)}
           />
           <MarqueeText
             text={isRadio
               ? (radioMeta.currentTitle && currentRadio?.name
                   ? currentRadio.name
                   : t('radio.liveStream'))
-              : (currentTrack?.artist ?? '—')}
+              : displayArtist}
             className="player-track-artist"
-            style={{ cursor: !isRadio && currentTrack?.artistId ? 'pointer' : 'default' }}
-            onClick={() => !isRadio && currentTrack?.artistId && navigate(`/artist/${currentTrack.artistId}`)}
+            style={{ cursor: !isRadio && !showPreviewMeta && currentTrack?.artistId ? 'pointer' : 'default' }}
+            onClick={() => !isRadio && !showPreviewMeta && currentTrack?.artistId && navigate(`/artist/${currentTrack.artistId}`)}
           />
-          {currentTrack && !isRadio && (
+          {currentTrack && !isRadio && !showPreviewMeta && (
             <StarRating
               value={userRatingOverrides[currentTrack.id] ?? currentTrack.userRating ?? 0}
               onChange={r => { setUserRatingOverride(currentTrack.id, r); setRating(currentTrack.id, r).catch(() => {}); }}
@@ -303,7 +425,19 @@ export default function PlayerBar() {
 
       {/* Transport Controls */}
       <div className="player-buttons" ref={transportAnchorRef}>
-        <button className="player-btn player-btn-sm" onClick={stop} aria-label={t('player.stop')} data-tooltip={t('player.stop')}>
+        <button
+          className="player-btn player-btn-sm"
+          onClick={() => {
+            if (isPreviewing) {
+              usePreviewStore.setState({ previewingId: null, previewingTrack: null, elapsed: 0 });
+              invoke('audio_preview_stop_silent').catch(() => {});
+            } else {
+              stop();
+            }
+          }}
+          aria-label={isPreviewing ? t('playlists.previewStop') : t('player.stop')}
+          data-tooltip={isPreviewing ? t('playlists.previewStop') : t('player.stop')}
+        >
           <Square size={14} fill="currentColor" />
         </button>
         <button className="player-btn" onClick={() => previous()} aria-label={t('player.prev')} data-tooltip={t('player.prev')} disabled={isRadio} style={isRadio ? { opacity: 0.3, pointerEvents: 'none' } : undefined}>
@@ -311,12 +445,27 @@ export default function PlayerBar() {
         </button>
         <span className="playback-transport-play-wrap" ref={playSlotRef}>
           <PlaybackScheduleBadge layoutAnchorRef={playSlotRef} />
+          {isPreviewing && (
+            <svg className="player-btn-preview-ring" viewBox="0 0 100 100" aria-hidden="true">
+              <circle cx="50" cy="50" r="47" pathLength="100" className="player-btn-preview-ring-track" />
+              <circle cx="50" cy="50" r="47" pathLength="100" className="player-btn-preview-ring-progress" />
+            </svg>
+          )}
           <button
-            className="player-btn player-btn-primary"
+            className={`player-btn player-btn-primary${isPreviewing ? ' is-previewing' : ''}`}
             type="button"
             {...playPauseBind}
-            aria-label={isPlaying ? t('player.pause') : t('player.play')}
-            data-tooltip={isPlaying ? t('player.pause') : t('player.play')}
+            onClick={isPreviewing
+              ? (() => {
+                  // Visual is "stop preview"; semantics match the tracklist preview
+                  // button — preview ends, main playback auto-resumes if it was
+                  // playing before. Use regular audio_preview_stop (not _silent).
+                  usePreviewStore.setState({ previewingId: null, previewingTrack: null, elapsed: 0 });
+                  invoke('audio_preview_stop').catch(() => {});
+                })
+              : playPauseBind.onClick}
+            aria-label={isPreviewing ? t('playlists.previewStop') : isPlaying ? t('player.pause') : t('player.play')}
+            data-tooltip={isPreviewing ? t('playlists.previewStop') : isPlaying ? t('player.pause') : t('player.play')}
           >
             {scheduleRemaining != null ? (
               <span className={`player-btn-schedule-stack player-btn-schedule-stack--${scheduleRemaining.mode}`}>
@@ -325,6 +474,8 @@ export default function PlayerBar() {
                   : <Sunrise size={10} strokeWidth={2.5} />}
                 <span className="player-btn-schedule-time">{scheduleRemaining.remaining}</span>
               </span>
+            ) : isPreviewing ? (
+              <Square size={16} fill="currentColor" strokeWidth={0} />
             ) : isPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" />}
           </button>
         </span>
@@ -391,65 +542,205 @@ export default function PlayerBar() {
         )}
       </div>
 
-      {/* EQ Button */}
-      <button
-        className={`player-btn player-btn-sm player-eq-btn ${eqOpen ? 'active' : ''}`}
-        onClick={() => setEqOpen(v => !v)}
-        aria-label="Equalizer"
-        data-tooltip="Equalizer"
-      >
-        <SlidersVertical size={15} />
-      </button>
-
-      {/* Mini Player */}
-      <button
-        className="player-btn player-btn-sm"
-        onClick={() => invoke('open_mini_player').catch(() => {})}
-        aria-label="Mini Player"
-        data-tooltip="Mini Player"
-      >
-        <PictureInPicture2 size={15} />
-      </button>
-
-      {/* Volume */}
-      <div className="player-volume-section">
-        <button
-          className="player-btn player-btn-sm"
-          onClick={() => {
-            if (volume === 0) {
-              setVolume(premuteVolumeRef.current);
-            } else {
-              premuteVolumeRef.current = volume;
-              setVolume(0);
-            }
-          }}
-          aria-label={t('player.volume')}
-          style={{ color: 'var(--text-muted)', flexShrink: 0 }}
-        >
-          {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
-        </button>
-        <div className="player-volume-slider-wrap" onWheel={handleVolumeWheel}>
-          {showVolPct && (
-            <span className="player-volume-pct" style={{ left: `${volume * 100}%` }}>
-              {Math.round(volume * 100)}%
-            </span>
-          )}
-          <input
-            type="range"
-            id="player-volume"
-            min={0}
-            max={1}
-            step={0.01}
-            value={volume}
-            onChange={handleVolume}
-            style={volumeStyle}
-            aria-label={t('player.volume')}
-            className="player-volume-slider"
-            onMouseEnter={() => setShowVolPct(true)}
-            onMouseLeave={() => setShowVolPct(false)}
-          />
+      {utilityOverflow ? (
+        <div className="player-overflow-wrap">
+          <button
+            ref={utilityBtnRef}
+            className={`player-btn player-btn-sm${utilityMenuOpen ? ' active' : ''}`}
+            onClick={() => {
+              setUtilityMenuMode('full');
+              setUtilityMenuOpen(v => !v);
+              if (volumeWheelMenuTimerRef.current != null) {
+                window.clearTimeout(volumeWheelMenuTimerRef.current);
+                volumeWheelMenuTimerRef.current = null;
+              }
+              setSuppressOverflowTooltip(false);
+            }}
+            onWheel={handleVolumeWheel}
+            aria-label={t('player.moreOptions')}
+            data-tooltip={suppressOverflowTooltip ? undefined : t('player.moreOptions')}
+          >
+            <Ellipsis size={15} />
+          </button>
         </div>
-      </div>
+      ) : (
+        <>
+          {/* EQ Button */}
+          <button
+            className={`player-btn player-btn-sm player-eq-btn ${eqOpen ? 'active' : ''}`}
+            onClick={() => setEqOpen(v => !v)}
+            aria-label={t('player.equalizer')}
+            data-tooltip={t('player.equalizer')}
+          >
+            <SlidersVertical size={15} />
+          </button>
+
+          {/* Mini Player */}
+          <button
+            className="player-btn player-btn-sm"
+            onClick={() => invoke('open_mini_player').catch(() => {})}
+            aria-label={t('player.miniPlayer')}
+            data-tooltip={t('player.miniPlayer')}
+          >
+            <PictureInPicture2 size={15} />
+          </button>
+
+          {/* Volume */}
+          <div className="player-volume-section">
+            <button
+              className="player-btn player-btn-sm"
+              onClick={() => {
+                if (volume === 0) {
+                  setVolume(premuteVolumeRef.current);
+                } else {
+                  premuteVolumeRef.current = volume;
+                  setVolume(0);
+                }
+              }}
+              aria-label={t('player.volume')}
+              style={{ color: 'var(--text-muted)', flexShrink: 0 }}
+            >
+              {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+            </button>
+            <div className="player-volume-slider-wrap" onWheel={handleVolumeWheel}>
+              {showVolPct && (
+                <span className="player-volume-pct" style={{ left: `${volume * 100}%` }}>
+                  {Math.round(volume * 100)}%
+                </span>
+              )}
+              <input
+                type="range"
+                id="player-volume"
+                min={0}
+                max={1}
+                step={0.01}
+                value={volume}
+                onChange={handleVolume}
+                style={volumeStyle}
+                aria-label={t('player.volume')}
+                className="player-volume-slider"
+                onMouseEnter={() => setShowVolPct(true)}
+                onMouseLeave={() => setShowVolPct(false)}
+              />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* EQ Popup — rendered via portal to avoid backdrop-filter containing-block issue */}
+      {utilityMenuOpen && createPortal(
+        <div
+          className={`player-overflow-menu${utilityMenuMode === 'volume' ? ' player-overflow-menu--volume-only' : ''}`}
+          ref={utilityMenuRef}
+          style={utilityMenuStyle}
+          onWheel={handleVolumeWheel}
+        >
+          {utilityMenuMode === 'full' && (
+            <div className="player-overflow-menu-row">
+              <button
+                className={`player-overflow-menu-btn${eqOpen ? ' active' : ''}`}
+                onClick={() => {
+                  setEqOpen(v => !v);
+                  setUtilityMenuOpen(false);
+                }}
+              >
+                <SlidersVertical size={14} />
+                {t('player.equalizer')}
+              </button>
+              <button
+                className="player-overflow-menu-btn"
+                onClick={() => {
+                  invoke('open_mini_player').catch(() => {});
+                  setUtilityMenuOpen(false);
+                }}
+              >
+                <PictureInPicture2 size={14} />
+                {t('player.miniPlayer')}
+              </button>
+            </div>
+          )}
+          {utilityMenuMode === 'full' ? (
+            <div className="player-volume-section player-volume-section--menu">
+              <button
+                className="player-btn player-btn-sm"
+                onClick={() => {
+                  if (volume === 0) {
+                    setVolume(premuteVolumeRef.current);
+                  } else {
+                    premuteVolumeRef.current = volume;
+                    setVolume(0);
+                  }
+                }}
+                aria-label={t('player.volume')}
+                style={{ color: 'var(--text-muted)', flexShrink: 0 }}
+              >
+                {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              </button>
+              <div className="player-volume-slider-wrap" onWheel={handleVolumeWheel}>
+                {showVolPct && (
+                  <span className="player-volume-pct" style={{ left: `${volume * 100}%` }}>
+                    {Math.round(volume * 100)}%
+                  </span>
+                )}
+                <input
+                  type="range"
+                  id="player-volume-overflow"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={volume}
+                  onChange={handleVolume}
+                  style={volumeStyle}
+                  aria-label={t('player.volume')}
+                  className="player-volume-slider"
+                  onMouseEnter={() => setShowVolPct(true)}
+                  onMouseLeave={() => setShowVolPct(false)}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="player-volume-section player-volume-section--menu">
+              <button
+                className="player-btn player-btn-sm"
+                onClick={() => {
+                  if (volume === 0) {
+                    setVolume(premuteVolumeRef.current);
+                  } else {
+                    premuteVolumeRef.current = volume;
+                    setVolume(0);
+                  }
+                }}
+                aria-label={t('player.volume')}
+                style={{ color: 'var(--text-muted)', flexShrink: 0 }}
+              >
+                {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              </button>
+              <div className="player-volume-slider-wrap player-volume-slider-wrap--menu-only" onWheel={handleVolumeWheel}>
+                {showVolPct && (
+                  <span className="player-volume-pct" style={{ left: `${volume * 100}%` }}>
+                    {Math.round(volume * 100)}%
+                  </span>
+                )}
+                <input
+                  type="range"
+                  id="player-volume-overflow-wheel"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={volume}
+                  onChange={handleVolume}
+                  style={volumeStyle}
+                  aria-label={t('player.volume')}
+                  className="player-volume-slider"
+                  onMouseEnter={() => setShowVolPct(true)}
+                  onMouseLeave={() => setShowVolPct(false)}
+                />
+              </div>
+            </div>
+          )}
+        </div>,
+        document.body
+      )}
 
       {/* EQ Popup — rendered via portal to avoid backdrop-filter containing-block issue */}
       {eqOpen && createPortal(

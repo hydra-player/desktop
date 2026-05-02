@@ -31,11 +31,13 @@ import {
   DEFAULT_LOUDNESS_PRE_ANALYSIS_ATTENUATION_DB,
   ServerProfile,
   MIX_MIN_RATING_FILTER_MAX_STARS,
+  TRACK_PREVIEW_LOCATIONS,
   type SeekbarStyle,
   type LyricsSourceId,
   type LyricsSourceConfig,
   type LoggingMode,
   type LoudnessLufsPreset,
+  type TrackPreviewLocation,
 } from '../store/authStore';
 import { SeekbarPreview } from '../components/WaveformSeek';
 import { IS_LINUX, IS_MACOS, IS_WINDOWS } from '../utils/platform';
@@ -195,6 +197,13 @@ const CONTRIBUTORS = [
       'Queue undo/redo — hotkeys, playback-aware restore, scroll restoration (PR #331)',
       'Lucky Mix + mix rating filter (Navidrome / OpenSubsonic) (PR #332)',
       'Loudness: target sync, effective pre-analysis trim, queue/settings copy (PR #333)',
+      'CLI logs mode with tail/follow and shell completions (PR #337)',
+      'Player: reserve preview row space in delay modal (PR #344)',
+      'Infinite queue: respect rating filter in top-up (PR #357)',
+      'NixOS install guide refresh for channels and CI (PR #380)',
+      'UI refinements — sidebar discovery indicators, adaptive header, interaction polish (PR #397)',
+      'Queue: drag rows outside to remove with trash ghost (PR #420)',
+      'Tauri: modularize audio and lib command layers (PR #422)',
     ],
   },
   {
@@ -238,6 +247,7 @@ const CONTRIBUTORS = [
       'Linux GPU-vendor auto-detection to configure the WebKitGTK DMA-BUF renderer (disabled on NVIDIA proprietary) (PR #217)',
       'Artist page: continue playback when starting top songs (PR #220)',
       'Floating player bar: scroll-padding fix (PR #221)',
+      'Queue Panel — position counter, tri-state duration toggle (total/remaining/ETA), persistent Now Playing collapse, animated EQ indicator (PR #419)',
     ],
   },
   {
@@ -328,6 +338,14 @@ const CONTRIBUTORS = [
       'Playlists: confirm before re-adding songs already in the playlist (PR #329)',
       'Discord: debug-build logging for Rich Presence IPC path (PR #330)',
       'Player: persist queue panel visibility + drop dead loudness binding (PR #336)',
+      'Playlists: suggestion-row preview UX (PR #365)',
+      'macOS: Equalizer canvas blanking fix when laid-out dimensions are missing (PR #384)',
+      'Themes: Kanagawa, Atom One and 1984 palettes; OSS Classics regrouped by family (PR #390)',
+      'Rust track preview engine + player-bar preview indicator with smart stop semantics (PRs #392, #394)',
+      'Tray: now-playing track tooltip + i18n menu labels (PR #395)',
+      'Preview: audio start sync, ring animation, download timeout (PR #423)',
+      'Statistics: shareable Top-Albums card export (PR #425)',
+      'Windows: playback stutter under GPU load — MMCSS Pro Audio promotion + animation pause + reduce-animations toggle (PR #426)',
     ],
   },
 ] as const;
@@ -394,7 +412,7 @@ const SETTINGS_INDEX: SearchIndexEntry[] = [
   { tab: 'appearance',     titleKey: 'settings.uiScaleTitle',             keywords: 'ui scale zoom dpi size' },
   { tab: 'appearance',     titleKey: 'settings.font',                     keywords: 'font typography typeface' },
   { tab: 'appearance',     titleKey: 'settings.fsPlayerSection',          keywords: 'fullscreen player mesh blob' },
-  { tab: 'appearance',     titleKey: 'settings.seekbarStyle',             keywords: 'seekbar progress bar waveform' },
+  { tab: 'appearance',     titleKey: 'settings.seekbarStyle',             keywords: 'seekbar progress bar waveform reduced animations performance gpu fps low-end framerate cap' },
   { tab: 'input',          titleKey: 'settings.inputKeybindingsTitle',    keywords: 'keybindings shortcuts hotkeys keyboard' },
   { tab: 'input',          titleKey: 'settings.globalShortcutsTitle',     keywords: 'global shortcuts hotkeys system-wide media keys' },
   { tab: 'system',         titleKey: 'settings.language',                 keywords: 'language locale translation i18n' },
@@ -2523,6 +2541,111 @@ export default function Settings() {
             </div>
           </SettingsSubSection>
 
+          <SettingsSubSection
+            title={t('settings.trackPreviewsTitle')}
+            icon={<Play size={16} />}
+          >
+            <div className="settings-card">
+              <div className="settings-toggle-row">
+                <div>
+                  <div style={{ fontWeight: 500 }}>
+                    {t('settings.trackPreviewsToggle')}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    {t('settings.trackPreviewsDesc')}
+                  </div>
+                </div>
+                <label className="toggle-switch" aria-label={t('settings.trackPreviewsToggle')}>
+                  <input type="checkbox" checked={auth.trackPreviewsEnabled}
+                    onChange={e => auth.setTrackPreviewsEnabled(e.target.checked)} />
+                  <span className="toggle-track" />
+                </label>
+              </div>
+
+              {auth.trackPreviewsEnabled && (
+                <>
+                  <div className="divider" />
+                  <div>
+                    <div style={{ fontWeight: 500, marginBottom: 4 }}>
+                      {t('settings.trackPreviewLocationsTitle')}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+                      {t('settings.trackPreviewLocationsDesc')}
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2,
+                    }}>
+                      {TRACK_PREVIEW_LOCATIONS.map((loc: TrackPreviewLocation) => (
+                        <div key={loc} className="settings-toggle-row" style={{ padding: '6px var(--space-3)' }}>
+                          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                            {t(`settings.trackPreviewLocation_${loc}`)}
+                          </div>
+                          <label className="toggle-switch" aria-label={t(`settings.trackPreviewLocation_${loc}`)}>
+                            <input type="checkbox" checked={auth.trackPreviewLocations[loc]}
+                              onChange={e => auth.setTrackPreviewLocation(loc, e.target.checked)} />
+                            <span className="toggle-track" />
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="divider" />
+                  <div>
+                    <div style={{ fontWeight: 500, marginBottom: 4 }}>
+                      {t('settings.trackPreviewStart')}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                      {t('settings.trackPreviewStartDesc')}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <input
+                        type="range"
+                        min={0}
+                        max={0.9}
+                        step={0.01}
+                        value={auth.trackPreviewStartRatio}
+                        onChange={e => auth.setTrackPreviewStartRatio(parseFloat(e.target.value))}
+                        style={{ flex: 1, minWidth: 80, maxWidth: 240 }}
+                        aria-label={t('settings.trackPreviewStart')}
+                      />
+                      <span style={{ fontSize: 13, color: 'var(--text-secondary)', minWidth: 44 }}>
+                        {Math.round(auth.trackPreviewStartRatio * 100)}%
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="divider" />
+                  <div>
+                    <div style={{ fontWeight: 500, marginBottom: 4 }}>
+                      {t('settings.trackPreviewDuration')}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                      {t('settings.trackPreviewDurationDesc')}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <input
+                        type="range"
+                        min={5}
+                        max={60}
+                        step={1}
+                        value={auth.trackPreviewDurationSec}
+                        onChange={e => auth.setTrackPreviewDurationSec(parseInt(e.target.value, 10))}
+                        style={{ flex: 1, minWidth: 80, maxWidth: 240 }}
+                        aria-label={t('settings.trackPreviewDuration')}
+                      />
+                      <span style={{ fontSize: 13, color: 'var(--text-secondary)', minWidth: 44 }}>
+                        {t('settings.trackPreviewDurationSecs', { n: auth.trackPreviewDurationSec })}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </SettingsSubSection>
+
         </>
       )}
 
@@ -3402,7 +3525,11 @@ export default function Settings() {
               </div>
               {theme.enableThemeScheduler && (() => {
                 const themeOptions = THEME_GROUPS.flatMap(g =>
-                  g.themes.map(th => ({ value: th.id, label: th.label, group: g.group }))
+                  g.themes.map(th => ({
+                    value: th.id,
+                    label: th.family ? `${th.family} ${th.label}` : th.label,
+                    group: g.group,
+                  }))
                 );
                 const use12h = i18n.language === 'en';
                 const hourOptions = Array.from({ length: 24 }, (_, i) => {
@@ -3732,6 +3859,16 @@ export default function Settings() {
                     onClick={() => auth.setSeekbarStyle(style)}
                   />
                 ))}
+              </div>
+              <div className="settings-toggle-row" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+                <div>
+                  <div style={{ fontWeight: 500 }}>{t('settings.reducedAnimations')}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('settings.reducedAnimationsDesc')}</div>
+                </div>
+                <label className="toggle-switch" aria-label={t('settings.reducedAnimations')}>
+                  <input type="checkbox" checked={auth.reducedAnimations} onChange={e => auth.setReducedAnimations(e.target.checked)} />
+                  <span className="toggle-track" />
+                </label>
               </div>
             </div>
           </SettingsSubSection>

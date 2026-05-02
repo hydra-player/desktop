@@ -107,11 +107,31 @@ import { useEqStore } from './store/eqStore';
 import { useKeybindingsStore, matchInAppBinding, buildInAppBinding } from './store/keybindingsStore';
 import { useGlobalShortcutsStore } from './store/globalShortcutsStore';
 import { useZipDownloadStore } from './store/zipDownloadStore';
+import { usePreviewStore } from './store/previewStore';
 import ZipDownloadOverlay from './components/ZipDownloadOverlay';
 import PasteClipboardHandler from './components/PasteClipboardHandler';
 
 /** Volume before last `psysonic --player mute` (CLI only; in-memory). */
 let cliPremuteVolume: number | null = null;
+const SIDEBAR_COLLAPSED_STORAGE_KEY = 'psysonic_sidebar_collapsed';
+
+function readInitialSidebarCollapsed(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function persistSidebarCollapsed(collapsed: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(collapsed));
+  } catch {
+    // Ignore storage failures and keep in-memory UI state.
+  }
+}
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isLoggedIn, servers, activeServerId } = useAuthStore();
@@ -141,7 +161,13 @@ function shouldSuppressQueueResizerMouseDown(clientX: number, clientY: number, q
   const xSlop = 22;
   const vPad = 40;
   for (let i = 0; i < thumbs.length; i++) {
-    const r = thumbs[i].getBoundingClientRect();
+    const thumb = thumbs[i];
+    const style = window.getComputedStyle(thumb);
+    const pointerActive = style.pointerEvents !== 'none';
+    const visible = Number.parseFloat(style.opacity || '0') > 0.01;
+    if (!pointerActive && !visible) continue;
+
+    const r = thumb.getBoundingClientRect();
     if (r.height < 4 || r.width < 1) continue;
     if (clientY < r.top - vPad || clientY > r.bottom + vPad) continue;
     const thumbHitRight = Math.min(r.right + xSlop, mainRight);
@@ -151,7 +177,7 @@ function shouldSuppressQueueResizerMouseDown(clientX: number, clientY: number, q
 }
 
 function AppShell() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isMobile = useIsMobile();
   const [isWindowFullscreen, setIsWindowFullscreen] = useState(false);
   const [isTilingWm, setIsTilingWm] = useState(false);
@@ -310,28 +336,53 @@ function AppShell() {
           const title = `${state} ${currentTrack.artist} - ${currentTrack.title} | Hydra`;
           document.title = title;
           await appWindow.setTitle(title);
+          await invoke('set_tray_tooltip', {
+            tooltip: `${currentTrack.artist} – ${currentTrack.title}`,
+            playbackState: isPlaying ? 'play' : 'pause',
+          }).catch(() => {});
         } else {
           document.title = 'Hydra';
           await appWindow.setTitle('Hydra');
+          await invoke('set_tray_tooltip', {
+            tooltip: '',
+            playbackState: 'stop',
+          }).catch(() => {});
         }
       } catch (err) {}
     };
     fn();
   }, [currentTrack, isPlaying]);
 
+  useEffect(() => {
+    const apply = () => {
+      invoke('set_tray_menu_labels', {
+        playPause: t('tray.playPause'),
+        next: t('tray.nextTrack'),
+        previous: t('tray.previousTrack'),
+        showHide: t('tray.showHide'),
+        quit: t('tray.exitPsysonic'),
+        nothingPlaying: t('tray.nothingPlaying'),
+      }).catch(() => {});
+    };
+    apply();
+    i18n.on('languageChanged', apply);
+    return () => { i18n.off('languageChanged', apply); };
+  }, [t, i18n]);
+
   // Post-update changelog is now surfaced via a dismissible banner in the
   // sidebar (WhatsNewBanner) that links to the /whats-new page — no auto
   // modal takeover on startup.
 
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    return localStorage.getItem('psysonic_sidebar_collapsed') === 'true';
-  });
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(readInitialSidebarCollapsed);
   const [queueWidth, setQueueWidth] = useState(340);
   const [isDraggingQueue, setIsDraggingQueue] = useState(false);
+  const [queueHandleTop, setQueueHandleTop] = useState<number | null>(null);
+  const [isMainScrolling, setIsMainScrolling] = useState(false);
 
-  useEffect(() => {
-    localStorage.setItem('psysonic_sidebar_collapsed', isSidebarCollapsed.toString());
-  }, [isSidebarCollapsed]);
+  const setSidebarCollapsed = useCallback((collapsed: boolean) => {
+    persistSidebarCollapsed(collapsed);
+    setIsSidebarCollapsed(collapsed);
+  }, []);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (isDraggingQueue) {
@@ -362,6 +413,107 @@ function AppShell() {
       document.body.classList.remove('is-dragging');
     };
   }, [isDraggingQueue, handleMouseMove, handleMouseUp]);
+
+  useEffect(() => {
+    const viewports = new Set<HTMLElement>();
+    const appViewport = document.getElementById(APP_MAIN_SCROLL_VIEWPORT_ID);
+    if (appViewport) viewports.add(appViewport);
+    const nowPlayingViewport = document.querySelector<HTMLElement>('.np-main__viewport');
+    if (nowPlayingViewport) viewports.add(nowPlayingViewport);
+    if (viewports.size === 0) return;
+
+    let scrollHideTimer: number | null = null;
+
+    const onScroll = () => {
+      setIsMainScrolling(true);
+      if (scrollHideTimer != null) window.clearTimeout(scrollHideTimer);
+      scrollHideTimer = window.setTimeout(() => {
+        setIsMainScrolling(false);
+        scrollHideTimer = null;
+      }, 180);
+    };
+
+    viewports.forEach(viewport => {
+      viewport.addEventListener('scroll', onScroll, { passive: true });
+    });
+    return () => {
+      viewports.forEach(viewport => {
+        viewport.removeEventListener('scroll', onScroll);
+      });
+      if (scrollHideTimer != null) window.clearTimeout(scrollHideTimer);
+      setIsMainScrolling(false);
+    };
+  }, [location.pathname]);
+
+  const syncQueueHandleTop = useCallback(() => {
+    const leftBtn = document.querySelector('.sidebar .collapse-btn') as HTMLElement | null;
+    if (!leftBtn) return;
+    const r = leftBtn.getBoundingClientRect();
+    setQueueHandleTop(r.top + r.height / 2);
+  }, []);
+
+  useEffect(() => {
+    if (isMobile) return;
+    const leftBtn = document.querySelector('.sidebar .collapse-btn') as HTMLElement | null;
+    if (!leftBtn) return;
+
+    syncQueueHandleTop();
+    const raf = requestAnimationFrame(syncQueueHandleTop);
+
+    const onResize = () => syncQueueHandleTop();
+    window.addEventListener('resize', onResize);
+    const observer = new ResizeObserver(onResize);
+    observer.observe(leftBtn);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', onResize);
+      observer.disconnect();
+    };
+  }, [isMobile, isSidebarCollapsed, syncQueueHandleTop]);
+
+  const handleQueueHandleMouseDown = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const DRAG_THRESHOLD_PX = 4;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let didDrag = false;
+
+    const cleanup = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp, true);
+      document.body.style.cursor = '';
+      document.body.classList.remove('is-dragging');
+    };
+
+    const applyWidthFromClientX = (clientX: number) => {
+      const newWidth = Math.max(310, Math.min(window.innerWidth - clientX, 500));
+      setQueueWidth(newWidth);
+    };
+
+    const onMove = (me: MouseEvent) => {
+      const movedEnough = Math.hypot(me.clientX - startX, me.clientY - startY) >= DRAG_THRESHOLD_PX;
+      if (!didDrag && movedEnough) {
+        didDrag = true;
+        if (!isQueueVisible) toggleQueue();
+        document.body.style.cursor = 'col-resize';
+        document.body.classList.add('is-dragging');
+      }
+      if (!didDrag) return;
+      applyWidthFromClientX(me.clientX);
+    };
+
+    const onUp = () => {
+      cleanup();
+      if (!didDrag) toggleQueue();
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp, true);
+  }, [isQueueVisible, toggleQueue]);
 
   // ── Global DnD fix for Linux/WebKitGTK / Wayland ─────────────────
   // dragover/dragenter: WebKitGTK needs preventDefault so external drops are not
@@ -428,6 +580,25 @@ function AppShell() {
     return () => document.removeEventListener('visibilitychange', update);
   }, []);
 
+  // Pause cosmetic animations when the window loses OS focus but stays visible
+  // (alt-tab, click into another app). On low-VRAM laptops WebView2 keeps
+  // compositing mesh blobs / waveform / marquee at full rate even though the
+  // user isn't looking — measurable GPU drain reported in issue #334.
+  useEffect(() => {
+    const update = () => {
+      const blurred = !document.hasFocus();
+      window.__psyBlurred = blurred;
+      document.documentElement.dataset.appBlurred = blurred ? 'true' : 'false';
+    };
+    window.addEventListener('focus', update);
+    window.addEventListener('blur', update);
+    update();
+    return () => {
+      window.removeEventListener('focus', update);
+      window.removeEventListener('blur', update);
+    };
+  }, []);
+
   const isMobilePlayer = isMobile && location.pathname === '/now-playing';
 
   return (
@@ -439,7 +610,9 @@ function AppShell() {
       data-fullscreen={isWindowFullscreen || undefined}
       style={{
         '--sidebar-width': isMobile ? '0px' : (isSidebarCollapsed ? '72px' : 'clamp(200px, 15vw, 220px)'),
-        '--queue-width': isMobile ? '0px' : (isQueueVisible ? `${queueWidth}px` : '0px')
+        '--queue-width': isMobile
+          ? '0px'
+          : (isQueueVisible ? `${queueWidth}px` : '0px')
       } as React.CSSProperties}
       onContextMenu={e => e.preventDefault()}
     >
@@ -447,7 +620,7 @@ function AppShell() {
       {!isMobile && (
         <Sidebar
           isCollapsed={isSidebarCollapsed}
-          toggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          toggleCollapse={() => setSidebarCollapsed(!isSidebarCollapsed)}
         />
       )}
       <main className="main-content">
@@ -459,14 +632,16 @@ function AppShell() {
           <LastfmIndicator />
           <NowPlayingDropdown />
           <OrbitStartTrigger />
-          <button
-            className="queue-toggle-btn"
-            onClick={toggleQueue}
-            data-tooltip={t('player.toggleQueue')}
-            data-tooltip-pos="bottom"
-          >
-            {isQueueVisible ? <PanelRightClose size={18} /> : <PanelRight size={18} />}
-          </button>
+          {!isMobile && !isQueueVisible && (
+            <button
+              className="queue-toggle-btn"
+              onClick={toggleQueue}
+              data-tooltip={t('player.toggleQueue')}
+              data-tooltip-pos="bottom"
+            >
+              <PanelRight size={18} />
+            </button>
+          )}
         </header>
         <OrbitSessionBar />
         {connStatus === 'disconnected' && (
@@ -522,12 +697,45 @@ function AppShell() {
           className="resizer resizer-queue" 
           onMouseDown={(e) => {
             e.preventDefault();
-            if (document.body.classList.contains('is-overlay-scrollbar-thumb-drag')) return;
+            if (document.body.classList.contains('is-overlay-scrollbar-thumb-drag')) {
+              // Self-heal stale drag flag: if no thumb is actually dragging,
+              // unblock the queue resizer immediately.
+              const activeThumbDrag = document.querySelector('.overlay-scroll__thumb.is-thumb-dragging');
+              if (!activeThumbDrag) {
+                document.body.classList.remove('is-overlay-scrollbar-thumb-drag');
+              } else {
+                return;
+              }
+            }
             if (shouldSuppressQueueResizerMouseDown(e.clientX, e.clientY, queueWidth)) return;
             setIsDraggingQueue(true);
           }}
-          style={{ display: isQueueVisible ? 'block' : 'none' }}
+          style={{
+            display: isQueueVisible ? 'block' : 'none',
+            right: `${Math.max(0, queueWidth - 3)}px`,
+          }}
         />
+      )}
+      {!isMobile && isQueueVisible && (
+        <button
+          type="button"
+          className="resizer-queue-handle"
+          onMouseDown={handleQueueHandleMouseDown}
+          style={{
+            position: 'fixed',
+            top: queueHandleTop != null ? `${queueHandleTop}px` : '50%',
+            right: `${Math.max(0, queueWidth - 11)}px`,
+            transform: 'translateY(-50%)',
+            zIndex: 101,
+            opacity: isMainScrolling ? 0 : 1,
+            pointerEvents: isMainScrolling ? 'none' : 'auto',
+          }}
+          data-tooltip={t('player.collapseQueueResize')}
+          data-tooltip-pos="left"
+          aria-label={t('player.collapseQueueResize')}
+        >
+          {isQueueVisible ? <PanelRightClose size={14} /> : <PanelRight size={14} />}
+        </button>
       )}
       {!isMobile && <QueuePanel />}
       {isMobile && !isMobilePlayer && <BottomNav />}
@@ -561,6 +769,22 @@ function TauriEventBridge() {
       useZipDownloadStore.getState().updateProgress(e.payload.id, e.payload.bytes, e.payload.total);
     }).then(u => { unlisten = u; });
     return () => { unlisten?.(); };
+  }, []);
+
+  // Track-preview lifecycle: Rust audio engine emits start/progress/end. The
+  // store mirrors them so any tracklist row can render its preview UI.
+  useEffect(() => {
+    const unlistenFns: Array<() => void> = [];
+    listen<string>('audio:preview-start', e => {
+      usePreviewStore.getState()._onStart(e.payload);
+    }).then(u => unlistenFns.push(u));
+    listen<{ id: string; elapsed: number; duration: number }>('audio:preview-progress', e => {
+      usePreviewStore.getState()._onProgress(e.payload.id, e.payload.elapsed, e.payload.duration);
+    }).then(u => unlistenFns.push(u));
+    listen<{ id: string; reason: string }>('audio:preview-end', e => {
+      usePreviewStore.getState()._onEnd(e.payload.id);
+    }).then(u => unlistenFns.push(u));
+    return () => { unlistenFns.forEach(fn => fn()); };
   }, []);
 
   // Audio output device changed (Bluetooth headphones, USB DAC, etc.)
@@ -884,10 +1108,24 @@ function TauriEventBridge() {
       if (!action) return;
       e.preventDefault();
 
+      // While a track preview is running, Spacebar pauses the preview rather
+      // than the main player (which is already paused under it). Skip / prev
+      // also cancel the preview so the main player resumes cleanly.
+      const previewing = usePreviewStore.getState().previewingId !== null;
+
       switch (action) {
-        case 'play-pause':        togglePlay(); break;
-        case 'next':              next(); break;
-        case 'prev':              previous(); break;
+        case 'play-pause':
+          if (previewing) usePreviewStore.getState().stopPreview();
+          else togglePlay();
+          break;
+        case 'next':
+          if (previewing) usePreviewStore.getState().stopPreview();
+          next();
+          break;
+        case 'prev':
+          if (previewing) usePreviewStore.getState().stopPreview();
+          previous();
+          break;
         case 'volume-up':         setVolume(Math.min(1, usePlayerStore.getState().volume + 0.05)); break;
         case 'volume-down':       setVolume(Math.max(0, usePlayerStore.getState().volume - 0.05)); break;
         case 'seek-forward': {
@@ -928,16 +1166,36 @@ function TauriEventBridge() {
     const unlisten: Array<() => void> = [];
 
     const setup = async () => {
+      // Hardware mediakeys are silently dropped while a preview is playing —
+      // matches the cucadmuh-flow expectation that headphone buttons don't
+      // accidentally interrupt or switch the previewed track.
+      const ifNoPreview = (fn: () => void) => () => {
+        if (usePreviewStore.getState().previewingId === null) fn();
+      };
       const handlers: Array<[string, () => void]> = [
-        ['media:play-pause',  () => togglePlay()],
-        ['media:play',        () => { const s = usePlayerStore.getState(); if (!s.isPlaying) s.resume(); }],
-        ['media:pause',       () => { const s = usePlayerStore.getState(); if (s.isPlaying) s.pause(); }],
-        ['media:next',        () => next()],
-        ['media:prev',        () => previous()],
-        ['tray:play-pause',   () => togglePlay()],
-        ['tray:next',         () => next()],
-        ['tray:previous',     () => previous()],
-        ['media:stop',        () => usePlayerStore.getState().stop()],
+        ['media:play-pause',  ifNoPreview(() => togglePlay())],
+        ['media:play',        ifNoPreview(() => { const s = usePlayerStore.getState(); if (!s.isPlaying) s.resume(); })],
+        ['media:pause',       ifNoPreview(() => { const s = usePlayerStore.getState(); if (s.isPlaying) s.pause(); })],
+        ['media:next',        ifNoPreview(() => next())],
+        ['media:prev',        ifNoPreview(() => previous())],
+        // Tray clicks are user-driven UI, so they fall through to the keyboard
+        // semantics: cancel the preview, then act.
+        ['tray:play-pause',   () => {
+          if (usePreviewStore.getState().previewingId !== null) {
+            usePreviewStore.getState().stopPreview();
+          } else {
+            togglePlay();
+          }
+        }],
+        ['tray:next',         () => {
+          if (usePreviewStore.getState().previewingId !== null) usePreviewStore.getState().stopPreview();
+          next();
+        }],
+        ['tray:previous',     () => {
+          if (usePreviewStore.getState().previewingId !== null) usePreviewStore.getState().stopPreview();
+          previous();
+        }],
+        ['media:stop',        ifNoPreview(() => usePlayerStore.getState().stop())],
         ['media:volume-up',   () => { const s = usePlayerStore.getState(); s.setVolume(Math.min(1, s.volume + 0.05)); }],
         ['media:volume-down', () => { const s = usePlayerStore.getState(); s.setVolume(Math.max(0, s.volume - 0.05)); }],
       ];
@@ -1100,6 +1358,34 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-font', font);
   }, [font]);
+
+  // Hide all inline track-preview buttons when the user opts out — single
+  // CSS hook (`html[data-track-previews="off"]`) instead of conditional
+  // rendering in every tracklist. Per-location toggles use additional
+  // attributes `data-track-previews-{location}` consumed by scoped selectors.
+  const trackPreviewsEnabled = useAuthStore(s => s.trackPreviewsEnabled);
+  const trackPreviewLocations = useAuthStore(s => s.trackPreviewLocations);
+  const trackPreviewDurationSec = useAuthStore(s => s.trackPreviewDurationSec);
+  useEffect(() => {
+    document.documentElement.setAttribute(
+      'data-track-previews',
+      trackPreviewsEnabled ? 'on' : 'off',
+    );
+  }, [trackPreviewsEnabled]);
+  useEffect(() => {
+    const root = document.documentElement;
+    (Object.keys(trackPreviewLocations) as Array<keyof typeof trackPreviewLocations>).forEach(loc => {
+      root.setAttribute(`data-track-previews-${loc.toLowerCase()}`, trackPreviewLocations[loc] ? 'on' : 'off');
+    });
+  }, [trackPreviewLocations]);
+  // Drive the SVG progress-ring keyframe duration from the same setting that
+  // governs the engine's auto-stop timer so both finish in lockstep.
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      '--preview-duration',
+      `${trackPreviewDurationSec}s`,
+    );
+  }, [trackPreviewDurationSec]);
 
   // Main window only: push playback state to mini window + handle control events.
   useEffect(() => {

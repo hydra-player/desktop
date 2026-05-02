@@ -17,6 +17,34 @@ import { useOrbitStore } from './orbitStore';
 import { estimateLivePosition } from '../api/orbit';
 import { loudnessGainPlaceholderUntilCacheDb } from '../utils/loudnessPlaceholder';
 import { effectiveLoudnessPreAnalysisAttenuationDb } from '../utils/loudnessPreAnalysisSlider';
+import {
+  enrichSongsForMixRatingFilter,
+  getMixMinRatingsConfigFromAuth,
+  passesMixMinRatings,
+} from '../utils/mixRatingFilter';
+
+const QUEUE_VISIBILITY_STORAGE_KEY = 'psysonic_queue_visible';
+
+function readInitialQueueVisibility(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    const raw = window.localStorage.getItem(QUEUE_VISIBILITY_STORAGE_KEY);
+    if (raw === 'true') return true;
+    if (raw === 'false') return false;
+  } catch {
+    // ignore storage access failures and fall back to default
+  }
+  return true;
+}
+
+function persistQueueVisibility(visible: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(QUEUE_VISIBILITY_STORAGE_KEY, String(visible));
+  } catch {
+    // ignore storage access failures
+  }
+}
 
 export interface Track {
   id: string;
@@ -121,6 +149,8 @@ async function buildInfiniteQueueCandidates(
   existingIds: Set<string>,
   count = 5,
 ): Promise<Track[]> {
+  const RANDOM_TOPUP_BATCH_SIZE = Math.max(10, count * 2);
+  const RANDOM_TOPUP_MAX_BATCHES = 8;
   const artistId = seedTrack?.artistId?.trim() || null;
   const artistName = seedTrack?.artist?.trim() || null;
 
@@ -130,22 +160,35 @@ async function buildInfiniteQueueCandidates(
   ]);
 
   const seedId = seedTrack?.id ?? null;
-  const mixCandidates = shuffleArray(
-    [...top, ...similar]
+  const mixCfg = getMixMinRatingsConfigFromAuth();
+  const mixedSources = [...top, ...similar];
+  const filteredMixedSongs = mixCfg.enabled
+    ? (await enrichSongsForMixRatingFilter(mixedSources, mixCfg)).filter(s => passesMixMinRatings(s, mixCfg))
+    : mixedSources;
+  const out: Track[] = shuffleArray(
+    filteredMixedSongs
       .map(songToTrack)
       .filter(t => t.id !== seedId && !existingIds.has(t.id)),
   )
     .slice(0, count)
     .map(t => ({ ...t, autoAdded: true as const }));
 
-  if (mixCandidates.length > 0) return mixCandidates;
+  const seenIds = new Set<string>([...existingIds, ...out.map(t => t.id)]);
+  for (let b = 0; out.length < count && b < RANDOM_TOPUP_MAX_BATCHES; b++) {
+    const random = await getRandomSongs(RANDOM_TOPUP_BATCH_SIZE, seedTrack?.genre).catch(() => []);
+    if (!random.length) break;
+    const filteredRandomSongs = mixCfg.enabled
+      ? (await enrichSongsForMixRatingFilter(random, mixCfg)).filter(s => passesMixMinRatings(s, mixCfg))
+      : random;
+    for (const track of shuffleArray(filteredRandomSongs.map(songToTrack))) {
+      if (track.id === seedId || seenIds.has(track.id)) continue;
+      out.push({ ...track, autoAdded: true as const });
+      seenIds.add(track.id);
+      if (out.length >= count) break;
+    }
+  }
 
-  const random = await getRandomSongs(count, seedTrack?.genre).catch(() => []);
-  return random
-    .map(songToTrack)
-    .filter(t => t.id !== seedId && !existingIds.has(t.id))
-    .slice(0, count)
-    .map(t => ({ ...t, autoAdded: true as const }));
+  return out.slice(0, count);
 }
 
 interface PlayerState {
@@ -2061,7 +2104,7 @@ export const usePlayerStore = create<PlayerState>()(
               s.currentTrack?.id === id ? { ...s.currentTrack, userRating: rating } : s.currentTrack,
           };
         }),
-      isQueueVisible: true,
+      isQueueVisible: readInitialQueueVisibility(),
       isFullscreenOpen: false,
       scheduledPauseAtMs: null,
       scheduledPauseStartMs: null,
@@ -2081,8 +2124,16 @@ export const usePlayerStore = create<PlayerState>()(
       openSongInfo: (songId) => set({ songInfoModal: { isOpen: true, songId } }),
       closeSongInfo: () => set({ songInfoModal: { isOpen: false, songId: null } }),
 
-      toggleQueue: () => set(state => ({ isQueueVisible: !state.isQueueVisible })),
-      setQueueVisible: (v: boolean) => set({ isQueueVisible: v }),
+      toggleQueue: () =>
+        set(state => {
+          const next = !state.isQueueVisible;
+          persistQueueVisibility(next);
+          return { isQueueVisible: next };
+        }),
+      setQueueVisible: (v: boolean) => {
+        persistQueueVisibility(v);
+        set({ isQueueVisible: v });
+      },
       toggleFullscreen: () => set(state => ({ isFullscreenOpen: !state.isFullscreenOpen })),
 
       toggleLastfmLove: () => {

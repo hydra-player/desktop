@@ -2,6 +2,12 @@ name: Promote main to next
 
 on:
   workflow_dispatch:
+    inputs:
+      source_only:
+        description: "Create/refresh tagged release only (skip platform builds and verify-nix)"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   validate-main:
@@ -15,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
     steps:
       - uses: actions/checkout@v5
         with:
@@ -48,17 +55,40 @@ jobs:
             exit 0
           fi
           npm version --no-git-tag-version "$TARGET_VERSION"
+      - name: sync Tauri version from package.json
+        run: node scripts/sync-tauri-version-from-package.js
       - name: commit RC version bump
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json
+          git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/tauri.conf.json
           if git diff --cached --quiet; then
             echo "No version bump changes to commit."
             exit 0
           fi
           NEW_VERSION="$(node -p 'require("./package.json").version')"
-          git commit -m "chore(release): bump next channel to ${NEW_VERSION}"
+          MSG="chore(release): bump next channel to ${NEW_VERSION}"
+          if [[ "${{ inputs.source_only }}" == "true" ]]; then
+            MSG="${MSG} [source-only]"
+          fi
+          git commit -m "$MSG"
       - name: push next
         run: git push --force-with-lease origin HEAD:next
+      - name: dispatch Next Channel workflow
+        uses: actions/github-script@v9
+        env:
+          SOURCE_ONLY: ${{ inputs.source_only && 'true' || 'false' }}
+        with:
+          script: |
+            const sourceOnly = process.env.SOURCE_ONLY === "true";
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "next.yml",
+              ref: "main",
+              inputs: {
+                source_only: sourceOnly ? "true" : "false",
+              },
+            });
+            core.info(`Dispatched next.yml with source_only=${sourceOnly}`);
