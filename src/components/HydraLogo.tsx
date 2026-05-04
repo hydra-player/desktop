@@ -8,7 +8,7 @@ type LogoProps = {
 };
 
 // Import SVG from assets folder using Vite's ?raw suffix
-import HYDRA_INAPP_LOGO_SVG from '../assets/hydra-inapp-logo.svg?raw';
+import HYDRA_INAPP_LOGO_SVG from '../assets/hydra-logo.svg?raw';
 
 export function HydraMark({ className, style, title = 'Hydra', gradientIdSuffix }: LogoProps) {
   const titleId = title ? 'hydra-logo-title' : undefined;

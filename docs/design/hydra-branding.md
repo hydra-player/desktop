@@ -36,5 +36,4 @@ Hydra is the product name. Use `Hydra` in titles, settings copy, app metadata, a
 ## Assets
 
 - React shell logo: `src/components/HydraLogo.tsx`.
-- Public compact fallback: `public/hydra-mark.svg`.
-- Public in-app/export wordmark: `public/hydra-inapp-logo.svg`.
+- Public logo: `public/hydra-logo.svg`.

@@ -48,7 +48,7 @@ async function loadImage(url: string): Promise<ImageBitmap | null> {
 
 async function loadLogo(): Promise<HTMLImageElement | null> {
   try {
-    const res = await fetch('/hydra-inapp-logo.svg');
+    const res = await fetch('/hydra-logo.svg');
     if (!res.ok) return null;
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
