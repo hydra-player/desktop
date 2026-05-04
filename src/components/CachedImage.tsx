@@ -110,7 +110,7 @@ export default function CachedImage({ src, cacheKey, style, onLoad, onError, ...
     } else {
       // Nullify the DOM-level handler first to prevent any infinite loop
       e.currentTarget.onerror = null;
-      setFallbackSrc('/hydra-mark.svg');
+      setFallbackSrc('/hydra-logo.svg');
     }
   };
 

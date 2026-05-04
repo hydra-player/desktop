@@ -21,6 +21,12 @@ export default defineConfig({
     watch: {
       ignored: ["**/src-tauri/**"],
     },
+    headers: {
+      // Disable caching during development to ensure updated SVGs and other assets are always fresh
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    },
   },
   envPrefix: ["VITE_", "TAURI_ENV_*"],
   build: {
