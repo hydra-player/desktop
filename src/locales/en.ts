@@ -1770,7 +1770,7 @@ export const enTranslation = {
     nextTrack: 'Next Track',
     previousTrack: 'Previous Track',
     showHide: 'Show / Hide',
-      exit: 'Exit Hydra Player',
+    exit: 'Exit Hydra Player',
     nothingPlaying: 'Nothing playing',
   },
 };

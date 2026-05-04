@@ -39,8 +39,8 @@ export async function exportBackup(): Promise<string | null> {
 
   const today = new Date().toISOString().slice(0, 10);
   const path = await save({
-    filters: [{ name: 'Psysonic Backup', extensions: ['psybkp'] }],
-    defaultPath: `psysonic-backup-${today}.psybkp`,
+    filters: [{ name: 'Hydra Player Backup', extensions: ['psybkp'] }],
+    defaultPath: `hydra-player-backup-${today}.psybkp`,
   });
 
   if (!path) return null;
@@ -52,9 +52,9 @@ export async function exportBackup(): Promise<string | null> {
 
 export async function importBackup(): Promise<void> {
   const path = await openDialog({
-    filters: [{ name: 'Psysonic Backup', extensions: ['psybkp'] }],
+    filters: [{ name: 'Hydra Player Backup', extensions: ['psybkp'] }],
     multiple: false,
-    title: 'Import Psysonic Backup',
+    title: 'Import Hydra Player Backup',
   });
 
   if (!path || typeof path !== 'string') return;

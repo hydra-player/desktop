@@ -360,7 +360,7 @@ function AppShell() {
         next: t('tray.nextTrack'),
         previous: t('tray.previousTrack'),
         showHide: t('tray.showHide'),
-        quit: t('tray.exitPsysonic'),
+        quit: t('tray.exit'),
         nothingPlaying: t('tray.nothingPlaying'),
       }).catch(() => {});
     };

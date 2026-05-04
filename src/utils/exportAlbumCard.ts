@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { buildCoverArtUrl, coverArtCacheKey, SubsonicAlbum } from '../api/subsonic';
 import { getCachedBlob } from './imageCache';
-import PsysonicLogo from '../components/PsysonicLogo';
+import HydraLogo from '../components/HydraLogo';
 
 export type ExportFormat = 'story' | 'square' | 'twitter';
 export type ExportGridSize = 3 | 4 | 5;
@@ -93,7 +93,7 @@ let cachedLogoSvgKey = '';
 let cachedLogoSvg = '';
 function getCachedLogoSvg(color: string): string {
   if (cachedLogoSvgKey === color && cachedLogoSvg) return cachedLogoSvg;
-  const raw = renderToStaticMarkup(React.createElement(PsysonicLogo, { gradientIdSuffix: 'export' }));
+  const raw = renderToStaticMarkup(React.createElement(HydraLogo, { gradientIdSuffix: 'export' }));
   const swapped = raw
     .replace('var(--logo-color-start, var(--accent))', color)
     .replace('var(--logo-color-end, var(--ctp-blue))', color);
@@ -190,7 +190,7 @@ export async function renderAlbumCardCanvas(opts: ExportAlbumCardOptions): Promi
       ctx.font = `700 ${Math.round(lh * 0.78)}px "Space Grotesk", "Inter", system-ui, sans-serif`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      ctx.fillText('psysonic', lx, ly);
+        ctx.fillText('hydra', lx, ly);
     }
   };
 
@@ -234,7 +234,7 @@ export async function renderAlbumCardCanvas(opts: ExportAlbumCardOptions): Promi
     ctx.fillStyle = fgMuted;
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    ctx.fillText('www.psysonic.de', w - pad, headerCenterY);
+        ctx.fillText('www.hydra-player.com', w - pad, headerCenterY);
   } else {
     // Square: logo left, label right.
     const logoH = Math.max(28, Math.round(headerMin * 0.40));
@@ -309,7 +309,7 @@ export async function renderAlbumCardCanvas(opts: ExportAlbumCardOptions): Promi
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const footerCenterY = h - Math.round(footerMin / 2);
-    ctx.fillText('www.psysonic.de', Math.round(w / 2), footerCenterY);
+        ctx.fillText('www.hydra-player.com', Math.round(w / 2), footerCenterY);
   }
 
   return canvas;

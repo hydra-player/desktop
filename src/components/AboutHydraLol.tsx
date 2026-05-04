@@ -133,13 +133,13 @@ export function AboutHydraBrandHeader({
                 </h2>
                 <p className="about-hydra-lol-lede">
                   {"We're very much looking forward to you as a developer — join us on "}
-                  <button
-                    type="button"
-                    className="about-hydra-lol-inline-link"
-                    onClick={() => void openUrl('https://github.com/Psychotoxical/psysonic')}
-                  >
-                    GitHub
-                  </button>
+                   <button
+                     type="button"
+                     className="about-hydra-lol-inline-link"
+                     onClick={() => void openUrl('https://github.com/hydra-player/desktop')}
+                   >
+                     GitHub
+                   </button>
                   {' and build great features!'}
                 </p>
                 <p className="about-hydra-lol-signoff">{MSG_CONGRATS_SIGN_OFF}</p>
