@@ -20,7 +20,7 @@ pub(crate) fn build_tray_icon(app: &tauri::AppHandle) -> tauri::Result<TrayIcon>
             let g = s.lock().ok()?;
             if g.is_empty() { None } else { Some(g.clone()) }
         })
-        .unwrap_or_else(|| "Psysonic".to_string());
+        .unwrap_or_else(|| "Hydra Player".to_string());
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     let playback_state = app
         .try_state::<TrayPlaybackState>()
@@ -35,7 +35,7 @@ pub(crate) fn build_tray_icon(app: &tauri::AppHandle) -> tauri::Result<TrayIcon>
     #[cfg(target_os = "linux")]
     let (now_playing, sep_now_playing) = {
         let icon = tray_state_icon(&playback_state);
-        let label = if cached_tooltip == "Psysonic" {
+        let label = if cached_tooltip == "Hydra Player" {
             format!("{icon} {}", labels.nothing_playing)
         } else {
             format!("{icon} {cached_tooltip}")
@@ -158,12 +158,12 @@ pub(crate) fn try_build_tray_icon(app: &tauri::AppHandle) -> Option<TrayIcon> {
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| build_tray_icon(&app))) {
         Ok(Ok(tray)) => Some(tray),
         Ok(Err(e)) => {
-            crate::app_eprintln!("[Psysonic] System tray unavailable: {e}");
+            crate::app_eprintln!("[Hydra Player] System tray unavailable: {e}");
             None
         }
         Err(_) => {
             crate::app_eprintln!(
-                "[Psysonic] System tray unavailable — missing libayatana-appindicator3 or libappindicator3 \
+                "[Hydra Player] System tray unavailable — missing libayatana-appindicator3 or libappindicator3 \
                  (install the distro package or set LD_LIBRARY_PATH)"
             );
             None
@@ -175,7 +175,7 @@ pub(crate) fn try_build_tray_icon(app: &tauri::AppHandle) -> Option<TrayIcon> {
 ///
 /// `tooltip` should be a compact "Artist – Title" form (no app suffix needed —
 /// the tray icon itself identifies the app). An empty string resets to the
-/// default `"Psysonic"` tooltip.
+/// default `"Hydra Player"` tooltip.
 ///
 /// The text is truncated to 127 chars defensively to stay under the historical
 /// Windows `NOTIFYICONDATA.szTip` limit (128 bytes including the null terminator).
@@ -204,7 +204,7 @@ pub(crate) fn set_tray_tooltip(
         tooltip
     };
     let has_track = !truncated.is_empty();
-    let effective = if has_track { truncated.clone() } else { "Psysonic".to_string() };
+    let effective = if has_track { truncated.clone() } else { "Hydra Player".to_string() };
     #[cfg(target_os = "windows")]
     let effective_with_icon = format!("{icon} {effective}");
 

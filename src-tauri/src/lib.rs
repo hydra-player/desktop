@@ -34,7 +34,7 @@ type ShortcutMap = Mutex<HashMap<String, String>>;
 const MAX_DL_CONCURRENCY: usize = 4;
 
 fn default_subsonic_wire_user_agent() -> String {
-    format!("psysonic/{}", env!("CARGO_PKG_VERSION"))
+    format!("hydra-player/{}", env!("CARGO_PKG_VERSION"))
 }
 
 fn runtime_subsonic_wire_user_agent() -> &'static RwLock<String> {
@@ -43,7 +43,7 @@ fn runtime_subsonic_wire_user_agent() -> &'static RwLock<String> {
 }
 
 /// Unified outbound User-Agent for all Rust-side HTTP requests.
-/// It is initialized with `psysonic/<version>` and then overridden from
+/// It is initialized with `hydra-player/<version>` and then overridden from
 /// the main WebView `navigator.userAgent` at app startup.
 pub(crate) fn subsonic_wire_user_agent() -> String {
     runtime_subsonic_wire_user_agent()
@@ -489,7 +489,7 @@ type TrayState = Mutex<Option<TrayIcon>>;
 
 /// Cached tray tooltip text. Updated by `set_tray_tooltip` and re-applied when the
 /// icon is rebuilt (e.g. after the user toggles the tray off and on again).
-/// Empty string means "use the default `Psysonic` tooltip".
+/// Empty string means "use the default `Hydra Player` tooltip".
 type TrayTooltip = Mutex<String>;
 
 #[derive(Default)]
@@ -540,7 +540,7 @@ impl Default for TrayMenuLabels {
             next: "Next Track".into(),
             previous: "Previous Track".into(),
             show_hide: "Show / Hide".into(),
-            quit: "Exit Psysonic".into(),
+            quit: "Exit Hydra Player".into(),
             nothing_playing: "Nothing playing".into(),
         }
     }
@@ -581,7 +581,7 @@ struct LoudnessCachePayload {
 }
 
 pub fn run() {
-    // Linux: second `psysonic --player …` forwards over D-Bus before heavy startup.
+    // Linux: second `hydra-player --player …` forwards over D-Bus before heavy startup.
     #[cfg(target_os = "linux")]
     {
         let argv: Vec<String> = std::env::args().collect();
@@ -678,7 +678,7 @@ pub fn run() {
                             .map(|v| !v.is_empty())
                             .unwrap_or(false);
                         if !dbus_ok {
-                            crate::app_eprintln!("[Psysonic] No D-Bus session — MPRIS media controls disabled");
+                            crate::app_eprintln!("[Hydra Player] No D-Bus session — MPRIS media controls disabled");
                             return None;
                         }
                     }
@@ -694,7 +694,7 @@ pub fn run() {
                             .and_then(|w| w.hwnd().ok())
                             .map(|h| h.0 as *mut std::ffi::c_void);
                         if h.is_none() {
-                            crate::app_eprintln!("[Psysonic] Could not get HWND — Windows media controls disabled");
+                            crate::app_eprintln!("[Hydra Player] Could not get HWND — Windows media controls disabled");
                             return None;
                         }
                         h
@@ -703,8 +703,8 @@ pub fn run() {
                     let hwnd: Option<*mut std::ffi::c_void> = None;
 
                     let config = PlatformConfig {
-                        dbus_name: "psysonic",
-                        display_name: "Psysonic",
+                        dbus_name: "hydra-player",
+                        display_name: "Hydra Player",
                         hwnd,
                     };
 
@@ -739,12 +739,12 @@ pub fn run() {
                                     _ => {}
                                 }
                             }) {
-                                crate::app_eprintln!("[Psysonic] Failed to attach media controls: {e:?}");
+                                crate::app_eprintln!("[Hydra Player] Failed to attach media controls: {e:?}");
                             }
                             Some(controls)
                         }
                         Err(e) => {
-                            crate::app_eprintln!("[Psysonic] Could not create media controls: {e:?}");
+                            crate::app_eprintln!("[Hydra Player] Could not create media controls: {e:?}");
                             None
                         }
                     }
@@ -782,7 +782,7 @@ pub fn run() {
             #[cfg(target_os = "windows")]
             {
                 if let Err(e) = build_mini_player_window(app.handle(), false) {
-                    crate::app_eprintln!("[psysonic] Failed to pre-create mini window: {e}");
+                    crate::app_eprintln!("[hydra-player] Failed to pre-create mini window: {e}");
                 }
             }
 
@@ -954,5 +954,5 @@ pub fn run() {
             taskbar_win::update_taskbar_icon,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Psysonic");
+        .expect("error while running Hydra Player");
 }

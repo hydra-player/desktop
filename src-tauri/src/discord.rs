@@ -250,7 +250,7 @@ fn apply_template(template: &str, title: &str, artist: &str, album: Option<&str>
 ///   Discord stops any running timer.
 /// - `cover_art_url`: optional direct URL to album artwork.
 /// - `fetch_itunes_covers`: if true, fetch artwork from the iTunes Search API when no
-///   `cover_art_url` is provided. If false (default), fall back to the Psysonic app icon
+///   `cover_art_url` is provided. If false (default), fall back to the Hydra Player app icon
 ///   without making any external request — required for privacy opt-in.
 /// - `details_template`: template string for the "details" field. Default: "{artist} - {title}".
 ///   Supported placeholders: {title}, {artist}, {album}
@@ -324,9 +324,9 @@ pub async fn discord_update_presence(
             .large_image(url.as_str())
             .large_text(&large_text)
     } else {
-        // Fallback to default Psysonic icon
+        // Fallback to default Hydra Player icon
         Assets::new()
-            .large_image("psysonic")
+            .large_image("hydra-player")
             .large_text(&large_text)
     };
 

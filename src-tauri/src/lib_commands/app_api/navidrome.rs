@@ -191,7 +191,7 @@ pub(crate) fn nd_http_client() -> reqwest::Client {
     // the WebKit-side Subsonic calls end up negotiating most of the time
     // on these setups.
     reqwest::Client::builder()
-        .user_agent(format!("Psysonic/{} (Tauri)", env!("CARGO_PKG_VERSION")))
+        .user_agent(format!("Hydra Player/{} (Tauri)", env!("CARGO_PKG_VERSION")))
         .http1_only()
         .pool_max_idle_per_host(0)
         .max_tls_version(reqwest::tls::Version::TLS_1_2)

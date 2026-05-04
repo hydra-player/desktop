@@ -4,7 +4,7 @@ pkgver=1.44.0
 pkgrel=1
 pkgdesc="Desktop music player for Subsonic API-compatible servers (Navidrome, Gonic, etc.)"
 arch=('x86_64')
-url="https://github.com/Psychotoxical/hydra-player"
+url="https://github.com/hydra-player/desktop"
 license=('GPL-3.0-only')
 depends=(
   'webkit2gtk-4.1'
@@ -20,7 +20,7 @@ makedepends=(
   'nasm'
   'cmake'
 )
-source=("$pkgname-$pkgver.tar.gz::https://github.com/Psychotoxical/hydra-player/archive/refs/tags/app-v$pkgver.tar.gz")
+source=("$pkgname-$pkgver.tar.gz::https://github.com/hydra-player/desktop/archive/refs/tags/app-v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
 build() {

@@ -4,7 +4,7 @@
 <dict>
     <!-- Sandbox disabled: app is unsigned/ad-hoc signed, so an active sandbox
          would restrict network access more than without it. macOS users bypass
-         Gatekeeper via: xattr -cr /Applications/Psysonic.app -->
+         Gatekeeper via: xattr -cr /Applications/Hydra Player.app -->
     <key>com.apple.security.app-sandbox</key>
     <false/>
 

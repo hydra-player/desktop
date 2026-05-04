@@ -215,7 +215,7 @@ pub(crate) fn build_mini_player_window(
         "mini",
         tauri::WebviewUrl::App("index.html".into()),
     )
-    .title("Psysonic Mini")
+    .title("Hydra Player Mini")
     .inner_size(340.0, 260.0)
     .min_inner_size(320.0, 240.0)
     .resizable(true)
