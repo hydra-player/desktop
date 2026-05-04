@@ -614,6 +614,14 @@ pub async fn audio_play(
 
     // Gapless OFF: prepend a short silence so tracks are clearly separated.
     // Only when this is an auto-advance (near end), not on manual skip.
+    //
+    // Use a frame-aligned `SamplesBuffer` rather than `Zero + take_duration` —
+    // the latter computes its sample count via integer-nanosecond division
+    // (1_000_000_000 / (sr * ch)), which at common rates leaks an odd number
+    // of samples (e.g. 44103 at 44.1 kHz / 2 ch / 500 ms = 22051.5 frames).
+    // The half-frame leak shifts the next source's L/R parity in the device
+    // stream and can manifest as a dead channel for the rest of the track
+    // (reported by users for natural-end-without-gapless transitions only).
     if !gapless {
         let cur_pos = {
             let cur = state.current.lock().unwrap();
@@ -625,10 +633,12 @@ pub async fn audio_play(
         };
         let is_auto_advance = cur_dur > 3.0 && cur_pos >= cur_dur - 3.0;
         if is_auto_advance {
-            let silence = rodio::source::Zero::<f32>::new(
-                source.channels(),
-                source.sample_rate(),
-            ).take_duration(Duration::from_millis(500));
+            let ch = source.channels();
+            let sr = source.sample_rate();
+            // 500 ms in whole frames, then expand to interleaved samples.
+            let frames = (sr / 2) as usize;
+            let total_samples = frames.saturating_mul(ch as usize);
+            let silence = rodio::buffer::SamplesBuffer::new(ch, sr, vec![0f32; total_samples]);
             sink.append(silence);
         }
     }
@@ -953,12 +963,19 @@ fn spawn_progress_task(
         0.0
     }
 
+    // Keep near-end detection at 100 ms, but throttle progress IPC to webview.
+    const PROGRESS_EMIT_MIN_MS: u64 = 1500;
+    const PROGRESS_EMIT_MIN_DELTA_SECS: f64 = 0.9;
+
     tokio::spawn(async move {
         let mut near_end_ticks: u32 = 0;
         // Local done-flag reference; swapped on gapless transition.
         let mut current_done = initial_done;
         // Local sample counter; swapped to chained source's counter on transition.
         let mut samples_played = samples_played;
+        let mut last_progress_emit_at = Instant::now() - Duration::from_millis(PROGRESS_EMIT_MIN_MS);
+        let mut last_progress_emit_pos = -1.0f64;
+        let mut last_progress_emit_paused = false;
 
         loop {
             // 100 ms tick keeps near-end detection timely for crossfade/gapless
@@ -1060,7 +1077,20 @@ fn spawn_progress_task(
             };
             let pos = (pos_raw - progress_latency).max(0.0);
 
-            app.emit("audio:progress", ProgressPayload { current_time: pos, duration: dur }).ok();
+            let now = Instant::now();
+            let should_emit_progress = if is_paused != last_progress_emit_paused {
+                true
+            } else if now.duration_since(last_progress_emit_at) >= Duration::from_millis(PROGRESS_EMIT_MIN_MS) {
+                true
+            } else {
+                (pos - last_progress_emit_pos).abs() >= PROGRESS_EMIT_MIN_DELTA_SECS
+            };
+            if should_emit_progress {
+                app.emit("audio:progress", ProgressPayload { current_time: pos, duration: dur }).ok();
+                last_progress_emit_at = now;
+                last_progress_emit_pos = pos;
+                last_progress_emit_paused = is_paused;
+            }
 
             if is_paused {
                 continue;

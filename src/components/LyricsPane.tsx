@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { usePlayerStore } from '../store/playerStore';
+import { usePlayerStore, getPlaybackProgressSnapshot, subscribePlaybackProgress } from '../store/playerStore';
 import type { LrcLine } from '../api/lrclib';
 import { useLyrics, type WordLyricsLine } from '../hooks/useLyrics';
 import { useAuthStore } from '../store/authStore';
@@ -38,6 +38,7 @@ export default function LyricsPane({ currentTrack }: Props) {
   const lineRefs      = useRef<(HTMLDivElement | null)[]>([]);
   const wordRefs      = useRef<HTMLSpanElement[][]>([]);
   const prevActive    = useRef({ line: -1, word: -1 });
+  const prevTrackId   = useRef<string | null | undefined>(undefined);
   const isUserScroll  = useRef(false);
   const scrollTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -65,12 +66,18 @@ export default function LyricsPane({ currentTrack }: Props) {
     }
   }, [sidebarLyricsStyle]);
 
-  // Reset refs when track changes.
+  // Reset refs on actual track change. Skip the initial mount so we don't wipe
+  // the callback-refs that the commit phase just populated — that would leave
+  // the tracker effect with an empty lineRefs and freeze the highlight.
   useEffect(() => {
-    lineRefs.current  = [];
-    wordRefs.current  = [];
-    prevActive.current = { line: -1, word: -1 };
-    scrollerRef.current?.jump(0);
+    const id = currentTrack?.id ?? null;
+    if (prevTrackId.current !== undefined && prevTrackId.current !== id) {
+      lineRefs.current = [];
+      wordRefs.current = [];
+      prevActive.current = { line: -1, word: -1 };
+      scrollerRef.current?.jump(0);
+    }
+    prevTrackId.current = id;
   }, [currentTrack?.id]);
 
   // Imperative tracker — subscribes directly to the store, zero React re-renders per tick.
@@ -126,8 +133,8 @@ export default function LyricsPane({ currentTrack }: Props) {
       prevActive.current = { line: lineIdx, word: wordIdx };
     };
 
-    apply(usePlayerStore.getState().currentTime);
-    return usePlayerStore.subscribe(s => apply(s.currentTime));
+    apply(getPlaybackProgressSnapshot().currentTime);
+    return subscribePlaybackProgress(s => apply(s.currentTime));
   }, [useWords, hasSynced, wordLines, syncedLines, scrollToLine]);
 
   if (!currentTrack) {

@@ -45,6 +45,7 @@ import { useThemeStore } from '../store/themeStore';
 import { useFontStore, FontId } from '../store/fontStore';
 import { useKeybindingsStore, KeyAction, formatBinding, buildInAppBinding } from '../store/keybindingsStore';
 import { useGlobalShortcutsStore, GlobalAction, buildGlobalShortcut, formatGlobalShortcut } from '../store/globalShortcutsStore';
+import { IN_APP_SHORTCUT_ACTIONS, GLOBAL_SHORTCUT_ACTIONS } from '../config/shortcutActions';
 import { useSidebarStore, DEFAULT_SIDEBAR_ITEMS, SidebarItemConfig } from '../store/sidebarStore';
 import {
   effectiveLoudnessPreAnalysisAttenuationDb,
@@ -204,6 +205,7 @@ const CONTRIBUTORS = [
       'UI refinements — sidebar discovery indicators, adaptive header, interaction polish (PR #397)',
       'Queue: drag rows outside to remove with trash ghost (PR #420)',
       'Tauri: modularize audio and lib command layers (PR #422)',
+      'Shortcuts: action registry, dynamic CLI help, 9 new input targets + F1 help binding (PR #435)',
     ],
   },
   {
@@ -346,6 +348,10 @@ const CONTRIBUTORS = [
       'Preview: audio start sync, ring animation, download timeout (PR #423)',
       'Statistics: shareable Top-Albums card export (PR #425)',
       'Windows: playback stutter under GPU load — MMCSS Pro Audio promotion + animation pause + reduce-animations toggle (PR #426)',
+      'Audio: frame-align gapless-off track-separation silence (fixes mono-channel playback after natural track end) (PR #439)',
+      'Settings: 3-state animation mode (Full / Reduced / Static) — replaces boolean reduce-animations toggle (PR #441)',
+      'Tracks: Highly Rated rail and per-card star display, with cache layer for ndListSongs (PR #443)',
+      'Random Mix: playlist-size picker (50/75/100/125/150) and filter-panel layout cleanup (PR #445)',
     ],
   },
 ] as const;
@@ -3860,15 +3866,42 @@ export default function Settings() {
                   />
                 ))}
               </div>
-              <div className="settings-toggle-row" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
-                <div>
-                  <div style={{ fontWeight: 500 }}>{t('settings.reducedAnimations')}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('settings.reducedAnimationsDesc')}</div>
+              <div className="settings-norm-block" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+                <div className="settings-norm-field">
+                  <div className="settings-norm-row">
+                    <span className="settings-norm-label">{t('settings.animationMode')}</span>
+                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      <button
+                        className={`btn ${auth.animationMode === 'full' ? 'btn-primary' : 'btn-ghost'}`}
+                        style={{ fontSize: 12, padding: '4px 14px' }}
+                        onClick={() => auth.setAnimationMode('full')}
+                      >
+                        {t('settings.animationModeFull')}
+                      </button>
+                      <button
+                        className={`btn ${auth.animationMode === 'reduced' ? 'btn-primary' : 'btn-ghost'}`}
+                        style={{ fontSize: 12, padding: '4px 14px' }}
+                        onClick={() => auth.setAnimationMode('reduced')}
+                      >
+                        {t('settings.animationModeReduced')}
+                      </button>
+                      <button
+                        className={`btn ${auth.animationMode === 'static' ? 'btn-primary' : 'btn-ghost'}`}
+                        style={{ fontSize: 12, padding: '4px 14px' }}
+                        onClick={() => auth.setAnimationMode('static')}
+                      >
+                        {t('settings.animationModeStatic')}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="settings-norm-help">
+                    {auth.animationMode === 'reduced'
+                      ? t('settings.animationModeReducedHint')
+                      : auth.animationMode === 'static'
+                        ? t('settings.animationModeStaticHint')
+                        : t('settings.animationModeDesc')}
+                  </div>
                 </div>
-                <label className="toggle-switch" aria-label={t('settings.reducedAnimations')}>
-                  <input type="checkbox" checked={auth.reducedAnimations} onChange={e => auth.setReducedAnimations(e.target.checked)} />
-                  <span className="toggle-track" />
-                </label>
               </div>
             </div>
           </SettingsSubSection>
@@ -3898,20 +3931,8 @@ export default function Settings() {
         >
           <div className="settings-card">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {([
-                ['play-pause',        t('settings.shortcutPlayPause')],
-                ['next',              t('settings.shortcutNext')],
-                ['prev',              t('settings.shortcutPrev')],
-                ['volume-up',         t('settings.shortcutVolumeUp')],
-                ['volume-down',       t('settings.shortcutVolumeDown')],
-                ['seek-forward',      t('settings.shortcutSeekForward')],
-                ['seek-backward',     t('settings.shortcutSeekBackward')],
-                ['toggle-queue',      t('settings.shortcutToggleQueue')],
-                ['open-folder-browser', t('settings.shortcutOpenFolderBrowser', { folderBrowser: t('sidebar.folderBrowser') })],
-                ['fullscreen-player', t('settings.shortcutFullscreenPlayer')],
-                ['native-fullscreen', t('settings.shortcutNativeFullscreen')],
-                ['open-mini-player',  t('settings.shortcutOpenMiniPlayer')],
-              ] as [KeyAction, string][]).map(([action, label]) => {
+              {IN_APP_SHORTCUT_ACTIONS.map(({ id: action, getLabel }) => {
+                const label = getLabel(t);
                 const bound = kb.bindings[action];
                 const isListening = listeningFor === action;
                 return (
@@ -3994,13 +4015,8 @@ export default function Settings() {
         >
           <div className="settings-card">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {([
-                ['play-pause',  t('settings.shortcutPlayPause')],
-                ['next',        t('settings.shortcutNext')],
-                ['prev',        t('settings.shortcutPrev')],
-                ['volume-up',   t('settings.shortcutVolumeUp')],
-                ['volume-down', t('settings.shortcutVolumeDown')],
-              ] as [GlobalAction, string][]).map(([action, label]) => {
+              {GLOBAL_SHORTCUT_ACTIONS.map(({ id: action, getLabel }) => {
+                const label = getLabel(t);
                 const bound = gs.shortcuts[action] ?? null;
                 const isListening = listeningForGlobal === action;
                 return (
