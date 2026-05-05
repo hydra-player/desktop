@@ -186,6 +186,12 @@
   scrollbar-width: none;
 }
 
+/* Keep off-screen rail cards out of paint/compositing work. */
+.song-grid .song-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 190px;
+}
+
 .song-grid::-webkit-scrollbar {
   display: none;
 }
@@ -292,6 +298,14 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.song-card-rating {
+  display: flex;
+  gap: 2px;
+  color: var(--accent);
+  margin-top: 4px;
+  line-height: 1;
 }
 
 /* ─── Virtual Song List ───────────────────────────────────────── */

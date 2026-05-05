@@ -25,6 +25,7 @@ export interface ServerProfile {
 export type SeekbarStyle = 'truewave' | 'pseudowave' | 'linedot' | 'bar' | 'thick' | 'segmented' | 'neon' | 'pulsewave' | 'particletrail' | 'liquidfill' | 'retrotape';
 export type LoggingMode = 'off' | 'normal' | 'debug';
 export type NormalizationEngine = 'off' | 'replaygain' | 'loudness';
+export type AnimationMode = 'full' | 'reduced' | 'static';
 
 /** Integrated-loudness target presets (Settings + analysis). */
 export type LoudnessLufsPreset = -16 | -14 | -12 | -10;
@@ -48,6 +49,34 @@ function sanitizeLoudnessPreAnalysisFromStorage(v: unknown): number {
 
 export type LyricsSourceId = 'server' | 'lrclib' | 'netease';
 export interface LyricsSourceConfig { id: LyricsSourceId; enabled: boolean; }
+
+export type TrackPreviewLocation =
+  | 'suggestions'
+  | 'albums'
+  | 'playlists'
+  | 'favorites'
+  | 'artist'
+  | 'randomMix';
+
+export type TrackPreviewLocations = Record<TrackPreviewLocation, boolean>;
+
+export const TRACK_PREVIEW_LOCATIONS: readonly TrackPreviewLocation[] = [
+  'suggestions',
+  'albums',
+  'playlists',
+  'favorites',
+  'artist',
+  'randomMix',
+];
+
+const DEFAULT_TRACK_PREVIEW_LOCATIONS: TrackPreviewLocations = {
+  suggestions: true,
+  albums: true,
+  playlists: true,
+  favorites: true,
+  artist: true,
+  randomMix: true,
+};
 
 const DEFAULT_LYRICS_SOURCES: LyricsSourceConfig[] = [
   { id: 'server',  enabled: true  },
@@ -89,6 +118,14 @@ interface AuthState {
   crossfadeEnabled: boolean;
   crossfadeSecs: number;
   gaplessEnabled: boolean;
+  /** Show inline Play+Preview buttons in tracklists. Default on per Q3. Master kill switch — when off, all locations are off. */
+  trackPreviewsEnabled: boolean;
+  /** Per-location toggles. Only honoured when `trackPreviewsEnabled` is true. */
+  trackPreviewLocations: TrackPreviewLocations;
+  /** Mid-track start position as a 0…1 ratio. Default 0.33 = 33%. */
+  trackPreviewStartRatio: number;
+  /** Preview window length in seconds. Default 30 s. */
+  trackPreviewDurationSec: number;
   preloadMode: 'off' | 'balanced' | 'early' | 'custom';
   preloadCustomSeconds: number;
   infiniteQueueEnabled: boolean;
@@ -140,6 +177,14 @@ interface AuthState {
   lastSeenChangelogVersion: string;
 
   seekbarStyle: SeekbarStyle;
+  /** Animation budget across the UI:
+   *  - `full`   = native frame rate
+   *  - `reduced`= 30 fps cap on animated seekbar; marquee at half frame rate
+   *  - `static` = ~1 fps progress (no rAF interpolation); marquee disabled (truncate)
+   */
+  animationMode: AnimationMode;
+  /** Persisted UI toggle: is the Now Playing section in queue panel collapsed */
+  queueNowPlayingCollapsed: boolean;
 
   /** Alpha: native hi-res sample rate output (disabled = safe 44.1 kHz mode) */
   enableHiRes: boolean;
@@ -175,6 +220,8 @@ interface AuthState {
   mixMinRatingAlbum: number;
   /** 0 = ignore; artist rating from payload / nested OpenSubsonic fields or `getArtist`. */
   mixMinRatingArtist: number;
+  /** Random Mix target list size (50, 75, 100, 125, or 150). */
+  randomMixSize: number;
   /** Show "Lucky Mix" as a regular sidebar/menu item. */
   showLuckyMixMenu: boolean;
 
@@ -252,6 +299,10 @@ interface AuthState {
   setCrossfadeEnabled: (v: boolean) => void;
   setCrossfadeSecs: (v: number) => void;
   setGaplessEnabled: (v: boolean) => void;
+  setTrackPreviewsEnabled: (v: boolean) => void;
+  setTrackPreviewLocation: (location: TrackPreviewLocation, enabled: boolean) => void;
+  setTrackPreviewStartRatio: (v: number) => void;
+  setTrackPreviewDurationSec: (v: number) => void;
   setPreloadMode: (v: 'off' | 'balanced' | 'early' | 'custom') => void;
   setPreloadCustomSeconds: (v: number) => void;
   setInfiniteQueueEnabled: (v: boolean) => void;
@@ -283,6 +334,8 @@ interface AuthState {
   setShowChangelogOnUpdate: (v: boolean) => void;
   setLastSeenChangelogVersion: (v: string) => void;
   setSeekbarStyle: (v: SeekbarStyle) => void;
+  setAnimationMode: (v: AnimationMode) => void;
+  setQueueNowPlayingCollapsed: (v: boolean) => void;
   setEnableHiRes: (v: boolean) => void;
   setAudioOutputDevice: (v: string | null) => void;
   setHotCacheEnabled: (v: boolean) => void;
@@ -295,6 +348,7 @@ interface AuthState {
   setMixMinRatingSong: (v: number) => void;
   setMixMinRatingAlbum: (v: number) => void;
   setMixMinRatingArtist: (v: number) => void;
+  setRandomMixSize: (v: number) => void;
   setShowLuckyMixMenu: (v: boolean) => void;
   setMusicFolders: (folders: Array<{ id: string; name: string }>) => void;
   setMusicLibraryFilter: (folderId: 'all' | string) => void;
@@ -321,6 +375,21 @@ function clampMixFilterMinStars(v: number): number {
   if (!Number.isFinite(v)) return 0;
   return Math.max(0, Math.min(MIX_MIN_RATING_FILTER_MAX_STARS, Math.round(v)));
 }
+
+export const RANDOM_MIX_SIZE_OPTIONS: readonly number[] = [50, 75, 100, 125, 150];
+
+function clampRandomMixSize(v: number): number {
+  if (!Number.isFinite(v)) return 50;
+  // Snap to the nearest allowed option so a tampered persisted value can't break the picker.
+  let nearest = RANDOM_MIX_SIZE_OPTIONS[0];
+  let bestDelta = Math.abs(v - nearest);
+  for (const opt of RANDOM_MIX_SIZE_OPTIONS) {
+    const d = Math.abs(v - opt);
+    if (d < bestDelta) { nearest = opt; bestDelta = d; }
+  }
+  return nearest;
+}
+
 
 function clampSkipStarThreshold(v: number): number {
   if (!Number.isFinite(v)) return 3;
@@ -367,6 +436,10 @@ export const useAuthStore = create<AuthState>()(
       crossfadeEnabled: false,
       crossfadeSecs: 3,
       gaplessEnabled: false,
+      trackPreviewsEnabled: true,
+      trackPreviewLocations: { ...DEFAULT_TRACK_PREVIEW_LOCATIONS },
+      trackPreviewStartRatio: 0.33,
+      trackPreviewDurationSec: 30,
       preloadMode: 'balanced',
       preloadCustomSeconds: 30,
       infiniteQueueEnabled: false,
@@ -398,6 +471,8 @@ export const useAuthStore = create<AuthState>()(
       showChangelogOnUpdate: true,
       lastSeenChangelogVersion: '',
       seekbarStyle: 'truewave',
+      animationMode: 'full',
+      queueNowPlayingCollapsed: false,
       enableHiRes: false,
       audioOutputDevice: null,
       hotCacheEnabled: false,
@@ -411,6 +486,7 @@ export const useAuthStore = create<AuthState>()(
       mixMinRatingSong: 0,
       mixMinRatingAlbum: 0,
       mixMinRatingArtist: 0,
+      randomMixSize: 50,
       showLuckyMixMenu: true,
       randomNavMode: 'hub',
       musicFolders: [],
@@ -521,6 +597,12 @@ export const useAuthStore = create<AuthState>()(
       setCrossfadeEnabled: (v) => set({ crossfadeEnabled: v }),
       setCrossfadeSecs: (v) => set({ crossfadeSecs: v }),
       setGaplessEnabled: (v) => set({ gaplessEnabled: v }),
+      setTrackPreviewsEnabled: (v) => set({ trackPreviewsEnabled: !!v }),
+      setTrackPreviewLocation: (location, enabled) => set(state => ({
+        trackPreviewLocations: { ...state.trackPreviewLocations, [location]: !!enabled },
+      })),
+      setTrackPreviewStartRatio: (v) => set({ trackPreviewStartRatio: Math.max(0, Math.min(0.9, v)) }),
+      setTrackPreviewDurationSec: (v) => set({ trackPreviewDurationSec: Math.max(5, Math.min(120, Math.round(v))) }),
       setPreloadMode: (v: 'off' | 'balanced' | 'early' | 'custom') => set({ preloadMode: v }),
       setPreloadCustomSeconds: (v: number) => set({ preloadCustomSeconds: v }),
       setInfiniteQueueEnabled: (v) => set({ infiniteQueueEnabled: v }),
@@ -553,6 +635,8 @@ export const useAuthStore = create<AuthState>()(
       setLastSeenChangelogVersion: (v) => set({ lastSeenChangelogVersion: v }),
 
       setSeekbarStyle: (v) => set({ seekbarStyle: v }),
+      setAnimationMode: (v) => set({ animationMode: v }),
+      setQueueNowPlayingCollapsed: (v: boolean) => set({ queueNowPlayingCollapsed: v }),
       setEnableHiRes: (v) => set({ enableHiRes: v }),
       setAudioOutputDevice: (v) => set({ audioOutputDevice: v }),
       setHotCacheEnabled: (v) => set({ hotCacheEnabled: v }),
@@ -597,6 +681,7 @@ export const useAuthStore = create<AuthState>()(
       setMixMinRatingSong: (v) => set({ mixMinRatingSong: clampMixFilterMinStars(v) }),
       setMixMinRatingAlbum: (v) => set({ mixMinRatingAlbum: clampMixFilterMinStars(v) }),
       setMixMinRatingArtist: (v) => set({ mixMinRatingArtist: clampMixFilterMinStars(v) }),
+      setRandomMixSize: (v) => set({ randomMixSize: clampRandomMixSize(v) }),
       setShowLuckyMixMenu: (v) => set({ showLuckyMixMenu: v }),
       setRandomNavMode: (v) => set({ randomNavMode: v }),
 
@@ -740,12 +825,27 @@ export const useAuthStore = create<AuthState>()(
           } catch { /* ignore */ }
         }
 
-        // One-time: 'waveform' style was renamed to 'truewave' (with 'pseudowave'
-        // added as the deterministic legacy variant). Existing persisted value
-        // 'waveform' should land on the new bins-based default.
-        const seekbarStyleMigrated = (state.seekbarStyle as string) === 'waveform'
-          ? { seekbarStyle: 'truewave' as SeekbarStyle }
-          : {};
+        // 'waveform' style was renamed to 'truewave' (with 'pseudowave' added
+        // as the deterministic legacy variant). Any persisted value that is
+        // not a valid SeekbarStyle (legacy 'waveform', undefined, tampered
+        // strings) lands on the new bins-based default — otherwise the
+        // dispatcher's switch finds no match and the seekbar renders blank.
+        const VALID_SEEKBAR_STYLES = new Set<string>([
+          'truewave', 'pseudowave', 'linedot', 'bar', 'thick',
+          'segmented', 'neon', 'pulsewave', 'particletrail', 'liquidfill', 'retrotape',
+        ]);
+        const seekbarStyleMigrated = VALID_SEEKBAR_STYLES.has(state.seekbarStyle as string)
+          ? {}
+          : { seekbarStyle: 'truewave' as SeekbarStyle };
+
+        // `reducedAnimations: boolean` superseded by `animationMode: AnimationMode`.
+        // Map legacy true → 'reduced', false/missing → 'full'. Static is opt-in only.
+        let animationModeMigrated: { animationMode?: AnimationMode } = {};
+        const legacyReduced = (state as { reducedAnimations?: unknown }).reducedAnimations;
+        const VALID_ANIM_MODES = new Set<string>(['full', 'reduced', 'static']);
+        if (!VALID_ANIM_MODES.has(state.animationMode as string)) {
+          animationModeMigrated = { animationMode: legacyReduced === true ? 'reduced' : 'full' };
+        }
 
         const st = state as {
           loudnessTargetLufs?: unknown;
@@ -768,6 +868,7 @@ export const useAuthStore = create<AuthState>()(
           mixMinRatingSong: clampMixFilterMinStars(state.mixMinRatingSong as number),
           mixMinRatingAlbum: clampMixFilterMinStars(state.mixMinRatingAlbum as number),
           mixMinRatingArtist: clampMixFilterMinStars(state.mixMinRatingArtist as number),
+          randomMixSize: clampRandomMixSize(state.randomMixSize as number),
           skipStarManualSkipCountsByKey: sanitizeSkipStarCounts(
             (state as { skipStarManualSkipCountsByKey?: unknown }).skipStarManualSkipCountsByKey,
           ),
@@ -778,6 +879,7 @@ export const useAuthStore = create<AuthState>()(
           ...lyricsSourcesMigrated,
           ...wheelSmoothOneTime,
           ...seekbarStyleMigrated,
+          ...animationModeMigrated,
         });
       },
     }

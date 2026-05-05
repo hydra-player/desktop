@@ -1,6 +1,6 @@
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, ListPlus } from 'lucide-react';
+import { Play, ListPlus, Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SubsonicSong, buildCoverArtUrl, coverArtCacheKey } from '../api/subsonic';
 import { usePlayerStore, songToTrack } from '../store/playerStore';
@@ -11,14 +11,24 @@ import { useOrbitSongRowBehavior } from '../hooks/useOrbitSongRowBehavior';
 
 interface SongCardProps {
   song: SubsonicSong;
+  disableArtwork?: boolean;
+  artworkSize?: number;
 }
 
-function SongCard({ song }: SongCardProps) {
+function SongCard({ song, disableArtwork = false, artworkSize = 200 }: SongCardProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const openContextMenu = usePlayerStore(s => s.openContextMenu);
   const enqueue = usePlayerStore(s => s.enqueue);
-  const coverUrl = song.coverArt ? buildCoverArtUrl(song.coverArt, 200) : '';
+  // buildCoverArtUrl emits a salted URL; memoize to avoid churn on rerenders.
+  const coverUrl = useMemo(
+    () => (song.coverArt ? buildCoverArtUrl(song.coverArt, artworkSize) : ''),
+    [song.coverArt, artworkSize],
+  );
+  const coverCacheKey = useMemo(
+    () => (song.coverArt ? coverArtCacheKey(song.coverArt, artworkSize) : ''),
+    [song.coverArt, artworkSize],
+  );
   const psyDrag = useDragDrop();
   const { orbitActive, addTrackToOrbit } = useOrbitSongRowBehavior();
 
@@ -74,12 +84,13 @@ function SongCard({ song }: SongCardProps) {
       }}
     >
       <div className="song-card-cover">
-        {coverUrl ? (
+        {!disableArtwork && coverUrl ? (
           <CachedImage
             src={coverUrl}
-            cacheKey={coverArtCacheKey(song.coverArt!, 200)}
+            cacheKey={coverCacheKey}
             alt={`${song.album} Cover`}
             loading="lazy"
+            decoding="async"
           />
         ) : (
           <div className="song-card-cover-placeholder">
@@ -118,6 +129,18 @@ function SongCard({ song }: SongCardProps) {
           onClick={handleArtistClick}
           title={song.artist}
         >{song.artist}</p>
+        {(song.userRating ?? 0) > 0 && (
+          <div className="song-card-rating" aria-label={`${song.userRating} stars`}>
+            {Array.from({ length: 5 }, (_, i) => (
+              <Star
+                key={i}
+                size={11}
+                fill={i < (song.userRating ?? 0) ? 'currentColor' : 'none'}
+                strokeWidth={1.5}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

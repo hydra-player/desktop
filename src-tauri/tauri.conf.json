@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Hydra Player",
   "version": "1.44.0-rc1",
-  "identifier": "dev.psysonic.player",
+  "identifier": "dev.hydra-player",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "withGlobalTauri": false,
     "windows": [
       {
-        "title": "Hydra Player",
+        "title": "Hydra",
         "width": 1280,
         "height": 800,
         "minWidth": 360,
@@ -34,7 +34,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhCNzk5MUNCRDQ4N0UwODgKUldTSTRJZlV5NUY1aThucWM3RTh4ZmpwblR1amh4R2lER3NjZDgrQTQwVGNFaWFtVStsUVBhYzkK",
       "endpoints": [
-        "https://github.com/Psychotoxical/psysonic/releases/latest/download/latest.json"
+        "https://github.com/hydra-player/desktop/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"
@@ -53,7 +53,7 @@
     ],
     "category": "Music",
     "shortDescription": "A desktop music player for Subsonic-compatible servers",
-    "longDescription": "Hydra Player is a desktop music player for Subsonic-compatible servers such as Navidrome and Gonic. It is forked from Psysonic and currently preserves selected upstream identifiers while the fork baseline is established.",
+    "longDescription": "Hydra is a desktop music player for Subsonic-compatible servers such as Navidrome and Gonic.",
     "linux": {
       "appimage": {
         "bundleMediaFramework": true

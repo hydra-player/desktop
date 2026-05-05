@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, ListPlus, HardDriveDownload, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +9,7 @@ import { useAuthStore } from '../store/authStore';
 import CachedImage from './CachedImage';
 import { playAlbum } from '../utils/playAlbum';
 import { useDragDrop } from '../contexts/DragDropContext';
+import { isAlbumRecentlyAdded } from '../utils/albumRecency';
 
 interface AlbumCardProps {
   album: SubsonicAlbum;
@@ -17,9 +18,20 @@ interface AlbumCardProps {
   onToggleSelect?: (id: string) => void;
   showRating?: boolean;
   selectedAlbums?: SubsonicAlbum[];
+  disableArtwork?: boolean;
+  artworkSize?: number;
 }
 
-function AlbumCard({ album, selected, selectionMode, onToggleSelect, showRating = false, selectedAlbums = [] }: AlbumCardProps) {
+function AlbumCard({
+  album,
+  selected,
+  selectionMode,
+  onToggleSelect,
+  showRating = false,
+  selectedAlbums = [],
+  disableArtwork = false,
+  artworkSize = 300,
+}: AlbumCardProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const openContextMenu = usePlayerStore(s => s.openContextMenu);
@@ -30,8 +42,17 @@ function AlbumCard({ album, selected, selectionMode, onToggleSelect, showRating 
     if (!meta || meta.trackIds.length === 0) return false;
     return meta.trackIds.every(tid => !!s.tracks[`${serverId}:${tid}`]);
   });
-  const coverUrl = album.coverArt ? buildCoverArtUrl(album.coverArt, 300) : '';
+  // buildCoverArtUrl emits a salted URL; memoize to avoid churn on rerenders.
+  const coverUrl = useMemo(
+    () => (album.coverArt ? buildCoverArtUrl(album.coverArt, artworkSize) : ''),
+    [album.coverArt, artworkSize],
+  );
+  const coverCacheKey = useMemo(
+    () => (album.coverArt ? coverArtCacheKey(album.coverArt, artworkSize) : ''),
+    [album.coverArt, artworkSize],
+  );
   const psyDrag = useDragDrop();
+  const isNewAlbum = isAlbumRecentlyAdded(album.created);
 
   const handleClick = () => {
     if (selectionMode) { onToggleSelect?.(album.id); return; }
@@ -71,8 +92,14 @@ function AlbumCard({ album, selected, selectionMode, onToggleSelect, showRating 
       }}
     >
       <div className="album-card-cover">
-        {coverUrl ? (
-          <CachedImage src={coverUrl} cacheKey={coverArtCacheKey(album.coverArt!, 300)} alt={`${album.name} Cover`} loading="lazy" />
+        {!disableArtwork && coverUrl ? (
+          <CachedImage
+            src={coverUrl}
+            cacheKey={coverCacheKey}
+            alt={`${album.name} Cover`}
+            loading="lazy"
+            decoding="async"
+          />
         ) : (
           <div className="album-card-cover-placeholder">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -81,9 +108,18 @@ function AlbumCard({ album, selected, selectionMode, onToggleSelect, showRating 
             </svg>
           </div>
         )}
-        {isOffline && !selectionMode && (
-          <div className="album-card-offline-badge" aria-label="Offline available">
-            <HardDriveDownload size={12} />
+        {(isNewAlbum || (isOffline && !selectionMode)) && (
+          <div className="album-card-cover-badges-tr">
+            {isNewAlbum && (
+              <div className="album-card-new-badge" aria-label={t('common.new', 'New')}>
+                {t('common.new', 'New')}
+              </div>
+            )}
+            {isOffline && !selectionMode && (
+              <div className="album-card-offline-badge" aria-label="Offline available">
+                <HardDriveDownload size={12} />
+              </div>
+            )}
           </div>
         )}
         {selectionMode && (

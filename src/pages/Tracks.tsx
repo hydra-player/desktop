@@ -14,10 +14,24 @@ import CachedImage from '../components/CachedImage';
 import SongRail from '../components/SongRail';
 import VirtualSongList from '../components/VirtualSongList';
 import { playSongNow } from '../utils/playSong';
+import { ndListSongs, ndInvalidateSongsCache } from '../api/navidromeBrowse';
+import { usePerfProbeFlags } from '../utils/perfFlags';
 
 const RANDOM_RAIL_SIZE = 18;
+/** Over-fetch buffer so the client-side `userRating > 0` filter still leaves
+ *  enough cards for the rail. Server-side rating filter on Navidrome's REST
+ *  is finicky and not yet wired through — revisit when verified. */
+const RATED_RAIL_FETCH = 60;
+const RATED_RAIL_DISPLAY = 30;
+/** Stay-fresh window for the Highly Rated rail. Cleared on rating mutation, so
+ *  the only staleness path is a reroll-button click after >60 s. */
+const RATED_RAIL_CACHE_MS = 60_000;
+/** Match Home: only mount artwork for cards near the horizontal viewport. */
+const TRACKS_SONG_RAIL_WINDOWING = true;
+const TRACKS_SONG_RAIL_INITIAL_ARTWORK_BUDGET = 4;
 
 export default function Tracks() {
+  const perfFlags = usePerfProbeFlags();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const activeServerId = useAuthStore(s => s.activeServerId);
@@ -28,6 +42,11 @@ export default function Tracks() {
 
   const [random, setRandom] = useState<SubsonicSong[]>([]);
   const [randomLoading, setRandomLoading] = useState(true);
+
+  const [rated, setRated] = useState<SubsonicSong[]>([]);
+  const [ratedLoading, setRatedLoading] = useState(true);
+  /** Hide the rail entirely on non-Navidrome servers (REST call throws) so we don't show an empty section. */
+  const [ratedSupported, setRatedSupported] = useState(true);
 
   const rerollHero = useCallback(async () => {
     setHeroLoading(true);
@@ -49,11 +68,28 @@ export default function Tracks() {
     }
   }, []);
 
+  const reloadRated = useCallback(async () => {
+    setRatedLoading(true);
+    try {
+      const songs = await ndListSongs(0, RATED_RAIL_FETCH, 'rating', 'DESC', RATED_RAIL_CACHE_MS);
+      const filtered = songs.filter(s => (s.userRating ?? 0) > 0).slice(0, RATED_RAIL_DISPLAY);
+      setRated(filtered);
+      setRatedSupported(true);
+    } catch {
+      // Non-Navidrome server, or REST endpoint refused → silently hide the rail.
+      setRated([]);
+      setRatedSupported(false);
+    } finally {
+      setRatedLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!activeServerId) return;
     rerollHero();
     rerollRandom();
-  }, [activeServerId, rerollHero, rerollRandom]);
+    reloadRated();
+  }, [activeServerId, rerollHero, rerollRandom, reloadRated]);
 
   const heroCoverUrl = hero?.coverArt ? buildCoverArtUrl(hero.coverArt, 600) : '';
 
@@ -66,14 +102,16 @@ export default function Tracks() {
 
   return (
     <div className="content-body animate-fade-in tracks-page">
-      <header className="tracks-header">
-        <div className="tracks-header-text">
-          <h1 className="page-title">{t('tracks.title')}</h1>
-          <p className="tracks-subtitle">{t('tracks.subtitle')}</p>
-        </div>
-      </header>
+      {!perfFlags.disableMainstageStickyHeader && (
+        <header className="tracks-header">
+          <div className="tracks-header-text">
+            <h1 className="page-title">{t('tracks.title')}</h1>
+            <p className="tracks-subtitle">{t('tracks.subtitle')}</p>
+          </div>
+        </header>
+      )}
 
-      {hero && (
+      {!perfFlags.disableMainstageHero && hero && (
         <section className="tracks-hero">
           <div className="tracks-hero-cover">
             {heroCoverUrl ? (
@@ -137,17 +175,34 @@ export default function Tracks() {
         </section>
       )}
 
-      <SongRail
-        title={t('tracks.railRandom')}
-        songs={railSongs}
-        loading={randomLoading}
-        onReroll={rerollRandom}
-      />
+      {!perfFlags.disableMainstageRails && ratedSupported && (ratedLoading || rated.length > 0) && (
+        <SongRail
+          title={t('tracks.railHighlyRated')}
+          songs={rated}
+          loading={ratedLoading}
+          onReroll={() => { ndInvalidateSongsCache(); return reloadRated(); }}
+          windowArtworkByViewport={TRACKS_SONG_RAIL_WINDOWING}
+          initialArtworkBudget={TRACKS_SONG_RAIL_INITIAL_ARTWORK_BUDGET}
+        />
+      )}
 
-      <VirtualSongList
-        title={t('tracks.browseTitle')}
-        emptyBrowseText={t('tracks.browseUnsupported')}
-      />
+      {!perfFlags.disableMainstageRails && (
+        <SongRail
+          title={t('tracks.railRandom')}
+          songs={railSongs}
+          loading={randomLoading}
+          onReroll={rerollRandom}
+          windowArtworkByViewport={TRACKS_SONG_RAIL_WINDOWING}
+          initialArtworkBudget={TRACKS_SONG_RAIL_INITIAL_ARTWORK_BUDGET}
+        />
+      )}
+
+      {!perfFlags.disableMainstageVirtualLists && (
+        <VirtualSongList
+          title={t('tracks.browseTitle')}
+          emptyBrowseText={t('tracks.browseUnsupported')}
+        />
+      )}
     </div>
   );
 }

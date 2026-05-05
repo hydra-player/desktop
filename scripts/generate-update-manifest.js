@@ -12,7 +12,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 
 const VERSION = process.env.VERSION;
-const REPO = 'Psychotoxical/psysonic';
+const REPO = 'hydra-player/desktop';
 const TAG = `app-v${VERSION}`;
 
 if (!VERSION) {
@@ -22,8 +22,8 @@ if (!VERSION) {
 
 // Platform → update bundle filename (produced by tauri-action with updater plugin)
 const PLATFORM_FILES = {
-  'darwin-aarch64': 'Psysonic_aarch64.app.tar.gz',
-  'darwin-x86_64':  'Psysonic_x64.app.tar.gz',
+  'darwin-aarch64': 'Hydra_Player_aarch64.app.tar.gz',
+  'darwin-x86_64':  'Hydra_Player_x64.app.tar.gz',
 };
 
 const platforms = {};

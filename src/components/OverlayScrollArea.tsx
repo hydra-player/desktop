@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { computeOverlayScrollbarThumbMeta } from '../utils/overlayScrollbarMetrics';
 import { bindOverlayScrollbarThumbDrag } from '../utils/overlayScrollbarThumb';
+import { usePerfProbeFlags } from '../utils/perfFlags';
 
 export type OverlayScrollRailInset = 'none' | 'mini' | 'panel';
 
@@ -20,8 +21,14 @@ export type OverlayScrollAreaProps = {
   viewportScrollBehaviorAuto?: boolean;
   /** Ref to the scrollable element (querySelector, scrollIntoView, etc.). */
   viewportRef?: React.Ref<HTMLDivElement>;
+  /** Ref to the outer wrapper (incl. overlay scrollbar rail). */
+  wrapRef?: React.Ref<HTMLDivElement>;
   /** Optional id on the viewport (e.g. main app scroll for route pages). */
   viewportId?: string;
+  /** Optional wheel handler on the scrollable viewport. */
+  viewportOnWheel?: React.WheelEventHandler<HTMLDivElement>;
+  /** Optional touch-move handler on the scrollable viewport. */
+  viewportOnTouchMove?: React.TouchEventHandler<HTMLDivElement>;
 };
 
 const RAIL_INSET_CLASS: Record<OverlayScrollRailInset, string> = {
@@ -45,9 +52,13 @@ export default function OverlayScrollArea({
   railInset = 'none',
   viewportScrollBehaviorAuto = false,
   viewportRef: viewportRefProp,
+  wrapRef: wrapRefProp,
   viewportId,
+  viewportOnWheel,
+  viewportOnTouchMove,
 }: OverlayScrollAreaProps) {
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const perfFlags = usePerfProbeFlags();
+  const wrapRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [meta, setMeta] = useState({ thumbH: 0, thumbT: 0, visible: false });
 
@@ -63,6 +74,7 @@ export default function OverlayScrollArea({
   const measureKey = JSON.stringify(measureDeps ?? []);
 
   useLayoutEffect(() => {
+    if (perfFlags.disableOverlayScrollbars) return;
     if (!meta.visible) return;
     const vp = viewportRef.current;
     const wrap = wrapRef.current;
@@ -80,9 +92,10 @@ export default function OverlayScrollArea({
       }
       return next;
     });
-  }, [meta.visible]);
+  }, [meta.visible, perfFlags.disableOverlayScrollbars]);
 
   useEffect(() => {
+    if (perfFlags.disableOverlayScrollbars) return;
     recompute();
     const wrap = wrapRef.current;
     const onWinResize = () => recompute();
@@ -96,11 +109,16 @@ export default function OverlayScrollArea({
       window.removeEventListener('resize', onWinResize);
       ro?.disconnect();
     };
-  }, [recompute, measureKey]);
+  }, [recompute, measureKey, perfFlags.disableOverlayScrollbars]);
 
   const setViewportNode = (el: HTMLDivElement | null) => {
     viewportRef.current = el;
     assignRef(viewportRefProp, el);
+  };
+
+  const setWrapNode = (el: HTMLDivElement | null) => {
+    wrapRef.current = el;
+    assignRef(wrapRefProp, el);
   };
 
   const rootClass = [
@@ -115,16 +133,18 @@ export default function OverlayScrollArea({
   const viewportClass = ['overlay-scroll__viewport', viewportClassName].filter(Boolean).join(' ');
 
   return (
-    <div ref={wrapRef} className={rootClass} onMouseMove={onMouseMove}>
+    <div ref={setWrapNode} className={rootClass} onMouseMove={onMouseMove}>
       <div
         id={viewportId}
         ref={setViewportNode}
         className={viewportClass}
-        onScroll={recompute}
+        onScroll={perfFlags.disableOverlayScrollbars ? undefined : recompute}
+        onWheel={viewportOnWheel}
+        onTouchMove={viewportOnTouchMove}
       >
         {children}
       </div>
-      {meta.visible && (
+      {!perfFlags.disableOverlayScrollbars && meta.visible && (
         <div className="overlay-scroll__rail" aria-hidden>
           <div
             className="overlay-scroll__thumb"

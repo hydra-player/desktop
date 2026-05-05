@@ -1,7 +1,7 @@
-# Psysonic
+# Hydra Player
 
 <div align="center">
-  <img src="public/psysonic-inapp-logo.svg" alt="Psysonic Logo" width="320"/>
+  <img src="public/hydra-logo.svg" alt="Hydra Player Logo" width="320"/>
 
 ## The Ultimate Desktop Client for Self-Hosted Music Libraries
 
@@ -10,7 +10,7 @@ Built primarily for **Navidrome**. Also compatible with **Gonic**, **Airsonic**,
 
 <br>
 
-<a href="https://github.com/Psychotoxical/psysonic/releases/latest"><img src="https://img.shields.io/github/v/release/Psychotoxical/psysonic?style=for-the-badge&label=Latest%20Release&color=8b5cf6"></a> <a href="https://github.com/Psychotoxical/psysonic/stargazers"><img src="https://img.shields.io/github/stars/Psychotoxical/psysonic?style=for-the-badge&color=f59e0b"></a> <a href="https://github.com/Psychotoxical/psysonic/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-22c55e?style=for-the-badge"></a> <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri-v2-0f172a?style=for-the-badge&logo=tauri"></a> <a href="https://discord.gg/AMnDRErm4u"><img src="https://img.shields.io/badge/Discord-Community-5865F2?style=for-the-badge&logo=discord&logoColor=white"></a> <a href="https://aur.archlinux.org/packages/psysonic"><img src="https://img.shields.io/badge/AUR-psysonic-1793d1?style=for-the-badge&logo=arch-linux&logoColor=white"></a> <a href="https://aur.archlinux.org/packages/psysonic-bin"><img src="https://img.shields.io/badge/AUR-psysonic--bin-1793d1?style=for-the-badge&logo=arch-linux&logoColor=white"></a>
+<a href="https://github.com/hydra-player/desktop/releases/latest"><img src="https://img.shields.io/github/v/release/hydra-player/desktop?style=for-the-badge&label=Latest%20Release&color=8b5cf6" alt="Latest Release"></a> <a href="https://github.com/hydra-player/desktop/stargazers"><img src="https://img.shields.io/github/stars/hydra-player/desktop?style=for-the-badge&color=f59e0b" alt="GitHub Stars"></a> <a href="https://github.com/hydra-player/desktop/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-22c55e?style=for-the-badge" alt="License GPLv3"></a> <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri-v2-0f172a?style=for-the-badge&logo=tauri" alt="Tauri v2"></a> <a href="https://discord.gg/AMnDRErm4u"><img src="https://img.shields.io/badge/Discord-Community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord Community"></a> <a href="https://t.me/+GLBx1_xeH28xYTJi"><img src="https://img.shields.io/badge/Telegram-Community-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram Community"></a> <a href="https://aur.archlinux.org/packages/hydra-player"><img src="https://img.shields.io/badge/AUR-hydra--player-1793d1?style=for-the-badge&logo=arch-linux&logoColor=white" alt="AUR hydra-player"></a> <a href="https://aur.archlinux.org/packages/hydra-player-bin"><img src="https://img.shields.io/badge/AUR-hydra--player--bin-1793d1?style=for-the-badge&logo=arch-linux&logoColor=white" alt="AUR hydra-player-bin"></a>
 
 <br><br>
 
@@ -20,24 +20,24 @@ Built primarily for **Navidrome**. Also compatible with **Gonic**, **Airsonic**,
 
 ---
 
-![Psysonic Screenshot](public/screenshot1.png)
+![Hydra Player Screenshot](public/screenshot1.png)
 
 ---
 
 > [!WARNING]
-> Psysonic is under heavy active development. Bugs and rough edges are to be expected. We reserve the right to change, remove, or rework existing features at any time without prior notice.
+> Hydra Player is under heavy active development. Bugs and rough edges are to be expected. We reserve the right to change, remove, or rework existing features at any time without prior notice.
 
 ## Server Compatibility
 
-**Psysonic is optimized first and foremost for Navidrome.**
+**Hydra Player is optimized first and foremost for Navidrome.**
 
 Many advanced functions integrate directly with Navidrome APIs for the best possible experience. Other Subsonic-compatible servers generally work well, but some features may be limited depending on server capabilities.
 
-## Why Psysonic?
+## Why Hydra Player?
 
 Most Subsonic clients feel like web wrappers.
 
-**Psysonic does not.**
+**Hydra Player does not.**
 
 It is a true desktop experience built with **Rust**, **Tauri v2**, and **React** for users who care about speed, aesthetics, customization, and serious music library management.
 
@@ -105,7 +105,7 @@ If you host your own music, this is what the premium experience should feel like
 
 ## Listen Together. In Sync. Soon.
 
-Currently in final development and testing. Orbit will introduce synchronized shared listening sessions directly inside Psysonic.
+Currently in final development and testing. Orbit will introduce synchronized shared listening sessions directly inside Hydra Player.
 
 * Host-controlled playback
 * Join via link
@@ -123,7 +123,7 @@ Currently in final development and testing. Orbit will introduce synchronized sh
 | ------- | --------------------------------------------------------------- |
 | Windows | Native Installer *(certificate pending)*                        |
 | macOS   | Signed DMG                                                      |
-| Linux   | AppImage / DEB / RPM / AUR (`psysonic`, `psysonic-bin`) / NixOS |
+| Linux   | AppImage / DEB / RPM / AUR (`hydra-player`, `hydra-player-bin`) / NixOS |
 
 Supports **8 languages** and growing.
 
@@ -134,7 +134,7 @@ Supports **8 languages** and growing.
 ## Linux
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Psychotoxical/psysonic/main/scripts/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/hydra-player/desktop/main/scripts/install.sh | sudo bash
 ```
 
 ## Windows
@@ -152,8 +152,8 @@ Download the signed DMG from Releases.
 # Development
 
 ```bash
-git clone https://github.com/Psychotoxical/psysonic.git
-cd psysonic
+git clone https://github.com/hydra-player/desktop.git
+cd desktop
 npm install
 npm run tauri:dev
 ```
@@ -191,6 +191,6 @@ GNU GPL v3.0
 
 ## Stop using boring music clients.
 
-## Use Psysonic.
+## Use Hydra Player.
 
 </div>

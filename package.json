@@ -1,7 +1,7 @@
 {
   "name": "hydra-player",
   "version": "1.44.0-dev",
-  "description": "Hydra Player desktop music player",
+  "description": "Hydra desktop music player",
   "private": true,
   "license": "GPL-3.0-only",
   "scripts": {
@@ -9,7 +9,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:dev": "GDK_BACKEND=x11 WEBKIT_DISABLE_COMPOSITING_MODE=1 tauri dev",
+    "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "test": "vitest run"
   },

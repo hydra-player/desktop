@@ -28,6 +28,11 @@ on:
         required: false
         default: true
         type: boolean
+      build_platform_artifacts:
+        description: "Build and upload macOS/Windows/Linux artifacts + latest.json"
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   create-release:
@@ -38,6 +43,7 @@ jobs:
       release_id: ${{ steps.create-release.outputs.result }}
       package_version: ${{ steps.get-version.outputs.version }}
       release_tag: ${{ steps.tag.outputs.value }}
+      source_commit_sha: ${{ steps.source-sha.outputs.value }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -83,6 +89,27 @@ jobs:
             exit 1
           fi
           echo "value=$TAG" >> "$GITHUB_OUTPUT"
+      - name: capture source commit sha
+        id: source-sha
+        run: |
+          set -euo pipefail
+          echo "value=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: align existing tag to source ref
+        env:
+          TAG: ${{ steps.tag.outputs.value }}
+          EXPECTED_SHA: ${{ steps.source-sha.outputs.value }}
+        run: |
+          set -euo pipefail
+          git fetch --force --tags origin
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            TAG_SHA="$(git rev-list -n 1 "refs/tags/$TAG")"
+            if [ "$TAG_SHA" != "$EXPECTED_SHA" ]; then
+              echo "::warning::Tag '$TAG' points to $TAG_SHA, expected $EXPECTED_SHA from source_ref '${{ inputs.source_ref }}'"
+              echo "::warning::Re-pointing tag '$TAG' to expected source commit to keep Source code archives aligned with built artifacts."
+              git tag -f "$TAG" "$EXPECTED_SHA"
+              git push --force origin "refs/tags/$TAG"
+            fi
+          fi
       - name: extract changelog
         id: changelog
         run: |
@@ -100,14 +127,14 @@ jobs:
           echo "$EOF_MARKER" >> "$GITHUB_OUTPUT"
       - name: create or update release
         id: create-release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           PACKAGE_VERSION: ${{ steps.get-version.outputs.version }}
           RELEASE_TAG: ${{ steps.tag.outputs.value }}
+          RELEASE_COMMIT_SHA: ${{ steps.source-sha.outputs.value }}
           CHANGELOG_BODY: ${{ steps.changelog.outputs.body }}
           IS_PRERELEASE: ${{ inputs.prerelease }}
           IS_DRAFT: ${{ inputs.draft_release }}
-          CHANNEL: ${{ inputs.channel }}
         with:
           script: |
             const tag = process.env.RELEASE_TAG;
@@ -115,9 +142,8 @@ jobs:
             const prerelease = process.env.IS_PRERELEASE === "true";
             const draft = process.env.IS_DRAFT === "true";
             const version = process.env.PACKAGE_VERSION;
-            const channel = process.env.CHANNEL;
-            const titleSuffix = prerelease ? ` RC (${channel})` : "";
-            const name = `Psysonic v${version}${titleSuffix}`;
+            const targetCommitish = process.env.RELEASE_COMMIT_SHA;
+            const name = `Psysonic v${version}`;
             try {
               const { data } = await github.rest.repos.getReleaseByTag({
                 owner: context.repo.owner,
@@ -141,6 +167,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag_name: tag,
+              target_commitish: targetCommitish,
               name,
               body,
               draft,
@@ -149,6 +176,7 @@ jobs:
             return data.id;
 
   build-macos-windows:
+    if: ${{ inputs.build_platform_artifacts }}
     needs: create-release
     permissions:
       contents: write
@@ -232,6 +260,7 @@ jobs:
           gh release upload "$RELEASE_TAG" "Psysonic_${ARCH}.app.tar.gz.sig" --clobber
 
   generate-manifest:
+    if: ${{ inputs.build_platform_artifacts }}
     needs: [create-release, build-macos-windows]
     runs-on: ubuntu-24.04
     permissions:
@@ -253,6 +282,7 @@ jobs:
           gh release upload "$RELEASE_TAG" latest.json --clobber
 
   build-linux:
+    if: ${{ inputs.build_platform_artifacts }}
     needs: create-release
     permissions:
       contents: write
@@ -408,6 +438,8 @@ jobs:
             exit 0
           fi
           npm version --no-git-tag-version "$TARGET_VERSION"
+      - name: sync Tauri version from package.json
+        run: node scripts/sync-tauri-version-from-package.js
       - name: open PR with dev bump (if changed)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -415,7 +447,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json
+          git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/tauri.conf.json
           if git diff --cached --quiet; then
             echo "No dev version bump required."
             exit 0
@@ -431,4 +463,4 @@ jobs:
             --base main \
             --head "$BRANCH" \
             --title "chore(release): bump main to ${VERSION}" \
-            --body "Auto-generated after stable release: updates \`package.json\` and \`package-lock.json\` to the next development version."
+            --body "Auto-generated after stable release: updates \`package.json\`, \`package-lock.json\`, \`src-tauri/Cargo.toml\`, and \`src-tauri/tauri.conf.json\` to the next development version."

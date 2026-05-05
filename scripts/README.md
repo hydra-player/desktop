@@ -1,52 +1,47 @@
-# Scripts
+# Install Hydra Player on Linux
 
-## install.sh - Auto-Installer for Debian and RHEL-based Systems
+This script automatically downloads and installs the latest Hydra Player release from GitHub Releases.
 
-This script automatically downloads and installs the latest Psysonic release from GitHub Releases.
-
-### Supported Distributions
-
-- **Debian/Ubuntu**: Downloads and installs `.deb` package
-- **RHEL/Fedora/CentOS**: Downloads and installs `.rpm` package
-
-### Usage
-
-#### Quick Install (Recommended)
+## Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Psychotoxical/psysonic/main/scripts/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/hydra-player/desktop/main/scripts/install.sh | sudo bash
 ```
 
-#### Manual Installation
+## What it does
 
-```bash
-# Download the script
-wget https://raw.githubusercontent.com/Psychotoxical/psysonic/main/scripts/install.sh
+1. Detects your OS (Arch, Debian/Ubuntu, Fedora, or generic Linux)
+2. Downloads the latest release from [GitHub Releases](https://github.com/hydra-player/desktop/releases/latest)
+3. Installs the appropriate package for your system:
+   - **Arch/Manjaro/CachyOS**: Installs via `yay` or `paru` (AUR: `hydra-player`)
+   - **Debian/Ubuntu/Mint**: Downloads and installs the `.deb` package
+   - **Fedora/RHEL**: Downloads and installs the `.rpm` package
+   - **Other Linux**: Downloads and installs the AppImage
 
-# Make it executable
-chmod +x install.sh
+## Requirements
 
-# Run with sudo
-sudo ./install.sh
-```
+- `curl` or `wget`
+- `sudo` privileges (for system-wide install)
 
-### What it does
+## Manual Download
 
-1. Detects your OS type (Debian or RHEL-based)
-2. Fetches the latest release from GitHub
-3. Downloads the appropriate package (.deb or .rpm)
-4. Installs it using your system's package manager
-5. Cleans up temporary files
+If you prefer to download manually, visit:
+https://github.com/hydra-player/desktop/releases/latest
 
-### Requirements
+## After Installation
 
-- `curl` - for downloading packages
-- `sudo` or root access
-- Internet connection
-- Supported package manager (apt-get, dnf, or yum)
+- If Hydra Player is already installed, the script will ask if you want to reinstall
+- After installation, you can launch Hydra Player from your application menu or by running `hydra-player` in the terminal
 
-### Notes
+## Troubleshooting
 
-- If Psysonic is already installed, the script will ask if you want to reinstall
-- The script automatically handles dependency installation for Debian systems
-- After installation, you can launch Psysonic from your application menu or by running `psysonic` in the terminal
+- **"hydra-player: command not found"**: Try logging out and back in, or run `hash -r` to clear the shell cache
+- **Permission denied**: Make sure you have `sudo` privileges
+- **AppImage won't run**: You may need to `chmod +x` the downloaded AppImage file
+
+## Uninstall
+
+- **Arch**: `yay -R hydra-player` or `sudo pacman -R hydra-player`
+- **Debian/Ubuntu**: `sudo apt remove hydra-player`
+- **Fedora**: `sudo dn remove hydra-player`
+- **AppImage**: Simply delete the `.AppImage` file

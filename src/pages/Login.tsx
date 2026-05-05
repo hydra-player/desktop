@@ -6,6 +6,7 @@ import { pingWithCredentials, scheduleInstantMixProbeForServer } from '../api/su
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
 import CustomSelect from '../components/CustomSelect';
+import HydraLogo from '../components/HydraLogo';
 import {
   decodeServerMagicString,
   DECODED_PASSWORD_VISUAL_MASK,
@@ -13,10 +14,6 @@ import {
   type ServerMagicPayload,
 } from '../utils/serverMagicString';
 import { shortHostFromServerUrl, serverListDisplayLabel } from '../utils/serverDisplayName';
-
-const PsysonicLogo = () => (
-  <img src="/logo-psysonic.png" width="64" height="64" alt="Psysonic" style={{ borderRadius: 18 }} />
-);
 
 export default function Login() {
   const navigate = useNavigate();
@@ -188,9 +185,9 @@ export default function Login() {
           />
         </div>
         <div className="login-logo">
-          <PsysonicLogo />
+          <HydraLogo className="login-hydra-logo" />
         </div>
-        <h1 className="login-title">Psysonic</h1>
+        <h1 className="login-title">Hydra</h1>
         <p className="login-subtitle">{t('login.subtitle')}</p>
 
         {/* Saved servers quick-connect */}

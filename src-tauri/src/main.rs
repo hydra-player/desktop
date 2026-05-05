@@ -41,8 +41,9 @@ fn detect_gpu_vendor() -> Option<GpuVendor> {
 }
 
 fn main() {
-    // WebKitGTK on Wayland is unstable — force X11/XWayland on all Linux packages.
-    // Users can still override by setting these vars before launch.
+    // WebKitGTK on Wayland can be unstable — default to X11 when GDK_BACKEND is unset,
+    // except when PSYSONIC_ALLOW_NATIVE_GDK is set (e.g. Nix psysonic-gdk-session wrapper).
+    // Users can still override by setting GDK_BACKEND before launch.
     //
     // Safety: set_var modifies global process state. These calls are safe here
     // because we're in main() before the Tauri runtime starts — no other threads
@@ -50,7 +51,10 @@ fn main() {
     // need synchronization or marking as unsafe (Rust 2024+).
     #[cfg(target_os = "linux")]
     {
-        if std::env::var("GDK_BACKEND").is_err() {
+        // Nix `psysonic-gdk-session` sets this so we do not pin X11 when the packager asked for
+        // session-native GDK (e.g. Wayland). Local dev can export the same var before `tauri dev`.
+        let allow_native_gdk = std::env::var("PSYSONIC_ALLOW_NATIVE_GDK").is_ok();
+        if std::env::var("GDK_BACKEND").is_err() && !allow_native_gdk {
             std::env::set_var("GDK_BACKEND", "x11");
         }
         if std::env::var("WEBKIT_DISABLE_COMPOSITING_MODE").is_err() {
@@ -69,29 +73,29 @@ fn main() {
     }
 
     let args: Vec<String> = std::env::args().collect();
-    if psysonic_lib::cli::wants_version(&args) {
-        psysonic_lib::cli::print_version();
+    if hydra_player_lib::cli::wants_version(&args) {
+        hydra_player_lib::cli::print_version();
         return;
     }
-    if psysonic_lib::cli::wants_help(&args) {
-        psysonic_lib::cli::print_help(
-            args.first().map(|s| s.as_str()).unwrap_or("psysonic"),
+    if hydra_player_lib::cli::wants_help(&args) {
+        hydra_player_lib::cli::print_help(
+            args.first().map(|s| s.as_str()).unwrap_or("hydra-player"),
         );
         return;
     }
-    if let Some(code) = psysonic_lib::cli::try_completions_dispatch(&args) {
+    if let Some(code) = hydra_player_lib::cli::try_completions_dispatch(&args) {
         std::process::exit(code);
     }
-    if psysonic_lib::cli::wants_info(&args) {
-        psysonic_lib::cli::run_info_and_exit(&args);
+    if hydra_player_lib::cli::wants_info(&args) {
+        hydra_player_lib::cli::run_info_and_exit(&args);
     }
-    if psysonic_lib::cli::wants_logs(&args) {
-        psysonic_lib::cli::run_tail_and_exit(&args);
+    if hydra_player_lib::cli::wants_logs(&args) {
+        hydra_player_lib::cli::run_tail_and_exit(&args);
     }
-    if psysonic_lib::cli::wants_tail(&args) {
+    if hydra_player_lib::cli::wants_tail(&args) {
         eprintln!("NOT OK: --tail is only valid with --logs");
         std::process::exit(2);
     }
 
-    psysonic_lib::run();
+    hydra_player_lib::run();
 }

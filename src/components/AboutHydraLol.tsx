@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useId, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { open as openUrl } from '@tauri-apps/plugin-shell';
-import PsysonicLogo from './PsysonicLogo';
+import HydraLogo, { HydraMark } from './HydraLogo';
 
 const TAPS_TO_REVEAL_HINT = 10;
 const TARGET_CLICKS_IN_WINDOW = 100;
@@ -10,7 +10,7 @@ const WINDOW_MS = 60_000;
 
 /** Hardcoded About lol copy — intentionally not in locale files. */
 const MSG_HINT =
-  'To become a developer, you need to click the Psysonic logo 100 times within one minute.';
+  'To become a developer, you need to click the Hydra logo 100 times within one minute.';
 
 const MSG_CONGRATS_TITLE = 'Congratulations.';
 const MSG_CONGRATS_SIGN_OFF = 'Sincerely, your maintainers.';
@@ -20,14 +20,13 @@ const MSG_CONGRATS_PS = "PS: Don't forget to star the repo! ★";
  * About page brand row + Settings → System → About lol (logo taps + modal).
  * Modal copy is English and hardcoded by design.
  */
-export function AboutPsysonicBrandHeader({
+export function AboutHydraBrandHeader({
   appVersion,
   aboutVersionLabel,
 }: {
   appVersion: string;
   aboutVersionLabel: string;
 }) {
-  const modalWordmarkGradSuffix = useId().replace(/:/g, '');
   const [phase, setPhase] = useState<'idle' | 'hint' | 'done'>('idle');
   const [idleTaps, setIdleTaps] = useState(0);
   const [hintTimestamps, setHintTimestamps] = useState<number[]>([]);
@@ -78,14 +77,14 @@ export function AboutPsysonicBrandHeader({
         <button
           type="button"
           onClick={onLogoClick}
-          className="about-psysonic-logo-lol-hit"
-          aria-label="Psysonic"
+          className="about-hydra-logo-lol-hit"
+          aria-label="Hydra"
         >
-          <img src="/logo-psysonic.png" width={52} height={52} alt="" decoding="async" style={{ borderRadius: 14, display: 'block' }} />
+          <HydraMark style={{ width: 52, height: 52, display: 'block' }} title="" />
         </button>
         <div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-            Psysonic
+            Hydra
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
             {aboutVersionLabel} {appVersion}
@@ -111,47 +110,40 @@ export function AboutPsysonicBrandHeader({
           <div
             role="dialog"
             aria-modal="true"
-            aria-labelledby="about-psysonic-lol-title"
-            className="about-psysonic-lol-overlay"
+            aria-labelledby="about-hydra-lol-title"
+            className="about-hydra-lol-overlay"
           >
             <button
               type="button"
-              className="about-psysonic-lol-close"
+              className="about-hydra-lol-close"
               aria-label="Close"
               onClick={closeOverlay}
             >
               <X size={26} strokeWidth={2.25} aria-hidden />
             </button>
-            <div className="about-psysonic-lol-panel">
-              <div className="about-psysonic-lol-logo-slot">
-                <PsysonicLogo
-                  gradientIdSuffix={modalWordmarkGradSuffix}
-                  className="about-psysonic-lol-logo-mark"
-                  style={{
-                    height: 'clamp(3.25rem, 14vw, 5.75rem)',
-                    width: 'auto',
-                    maxWidth: 'min(100%, 420px)',
-                    display: 'block',
-                  }}
+            <div className="about-hydra-lol-panel">
+              <div className="about-hydra-lol-logo-slot">
+                <HydraLogo
+                  className="about-hydra-lol-logo-mark"
                 />
               </div>
-              <div className="about-psysonic-lol-copy">
-                <h2 id="about-psysonic-lol-title" className="about-psysonic-lol-title">
+              <div className="about-hydra-lol-copy">
+                <h2 id="about-hydra-lol-title" className="about-hydra-lol-title">
                   {MSG_CONGRATS_TITLE}
                 </h2>
-                <p className="about-psysonic-lol-lede">
+                <p className="about-hydra-lol-lede">
                   {"We're very much looking forward to you as a developer — join us on "}
-                  <button
-                    type="button"
-                    className="about-psysonic-lol-inline-link"
-                    onClick={() => void openUrl('https://github.com/Psychotoxical/psysonic')}
-                  >
-                    GitHub
-                  </button>
+                   <button
+                     type="button"
+                     className="about-hydra-lol-inline-link"
+                     onClick={() => void openUrl('https://github.com/hydra-player/desktop')}
+                   >
+                     GitHub
+                   </button>
                   {' and build great features!'}
                 </p>
-                <p className="about-psysonic-lol-signoff">{MSG_CONGRATS_SIGN_OFF}</p>
-                <p className="about-psysonic-lol-ps">{MSG_CONGRATS_PS}</p>
+                <p className="about-hydra-lol-signoff">{MSG_CONGRATS_SIGN_OFF}</p>
+                <p className="about-hydra-lol-ps">{MSG_CONGRATS_PS}</p>
               </div>
             </div>
           </div>,

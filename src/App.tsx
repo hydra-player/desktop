@@ -81,20 +81,16 @@ import { useAuthStore } from './store/authStore';
 import {
   getMusicFolders,
   getSimilarSongs,
-  getSong,
   probeEntityRatingSupport,
   search as subsonicSearch,
-  setRating,
-  star,
-  unstar,
 } from './api/subsonic';
 import { useOfflineStore } from './store/offlineStore';
 import { initHotCachePrefetch } from './hotCachePrefetch';
 import i18n from './i18n';
-import { playByOpaqueId } from './utils/playByOpaqueId';
 import { switchActiveServer } from './utils/switchActiveServer';
 import {
   usePlayerStore,
+  getPlaybackProgressSnapshot,
   initAudioListeners,
   songToTrack,
   shuffleArray,
@@ -104,14 +100,35 @@ import { useThemeStore } from './store/themeStore';
 import { useThemeScheduler } from './hooks/useThemeScheduler';
 import { useFontStore } from './store/fontStore';
 import { useEqStore } from './store/eqStore';
-import { useKeybindingsStore, matchInAppBinding, buildInAppBinding } from './store/keybindingsStore';
+import { useKeybindingsStore, buildInAppBinding } from './store/keybindingsStore';
 import { useGlobalShortcutsStore } from './store/globalShortcutsStore';
 import { useZipDownloadStore } from './store/zipDownloadStore';
+import { usePreviewStore } from './store/previewStore';
+import { DEFAULT_IN_APP_BINDINGS, canRunShortcutActionInMiniWindow, executeCliPlayerCommand, executeRuntimeAction, isGlobalShortcutActionId, isShortcutAction } from './config/shortcutActions';
+import { matchInAppShortcutAction } from './shortcuts/runtime';
 import ZipDownloadOverlay from './components/ZipDownloadOverlay';
 import PasteClipboardHandler from './components/PasteClipboardHandler';
+import { usePerfProbeFlags } from './utils/perfFlags';
 
-/** Volume before last `psysonic --player mute` (CLI only; in-memory). */
-let cliPremuteVolume: number | null = null;
+const SIDEBAR_COLLAPSED_STORAGE_KEY = 'psysonic_sidebar_collapsed';
+
+function readInitialSidebarCollapsed(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function persistSidebarCollapsed(collapsed: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(collapsed));
+  } catch {
+    // Ignore storage failures and keep in-memory UI state.
+  }
+}
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isLoggedIn, servers, activeServerId } = useAuthStore();
@@ -141,7 +158,13 @@ function shouldSuppressQueueResizerMouseDown(clientX: number, clientY: number, q
   const xSlop = 22;
   const vPad = 40;
   for (let i = 0; i < thumbs.length; i++) {
-    const r = thumbs[i].getBoundingClientRect();
+    const thumb = thumbs[i];
+    const style = window.getComputedStyle(thumb);
+    const pointerActive = style.pointerEvents !== 'none';
+    const visible = Number.parseFloat(style.opacity || '0') > 0.01;
+    if (!pointerActive && !visible) continue;
+
+    const r = thumb.getBoundingClientRect();
     if (r.height < 4 || r.width < 1) continue;
     if (clientY < r.top - vPad || clientY > r.bottom + vPad) continue;
     const thumbHitRight = Math.min(r.right + xSlop, mainRight);
@@ -151,7 +174,7 @@ function shouldSuppressQueueResizerMouseDown(clientX: number, clientY: number, q
 }
 
 function AppShell() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isMobile = useIsMobile();
   const [isWindowFullscreen, setIsWindowFullscreen] = useState(false);
   const [isTilingWm, setIsTilingWm] = useState(false);
@@ -212,6 +235,7 @@ function AppShell() {
   const offlineAlbums = useOfflineStore(s => s.albums);
   const hasOfflineContent = Object.values(offlineAlbums).some(a => a.serverId === serverId);
   const floatingPlayerBar = useThemeStore(s => s.floatingPlayerBar);
+  const perfFlags = usePerfProbeFlags();
 
   // Mini player → main: route requests dispatched as `psy:navigate`
   // CustomEvents from the bridge land here so React Router can take over.
@@ -307,31 +331,62 @@ function AppShell() {
         const appWindow = getCurrentWindow();
         if (currentTrack) {
           const state = isPlaying ? '▶' : '⏸';
-          const title = `${state} ${currentTrack.artist} - ${currentTrack.title} | Psysonic`;
+          const title = `${state} ${currentTrack.artist} - ${currentTrack.title} | Hydra`;
           document.title = title;
           await appWindow.setTitle(title);
+          await invoke('set_tray_tooltip', {
+            tooltip: `${currentTrack.artist} – ${currentTrack.title}`,
+            playbackState: isPlaying ? 'play' : 'pause',
+          }).catch(() => {});
         } else {
-          document.title = 'Psysonic';
-          await appWindow.setTitle('Psysonic');
+          document.title = 'Hydra';
+          await appWindow.setTitle('Hydra');
+          await invoke('set_tray_tooltip', {
+            tooltip: '',
+            playbackState: 'stop',
+          }).catch(() => {});
         }
       } catch (err) {}
     };
     fn();
   }, [currentTrack, isPlaying]);
 
+  useEffect(() => {
+    const apply = () => {
+      invoke('set_tray_menu_labels', {
+        playPause: t('tray.playPause'),
+        next: t('tray.nextTrack'),
+        previous: t('tray.previousTrack'),
+        showHide: t('tray.showHide'),
+        quit: t('tray.exit'),
+        nothingPlaying: t('tray.nothingPlaying'),
+      }).catch(() => {});
+    };
+    apply();
+    i18n.on('languageChanged', apply);
+    return () => { i18n.off('languageChanged', apply); };
+  }, [t, i18n]);
+
   // Post-update changelog is now surfaced via a dismissible banner in the
   // sidebar (WhatsNewBanner) that links to the /whats-new page — no auto
   // modal takeover on startup.
 
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    return localStorage.getItem('psysonic_sidebar_collapsed') === 'true';
-  });
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(readInitialSidebarCollapsed);
   const [queueWidth, setQueueWidth] = useState(340);
   const [isDraggingQueue, setIsDraggingQueue] = useState(false);
+  const [queueHandleTop, setQueueHandleTop] = useState<number | null>(null);
+  const [isMainScrolling, setIsMainScrolling] = useState(false);
+
+  const setSidebarCollapsed = useCallback((collapsed: boolean) => {
+    persistSidebarCollapsed(collapsed);
+    setIsSidebarCollapsed(collapsed);
+  }, []);
 
   useEffect(() => {
-    localStorage.setItem('psysonic_sidebar_collapsed', isSidebarCollapsed.toString());
-  }, [isSidebarCollapsed]);
+    const onToggleSidebar = () => setSidebarCollapsed(!isSidebarCollapsed);
+    window.addEventListener('psy:toggle-sidebar', onToggleSidebar);
+    return () => window.removeEventListener('psy:toggle-sidebar', onToggleSidebar);
+  }, [isSidebarCollapsed, setSidebarCollapsed]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (isDraggingQueue) {
@@ -362,6 +417,107 @@ function AppShell() {
       document.body.classList.remove('is-dragging');
     };
   }, [isDraggingQueue, handleMouseMove, handleMouseUp]);
+
+  useEffect(() => {
+    const viewports = new Set<HTMLElement>();
+    const appViewport = document.getElementById(APP_MAIN_SCROLL_VIEWPORT_ID);
+    if (appViewport) viewports.add(appViewport);
+    const nowPlayingViewport = document.querySelector<HTMLElement>('.np-main__viewport');
+    if (nowPlayingViewport) viewports.add(nowPlayingViewport);
+    if (viewports.size === 0) return;
+
+    let scrollHideTimer: number | null = null;
+
+    const onScroll = () => {
+      setIsMainScrolling(true);
+      if (scrollHideTimer != null) window.clearTimeout(scrollHideTimer);
+      scrollHideTimer = window.setTimeout(() => {
+        setIsMainScrolling(false);
+        scrollHideTimer = null;
+      }, 180);
+    };
+
+    viewports.forEach(viewport => {
+      viewport.addEventListener('scroll', onScroll, { passive: true });
+    });
+    return () => {
+      viewports.forEach(viewport => {
+        viewport.removeEventListener('scroll', onScroll);
+      });
+      if (scrollHideTimer != null) window.clearTimeout(scrollHideTimer);
+      setIsMainScrolling(false);
+    };
+  }, [location.pathname]);
+
+  const syncQueueHandleTop = useCallback(() => {
+    const leftBtn = document.querySelector('.sidebar .collapse-btn') as HTMLElement | null;
+    if (!leftBtn) return;
+    const r = leftBtn.getBoundingClientRect();
+    setQueueHandleTop(r.top + r.height / 2);
+  }, []);
+
+  useEffect(() => {
+    if (isMobile) return;
+    const leftBtn = document.querySelector('.sidebar .collapse-btn') as HTMLElement | null;
+    if (!leftBtn) return;
+
+    syncQueueHandleTop();
+    const raf = requestAnimationFrame(syncQueueHandleTop);
+
+    const onResize = () => syncQueueHandleTop();
+    window.addEventListener('resize', onResize);
+    const observer = new ResizeObserver(onResize);
+    observer.observe(leftBtn);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', onResize);
+      observer.disconnect();
+    };
+  }, [isMobile, isSidebarCollapsed, syncQueueHandleTop]);
+
+  const handleQueueHandleMouseDown = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const DRAG_THRESHOLD_PX = 4;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let didDrag = false;
+
+    const cleanup = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp, true);
+      document.body.style.cursor = '';
+      document.body.classList.remove('is-dragging');
+    };
+
+    const applyWidthFromClientX = (clientX: number) => {
+      const newWidth = Math.max(310, Math.min(window.innerWidth - clientX, 500));
+      setQueueWidth(newWidth);
+    };
+
+    const onMove = (me: MouseEvent) => {
+      const movedEnough = Math.hypot(me.clientX - startX, me.clientY - startY) >= DRAG_THRESHOLD_PX;
+      if (!didDrag && movedEnough) {
+        didDrag = true;
+        if (!isQueueVisible) toggleQueue();
+        document.body.style.cursor = 'col-resize';
+        document.body.classList.add('is-dragging');
+      }
+      if (!didDrag) return;
+      applyWidthFromClientX(me.clientX);
+    };
+
+    const onUp = () => {
+      cleanup();
+      if (!didDrag) toggleQueue();
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp, true);
+  }, [isQueueVisible, toggleQueue]);
 
   // ── Global DnD fix for Linux/WebKitGTK / Wayland ─────────────────
   // dragover/dragenter: WebKitGTK needs preventDefault so external drops are not
@@ -428,6 +584,25 @@ function AppShell() {
     return () => document.removeEventListener('visibilitychange', update);
   }, []);
 
+  // Pause cosmetic animations when the window loses OS focus but stays visible
+  // (alt-tab, click into another app). On low-VRAM laptops WebView2 keeps
+  // compositing mesh blobs / waveform / marquee at full rate even though the
+  // user isn't looking — measurable GPU drain reported in issue #334.
+  useEffect(() => {
+    const update = () => {
+      const blurred = !document.hasFocus();
+      window.__psyBlurred = blurred;
+      document.documentElement.dataset.appBlurred = blurred ? 'true' : 'false';
+    };
+    window.addEventListener('focus', update);
+    window.addEventListener('blur', update);
+    update();
+    return () => {
+      window.removeEventListener('focus', update);
+      window.removeEventListener('blur', update);
+    };
+  }, []);
+
   const isMobilePlayer = isMobile && location.pathname === '/now-playing';
 
   return (
@@ -439,7 +614,9 @@ function AppShell() {
       data-fullscreen={isWindowFullscreen || undefined}
       style={{
         '--sidebar-width': isMobile ? '0px' : (isSidebarCollapsed ? '72px' : 'clamp(200px, 15vw, 220px)'),
-        '--queue-width': isMobile ? '0px' : (isQueueVisible ? `${queueWidth}px` : '0px')
+        '--queue-width': isMobile
+          ? '0px'
+          : (isQueueVisible ? `${queueWidth}px` : '0px')
       } as React.CSSProperties}
       onContextMenu={e => e.preventDefault()}
     >
@@ -447,7 +624,7 @@ function AppShell() {
       {!isMobile && (
         <Sidebar
           isCollapsed={isSidebarCollapsed}
-          toggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          toggleCollapse={() => setSidebarCollapsed(!isSidebarCollapsed)}
         />
       )}
       <main className="main-content">
@@ -459,14 +636,16 @@ function AppShell() {
           <LastfmIndicator />
           <NowPlayingDropdown />
           <OrbitStartTrigger />
-          <button
-            className="queue-toggle-btn"
-            onClick={toggleQueue}
-            data-tooltip={t('player.toggleQueue')}
-            data-tooltip-pos="bottom"
-          >
-            {isQueueVisible ? <PanelRightClose size={18} /> : <PanelRight size={18} />}
-          </button>
+          {!isMobile && !isQueueVisible && (
+            <button
+              className="queue-toggle-btn"
+              onClick={toggleQueue}
+              data-tooltip={t('player.toggleQueue')}
+              data-tooltip-pos="bottom"
+            >
+              <PanelRight size={18} />
+            </button>
+          )}
         </header>
         <OrbitSessionBar />
         {connStatus === 'disconnected' && (
@@ -481,37 +660,41 @@ function AppShell() {
             railInset="panel"
           >
             <Suspense fallback={null}>
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/albums" element={<Albums />} />
-                <Route path="/tracks" element={<Tracks />} />
-                <Route path="/random" element={<RandomLanding />} />
-                <Route path="/random/albums" element={<RandomAlbums />} />
-                <Route path="/album/:id" element={<AlbumDetail />} />
-                <Route path="/artists" element={<Artists />} />
-                <Route path="/artist/:id" element={<ArtistDetail />} />
-                <Route path="/new-releases" element={<NewReleases />} />
-                <Route path="/favorites" element={<Favorites />} />
-                <Route path="/random/mix" element={<RandomMix />} />
-                <Route path="/lucky-mix" element={<LuckyMixPage />} />
-                <Route path="/label/:name" element={<LabelAlbums />} />
-                <Route path="/search" element={<SearchResults />} />
-                <Route path="/search/advanced" element={<AdvancedSearch />} />
-                <Route path="/statistics" element={<Statistics />} />
-                <Route path="/most-played" element={<MostPlayed />} />
-                <Route path="/now-playing" element={isMobile ? <MobilePlayerView /> : <NowPlayingPage />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/whats-new" element={<WhatsNew />} />
-                <Route path="/help" element={<Help />} />
-                <Route path="/offline" element={<OfflineLibrary />} />
-                <Route path="/genres" element={<Genres />} />
-                <Route path="/genres/:name" element={<GenreDetail />} />
-                <Route path="/playlists" element={<Playlists />} />
-                <Route path="/playlists/:id" element={<PlaylistDetail />} />
-                <Route path="/radio" element={<InternetRadio />} />
-                <Route path="/folders" element={<FolderBrowser />} />
-                <Route path="/device-sync" element={<DeviceSync />} />
-              </Routes>
+              {perfFlags.disableMainRouteContentMount ? (
+                <div style={{ minHeight: '60vh' }} />
+              ) : (
+                <Routes>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/albums" element={<Albums />} />
+                  <Route path="/tracks" element={<Tracks />} />
+                  <Route path="/random" element={<RandomLanding />} />
+                  <Route path="/random/albums" element={<RandomAlbums />} />
+                  <Route path="/album/:id" element={<AlbumDetail />} />
+                  <Route path="/artists" element={<Artists />} />
+                  <Route path="/artist/:id" element={<ArtistDetail />} />
+                  <Route path="/new-releases" element={<NewReleases />} />
+                  <Route path="/favorites" element={<Favorites />} />
+                  <Route path="/random/mix" element={<RandomMix />} />
+                  <Route path="/lucky-mix" element={<LuckyMixPage />} />
+                  <Route path="/label/:name" element={<LabelAlbums />} />
+                  <Route path="/search" element={<SearchResults />} />
+                  <Route path="/search/advanced" element={<AdvancedSearch />} />
+                  <Route path="/statistics" element={<Statistics />} />
+                  <Route path="/most-played" element={<MostPlayed />} />
+                  <Route path="/now-playing" element={isMobile ? <MobilePlayerView /> : <NowPlayingPage />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/whats-new" element={<WhatsNew />} />
+                  <Route path="/help" element={<Help />} />
+                  <Route path="/offline" element={<OfflineLibrary />} />
+                  <Route path="/genres" element={<Genres />} />
+                  <Route path="/genres/:name" element={<GenreDetail />} />
+                  <Route path="/playlists" element={<Playlists />} />
+                  <Route path="/playlists/:id" element={<PlaylistDetail />} />
+                  <Route path="/radio" element={<InternetRadio />} />
+                  <Route path="/folders" element={<FolderBrowser />} />
+                  <Route path="/device-sync" element={<DeviceSync />} />
+                </Routes>
+              )}
             </Suspense>
           </OverlayScrollArea>
         </div>
@@ -522,14 +705,47 @@ function AppShell() {
           className="resizer resizer-queue" 
           onMouseDown={(e) => {
             e.preventDefault();
-            if (document.body.classList.contains('is-overlay-scrollbar-thumb-drag')) return;
+            if (document.body.classList.contains('is-overlay-scrollbar-thumb-drag')) {
+              // Self-heal stale drag flag: if no thumb is actually dragging,
+              // unblock the queue resizer immediately.
+              const activeThumbDrag = document.querySelector('.overlay-scroll__thumb.is-thumb-dragging');
+              if (!activeThumbDrag) {
+                document.body.classList.remove('is-overlay-scrollbar-thumb-drag');
+              } else {
+                return;
+              }
+            }
             if (shouldSuppressQueueResizerMouseDown(e.clientX, e.clientY, queueWidth)) return;
             setIsDraggingQueue(true);
           }}
-          style={{ display: isQueueVisible ? 'block' : 'none' }}
+          style={{
+            display: isQueueVisible ? 'block' : 'none',
+            right: `${Math.max(0, queueWidth - 3)}px`,
+          }}
         />
       )}
-      {!isMobile && <QueuePanel />}
+      {!isMobile && isQueueVisible && (
+        <button
+          type="button"
+          className="resizer-queue-handle"
+          onMouseDown={handleQueueHandleMouseDown}
+          style={{
+            position: 'fixed',
+            top: queueHandleTop != null ? `${queueHandleTop}px` : '50%',
+            right: `${Math.max(0, queueWidth - 11)}px`,
+            transform: 'translateY(-50%)',
+            zIndex: 101,
+            opacity: isMainScrolling ? 0 : 1,
+            pointerEvents: isMainScrolling ? 'none' : 'auto',
+          }}
+          data-tooltip={t('player.collapseQueueResize')}
+          data-tooltip-pos="left"
+          aria-label={t('player.collapseQueueResize')}
+        >
+          {isQueueVisible ? <PanelRightClose size={14} /> : <PanelRight size={14} />}
+        </button>
+      )}
+      {!isMobile && !perfFlags.disableQueuePanelMount && <QueuePanel />}
       {isMobile && !isMobilePlayer && <BottomNav />}
       {!isMobilePlayer && <PlayerBar />}
       {isFullscreenOpen && (
@@ -541,7 +757,7 @@ function AppShell() {
       <GlobalConfirmModal />
       <OrbitAccountPicker />
       <OrbitHelpModal />
-      <TooltipPortal />
+      {!perfFlags.disableTooltipPortal && <TooltipPortal />}
       <AppUpdater />
     </div>
   );
@@ -550,9 +766,6 @@ function AppShell() {
 // Media key + tray event handler
 function TauriEventBridge() {
   const navigate = useNavigate();
-  const togglePlay = usePlayerStore(s => s.togglePlay);
-  const next = usePlayerStore(s => s.next);
-  const previous = usePlayerStore(s => s.previous);
 
   // ZIP download progress events from Rust
   useEffect(() => {
@@ -561,6 +774,22 @@ function TauriEventBridge() {
       useZipDownloadStore.getState().updateProgress(e.payload.id, e.payload.bytes, e.payload.total);
     }).then(u => { unlisten = u; });
     return () => { unlisten?.(); };
+  }, []);
+
+  // Track-preview lifecycle: Rust audio engine emits start/progress/end. The
+  // store mirrors them so any tracklist row can render its preview UI.
+  useEffect(() => {
+    const unlistenFns: Array<() => void> = [];
+    listen<string>('audio:preview-start', e => {
+      usePreviewStore.getState()._onStart(e.payload);
+    }).then(u => unlistenFns.push(u));
+    listen<{ id: string; elapsed: number; duration: number }>('audio:preview-progress', e => {
+      usePreviewStore.getState()._onProgress(e.payload.id, e.payload.elapsed, e.payload.duration);
+    }).then(u => unlistenFns.push(u));
+    listen<{ id: string; reason: string }>('audio:preview-end', e => {
+      usePreviewStore.getState()._onEnd(e.payload.id);
+    }).then(u => unlistenFns.push(u));
+    return () => { unlistenFns.forEach(fn => fn()); };
   }, []);
 
   // Audio output device changed (Bluetooth headphones, USB DAC, etc.)
@@ -759,95 +988,8 @@ function TauriEventBridge() {
         }).catch(() => {});
       }
     }).then(u => unsubs.push(u));
-    listen<string>('cli:play-id', async e => {
-      const id = typeof e.payload === 'string' ? e.payload.trim() : '';
-      if (!id) return;
-      try {
-        await playByOpaqueId(id);
-      } catch (err) {
-        console.error('CLI play failed', err);
-        const notFound = err instanceof Error && err.message === 'play_by_id_not_found';
-        showToast(
-          i18n.t('contextMenu.cliPlayIdNotFound', {
-            defaultValue: notFound
-              ? 'No song, album, or artist matches this id.'
-              : 'Could not start playback.',
-          }),
-          5000,
-          'error',
-        );
-      }
-    }).then(u => unsubs.push(u));
-    listen('cli:shuffle-queue', () => {
-      usePlayerStore.getState().shuffleQueue();
-    }).then(u => unsubs.push(u));
-    listen<string>('cli:set-repeat', e => {
-      const m = typeof e.payload === 'string' ? e.payload : '';
-      const mode = m === 'all' ? 'all' : m === 'one' ? 'one' : 'off';
-      usePlayerStore.setState({ repeatMode: mode });
-    }).then(u => unsubs.push(u));
-    listen('cli:mute', () => {
-      const { volume, setVolume } = usePlayerStore.getState();
-      if (volume > 0) cliPremuteVolume = volume;
-      setVolume(0);
-    }).then(u => unsubs.push(u));
-    listen('cli:unmute', () => {
-      const restore = cliPremuteVolume ?? 0.8;
-      cliPremuteVolume = null;
-      usePlayerStore.getState().setVolume(restore);
-    }).then(u => unsubs.push(u));
-    listen<boolean>('cli:star-current', async e => {
-      const want = e.payload === true;
-      const track = usePlayerStore.getState().currentTrack;
-      if (!track) {
-        showToast(i18n.t('contextMenu.cliMixNeedsTrack'), 5000, 'error');
-        return;
-      }
-      try {
-        if (want) {
-          await star(track.id, 'song');
-          usePlayerStore.getState().setStarredOverride(track.id, true);
-        } else {
-          await unstar(track.id, 'song');
-          usePlayerStore.getState().setStarredOverride(track.id, false);
-        }
-      } catch (err) {
-        console.error('CLI star failed', err);
-        showToast(i18n.t('contextMenu.cliStarFailed', { defaultValue: 'Star/unstar failed.' }), 5000, 'error');
-      }
-    }).then(u => unsubs.push(u));
-    listen<number>('cli:set-rating-current', async e => {
-      const stars = e.payload;
-      if (typeof stars !== 'number' || Number.isNaN(stars) || stars < 0 || stars > 5) return;
-      const track = usePlayerStore.getState().currentTrack;
-      if (!track) {
-        showToast(i18n.t('contextMenu.cliMixNeedsTrack'), 5000, 'error');
-        return;
-      }
-      try {
-        await setRating(track.id, stars);
-        usePlayerStore.getState().setUserRatingOverride(track.id, stars);
-      } catch (err) {
-        console.error('CLI set rating failed', err);
-      }
-    }).then(u => unsubs.push(u));
-    listen('cli:reload-player', async () => {
-      const store = usePlayerStore.getState();
-      const { currentTrack, queue, stop, resetAudioPause, playTrack, initializeFromServerQueue } = store;
-      stop();
-      resetAudioPause();
-      await invoke('audio_stop').catch(() => {});
-      if (currentTrack) {
-        try {
-          const fresh = await getSong(currentTrack.id);
-          const t = fresh ? songToTrack(fresh) : currentTrack;
-          playTrack(t, queue, true);
-        } catch {
-          playTrack(currentTrack, queue, true);
-        }
-      } else {
-        await initializeFromServerQueue();
-      }
+    listen<any>('cli:player-command', async e => {
+      await executeCliPlayerCommand({ payload: e.payload ?? {}, navigate });
     }).then(u => unsubs.push(u));
     return () => {
       unsubs.forEach(u => u());
@@ -876,48 +1018,11 @@ function TauriEventBridge() {
       }
 
       const { bindings } = useKeybindingsStore.getState();
-      const { togglePlay, next, previous, setVolume, seek, toggleQueue, toggleFullscreen } = usePlayerStore.getState();
-
-      const action = (Object.entries(bindings) as [string, string | null][])
-        .find(([, b]) => matchInAppBinding(e, b))?.[0];
+      const action = matchInAppShortcutAction(e, { ...DEFAULT_IN_APP_BINDINGS, ...bindings });
 
       if (!action) return;
       e.preventDefault();
-
-      switch (action) {
-        case 'play-pause':        togglePlay(); break;
-        case 'next':              next(); break;
-        case 'prev':              previous(); break;
-        case 'volume-up':         setVolume(Math.min(1, usePlayerStore.getState().volume + 0.05)); break;
-        case 'volume-down':       setVolume(Math.max(0, usePlayerStore.getState().volume - 0.05)); break;
-        case 'seek-forward': {
-          const s = usePlayerStore.getState();
-          const dur = s.currentTrack?.duration ?? 0;
-          if (!dur) break;
-          seek(Math.min(1, (s.currentTime + 10) / dur));
-          break;
-        }
-        case 'seek-backward': {
-          const s = usePlayerStore.getState();
-          const dur = s.currentTrack?.duration ?? 0;
-          if (!dur) break;
-          seek(Math.max(0, (s.currentTime - 10) / dur));
-          break;
-        }
-        case 'toggle-queue':      toggleQueue(); break;
-        case 'open-folder-browser':
-          navigate('/folders', { state: { folderBrowserRevealTs: Date.now() } });
-          break;
-        case 'fullscreen-player': toggleFullscreen(); break;
-        case 'native-fullscreen': {
-          const win = getCurrentWindow();
-          win.isFullscreen().then(fs => win.setFullscreen(!fs));
-          break;
-        }
-        case 'open-mini-player':
-          invoke('open_mini_player').catch(() => {});
-          break;
-      }
+      executeRuntimeAction(action, { navigate, previewPolicy: 'stop' });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -929,17 +1034,19 @@ function TauriEventBridge() {
 
     const setup = async () => {
       const handlers: Array<[string, () => void]> = [
-        ['media:play-pause',  () => togglePlay()],
-        ['media:play',        () => { const s = usePlayerStore.getState(); if (!s.isPlaying) s.resume(); }],
-        ['media:pause',       () => { const s = usePlayerStore.getState(); if (s.isPlaying) s.pause(); }],
-        ['media:next',        () => next()],
-        ['media:prev',        () => previous()],
-        ['tray:play-pause',   () => togglePlay()],
-        ['tray:next',         () => next()],
-        ['tray:previous',     () => previous()],
-        ['media:stop',        () => usePlayerStore.getState().stop()],
-        ['media:volume-up',   () => { const s = usePlayerStore.getState(); s.setVolume(Math.min(1, s.volume + 0.05)); }],
-        ['media:volume-down', () => { const s = usePlayerStore.getState(); s.setVolume(Math.max(0, s.volume - 0.05)); }],
+        // Hardware media controls should not interrupt active preview playback.
+        ['media:play-pause', () => executeRuntimeAction('play-pause', { navigate, previewPolicy: 'ignore' })],
+        ['media:play',       () => executeRuntimeAction('play', { navigate, previewPolicy: 'ignore' })],
+        ['media:pause',      () => executeRuntimeAction('pause', { navigate, previewPolicy: 'ignore' })],
+        ['media:next',       () => executeRuntimeAction('next', { navigate, previewPolicy: 'ignore' })],
+        ['media:prev',       () => executeRuntimeAction('prev', { navigate, previewPolicy: 'ignore' })],
+        ['media:stop',       () => executeRuntimeAction('stop', { navigate, previewPolicy: 'ignore' })],
+        ['media:volume-up',  () => executeRuntimeAction('volume-up', { navigate, previewPolicy: 'ignore' })],
+        ['media:volume-down', () => executeRuntimeAction('volume-down', { navigate, previewPolicy: 'ignore' })],
+        // Tray clicks are explicit UI intent: stop preview first, then act.
+        ['tray:play-pause',  () => executeRuntimeAction('play-pause', { navigate, previewPolicy: 'stop' })],
+        ['tray:next',        () => executeRuntimeAction('next', { navigate, previewPolicy: 'stop' })],
+        ['tray:previous',    () => executeRuntimeAction('prev', { navigate, previewPolicy: 'stop' })],
       ];
       for (const [event, handler] of handlers) {
         const u = await listen(event, handler);
@@ -947,13 +1054,38 @@ function TauriEventBridge() {
         unlisten.push(u);
       }
 
+      {
+        const u = await listen<string>('shortcut:global-action', e => {
+          const action = e.payload;
+          if (!isGlobalShortcutActionId(action)) return;
+          executeRuntimeAction(action, { navigate, previewPolicy: 'ignore' });
+        });
+        if (cancelled) { u(); return; }
+        unlisten.push(u);
+      }
+
+      {
+        const u = await listen<{ action: string; source?: string }>('shortcut:run-action', e => {
+          const action = e.payload?.action;
+          const source = e.payload?.source;
+          if (!action || !isShortcutAction(action)) return;
+          if (source === 'mini-window' && !canRunShortcutActionInMiniWindow(action)) return;
+          const previewPolicy = source === 'cli' ? 'ignore' : 'stop';
+          executeRuntimeAction(action, { navigate, previewPolicy });
+        });
+        if (cancelled) { u(); return; }
+        unlisten.push(u);
+      }
+
+
       // Seek events carry a numeric payload (seconds) — seek() expects 0-1 progress
       {
         const u = await listen<number>('media:seek-relative', e => {
           const s = usePlayerStore.getState();
+          const p = getPlaybackProgressSnapshot();
           const dur = s.currentTrack?.duration;
           if (!dur) return;
-          s.seek(Math.max(0, s.currentTime + e.payload) / dur);
+          s.seek(Math.max(0, p.currentTime + e.payload) / dur);
         });
         if (cancelled) { u(); return; }
         unlisten.push(u);
@@ -1023,11 +1155,16 @@ function TauriEventBridge() {
 
     setup();
     return () => { cancelled = true; unlisten.forEach(u => u()); };
-  }, [togglePlay, next, previous]);
+  }, [navigate]);
 
   // `psysonic --info`: JSON snapshot under XDG_RUNTIME_DIR (Rust writes atomically).
   useEffect(() => {
     let tid: ReturnType<typeof setTimeout> | undefined;
+    let lastPublishAt = 0;
+    let lastStableKey = '';
+    let lastPlaying = false;
+    const SNAPSHOT_PLAYING_HEARTBEAT_MS = 4000;
+    const SNAPSHOT_IDLE_HEARTBEAT_MS = 15000;
     const publish = () => {
       const s = usePlayerStore.getState();
       const auth = useAuthStore.getState();
@@ -1047,7 +1184,7 @@ function TauriEventBridge() {
         queue_index: s.queueIndex,
         queue_length: s.queue.length,
         is_playing: s.isPlaying,
-        current_time: s.currentTime,
+        current_time: getPlaybackProgressSnapshot().currentTime,
         volume: s.volume,
         repeat_mode: s.repeatMode,
         current_track_user_rating: currentTrackUserRating,
@@ -1059,11 +1196,32 @@ function TauriEventBridge() {
           folders: auth.musicFolders.map(f => ({ id: f.id, name: f.name })),
         },
       };
+      const stableKey = JSON.stringify({
+        trackId: s.currentTrack?.id ?? null,
+        radioId: s.currentRadio?.id ?? null,
+        queueIndex: s.queueIndex,
+        queueLength: s.queue.length,
+        isPlaying: s.isPlaying,
+        volume: Math.round(s.volume * 100),
+        repeatMode: s.repeatMode,
+        serverId: sid ?? null,
+        selected,
+        currentTrackUserRating,
+        currentTrackStarred,
+      });
+      const now = Date.now();
+      const heartbeatMs = s.isPlaying ? SNAPSHOT_PLAYING_HEARTBEAT_MS : SNAPSHOT_IDLE_HEARTBEAT_MS;
+      const stableChanged = stableKey !== lastStableKey;
+      const playingEdge = s.isPlaying !== lastPlaying;
+      if (!stableChanged && !playingEdge && now - lastPublishAt < heartbeatMs) return;
+      lastStableKey = stableKey;
+      lastPlaying = s.isPlaying;
+      lastPublishAt = now;
       invoke('cli_publish_player_snapshot', { snapshot }).catch(() => {});
     };
     publish();
     const schedule = () => {
-      if (tid !== undefined) clearTimeout(tid);
+      if (tid !== undefined) return;
       tid = setTimeout(() => {
         tid = undefined;
         publish();
@@ -1086,6 +1244,7 @@ export default function App() {
   const effectiveTheme = useThemeScheduler();
   const font = useFontStore(s => s.font);
   const [exportPickerOpen, setExportPickerOpen] = useState(false);
+  const perfFlags = usePerfProbeFlags();
 
   // Mini Player window: detected via Tauri window label. Rendered without
   // router / sidebar / full audio listeners — it just listens for state + sends
@@ -1100,6 +1259,34 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-font', font);
   }, [font]);
+
+  // Hide all inline track-preview buttons when the user opts out — single
+  // CSS hook (`html[data-track-previews="off"]`) instead of conditional
+  // rendering in every tracklist. Per-location toggles use additional
+  // attributes `data-track-previews-{location}` consumed by scoped selectors.
+  const trackPreviewsEnabled = useAuthStore(s => s.trackPreviewsEnabled);
+  const trackPreviewLocations = useAuthStore(s => s.trackPreviewLocations);
+  const trackPreviewDurationSec = useAuthStore(s => s.trackPreviewDurationSec);
+  useEffect(() => {
+    document.documentElement.setAttribute(
+      'data-track-previews',
+      trackPreviewsEnabled ? 'on' : 'off',
+    );
+  }, [trackPreviewsEnabled]);
+  useEffect(() => {
+    const root = document.documentElement;
+    (Object.keys(trackPreviewLocations) as Array<keyof typeof trackPreviewLocations>).forEach(loc => {
+      root.setAttribute(`data-track-previews-${loc.toLowerCase()}`, trackPreviewLocations[loc] ? 'on' : 'off');
+    });
+  }, [trackPreviewLocations]);
+  // Drive the SVG progress-ring keyframe duration from the same setting that
+  // governs the engine's auto-stop timer so both finish in lockstep.
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      '--preview-duration',
+      `${trackPreviewDurationSec}s`,
+    );
+  }, [trackPreviewDurationSec]);
 
   // Main window only: push playback state to mini window + handle control events.
   useEffect(() => {
@@ -1141,7 +1328,7 @@ export default function App() {
       <DragDropProvider>
         <MiniPlayer />
         <GlobalConfirmModal />
-        <TooltipPortal />
+        {!perfFlags.disableTooltipPortal && <TooltipPortal />}
       </DragDropProvider>
     );
   }
