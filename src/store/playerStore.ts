@@ -1110,6 +1110,14 @@ async function runRefreshLoudnessForTrack(trackId: string, syncEngine: boolean):
       if (auth.normalizationEngine === 'loudness'
         && !analysisBackfillInFlightByTrackId[trackId]
         && attempts < MAX_BACKFILL_ATTEMPTS_PER_TRACK) {
+        if (!isTrackInsideLoudnessBackfillWindow(trackId)) {
+          emitNormalizationDebug('backfill:skipped-outside-window', {
+            trackId,
+            queueIndex: usePlayerStore.getState().queueIndex,
+            aheadWindow: LOUDNESS_BACKFILL_WINDOW_AHEAD,
+          });
+          return;
+        }
         analysisBackfillInFlightByTrackId[trackId] = true;
         analysisBackfillAttemptsByTrackId[trackId] = attempts + 1;
         const url = buildStreamUrl(trackId);
@@ -1159,25 +1167,41 @@ async function runRefreshLoudnessForTrack(trackId: string, syncEngine: boolean):
 }
 
 /** After bulk enqueue, warm loudness cache so gapless `audio_chain_preload` sees real gain, not only startup trim. */
-const LOUDNESS_PREFETCH_MAX_ENQUEUED_IDS = 40;
+const LOUDNESS_BACKFILL_WINDOW_AHEAD = 5;
+
+function isTrackInsideLoudnessBackfillWindow(trackId: string): boolean {
+  if (!trackId) return false;
+  const state = usePlayerStore.getState();
+  const currentId = state.currentTrack?.id;
+  if (currentId === trackId) return true;
+  if (state.queue.length === 0) return false;
+  const start = Math.max(0, state.queueIndex + 1);
+  const end = Math.min(state.queue.length, start + LOUDNESS_BACKFILL_WINDOW_AHEAD);
+  for (let i = start; i < end; i++) {
+    if (state.queue[i]?.id === trackId) return true;
+  }
+  return false;
+}
+
+function collectLoudnessBackfillWindowTrackIds(queue: Track[], queueIndex: number, currentTrack: Track | null): string[] {
+  const ids = new Set<string>();
+  if (currentTrack?.id) ids.add(currentTrack.id);
+  const start = Math.max(0, queueIndex + 1);
+  const end = Math.min(queue.length, start + LOUDNESS_BACKFILL_WINDOW_AHEAD);
+  for (let i = start; i < end; i++) {
+    const tid = queue[i]?.id;
+    if (tid) ids.add(tid);
+  }
+  return Array.from(ids);
+}
 
 function prefetchLoudnessForEnqueuedTracks(
-  incoming: Track[],
   mergedQueue: Track[],
   queueIndex: number,
 ) {
   if (useAuthStore.getState().normalizationEngine !== 'loudness') return;
-  const ids = new Set<string>();
-  const next = mergedQueue[queueIndex + 1];
-  if (next?.id) ids.add(next.id);
-  let n = 0;
-  for (const t of incoming) {
-    if (n >= LOUDNESS_PREFETCH_MAX_ENQUEUED_IDS) break;
-    if (t?.id) {
-      ids.add(t.id);
-      n++;
-    }
-  }
+  const currentTrack = usePlayerStore.getState().currentTrack;
+  const ids = collectLoudnessBackfillWindowTrackIds(mergedQueue, queueIndex, currentTrack);
   for (const id of ids) {
     void refreshLoudnessForTrack(id, { syncPlayingEngine: false });
   }
@@ -3203,7 +3227,7 @@ export const usePlayerStore = create<PlayerState>()(
                 ...state.queue.slice(firstAutoIdx),
               ];
           syncQueueToServer(newQueue, state.currentTrack, state.currentTime);
-          prefetchLoudnessForEnqueuedTracks(tracks, newQueue, state.queueIndex);
+          prefetchLoudnessForEnqueuedTracks(newQueue, state.queueIndex);
           return { queue: newQueue };
         });
       },
@@ -3252,7 +3276,7 @@ export const usePlayerStore = create<PlayerState>()(
             ? state.queueIndex + tracks.length
             : state.queueIndex;
           syncQueueToServer(newQueue, state.currentTrack, state.currentTime);
-          prefetchLoudnessForEnqueuedTracks(tracks, newQueue, newQueueIndex);
+          prefetchLoudnessForEnqueuedTracks(newQueue, newQueueIndex);
           return { queue: newQueue, queueIndex: newQueueIndex };
         });
       },
