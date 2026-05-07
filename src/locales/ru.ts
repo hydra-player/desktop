@@ -49,6 +49,13 @@ export const ruTranslation = {
     discoverMore: 'Смотреть ещё',
     discoverArtists: 'Исполнители',
     discoverArtistsMore: 'Все исполнители',
+    becauseYouLike: 'Потому что вы слушали…',
+    becauseYouLikeFor: 'Потому что вы слушали {{artist}}',
+    similarTo: 'Похоже на {{artist}}',
+    becauseYouLikeTracks_one: '{{count}} трек',
+    becauseYouLikeTracks_few: '{{count}} трека',
+    becauseYouLikeTracks_many: '{{count}} треков',
+    becauseYouLikeTracks_other: '{{count}} треков',
   },
   hero: {
     eyebrow: 'Альбом дня',
