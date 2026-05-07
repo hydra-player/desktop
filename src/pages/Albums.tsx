@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } from 'react';
 import AlbumCard from '../components/AlbumCard';
 import GenreFilterBar from '../components/GenreFilterBar';
 import YearFilterButton from '../components/YearFilterButton';
+import StarFilterButton from '../components/StarFilterButton';
 import SortDropdown from '../components/SortDropdown';
 import { getAlbumList, getAlbumsByGenre, getAlbum, SubsonicAlbum, buildDownloadUrl } from '../api/subsonic';
 import { songToTrack } from '../store/playerStore';
@@ -15,7 +16,16 @@ import { join } from '@tauri-apps/api/path';
 import { showToast } from '../utils/toast';
 import { useZipDownloadStore } from '../store/zipDownloadStore';
 import { CheckSquare2, Download, HardDriveDownload, ListMusic, Disc3, ListPlus } from 'lucide-react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { APP_MAIN_SCROLL_VIEWPORT_ID } from '../constants/appScroll';
+import { useElementClientHeightById } from '../hooks/useResizeClientHeight';
 import { usePerfProbeFlags } from '../utils/perfFlags';
+import { useRangeSelection } from '../hooks/useRangeSelection';
+
+const ALBUM_GRID_GAP_PX = 16; // matches --space-4
+const ALBUM_GRID_MIN_CARD_PX = 140;
+/** Estimated row height for virtual window (card + margin). */
+const ALBUM_VIRTUAL_ROW_HEIGHT = 288;
 
 type SortType = 'alphabeticalByName' | 'alphabeticalByArtist';
 type CompFilter = 'all' | 'only' | 'hide';
@@ -50,35 +60,68 @@ export default function Albums() {
   const [yearFrom, setYearFrom] = useState('');
   const [yearTo, setYearTo] = useState('');
   const [compFilter, setCompFilter] = useState<CompFilter>('all');
+  const [starredOnly, setStarredOnly] = useState(false);
   const observerTarget = useRef<HTMLDivElement>(null);
 
   // ── Multi-selection ──────────────────────────────────────────────────────
+  // selectedIds + toggleSelect come from useRangeSelection (declared after
+  // `visibleAlbums` so Shift-click range expansion follows the visible order).
   const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const starredOverrides = usePlayerStore(s => s.starredOverrides);
+  const visibleAlbums = useMemo(() => {
+    let out = albums;
+    if (compFilter === 'only') out = out.filter(a => a.isCompilation);
+    else if (compFilter === 'hide') out = out.filter(a => !a.isCompilation);
+    if (starredOnly) {
+      out = out.filter(a => a.id in starredOverrides ? starredOverrides[a.id] : !!a.starred);
+    }
+    return out;
+  }, [albums, compFilter, starredOnly, starredOverrides]);
+
+  const { selectedIds, toggleSelect, clearSelection: resetSelection } = useRangeSelection(visibleAlbums);
 
   const toggleSelectionMode = () => {
     setSelectionMode(v => !v);
-    setSelectedIds(new Set());
+    resetSelection();
   };
-
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }, []);
 
   const clearSelection = () => {
     setSelectionMode(false);
-    setSelectedIds(new Set());
+    resetSelection();
   };
 
-  const visibleAlbums = useMemo(() => {
-    if (compFilter === 'all') return albums;
-    if (compFilter === 'only') return albums.filter(a => a.isCompilation);
-    return albums.filter(a => !a.isCompilation);
-  }, [albums, compFilter]);
+  const albumGridWrapRef = useRef<HTMLDivElement>(null);
+  const [albumGridCols, setAlbumGridCols] = useState(4);
+
+  useLayoutEffect(() => {
+    if (perfFlags.disableMainstageVirtualLists) return;
+    const el = albumGridWrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const w = el.clientWidth;
+      const cols = Math.max(1, Math.floor((w + ALBUM_GRID_GAP_PX) / (ALBUM_GRID_MIN_CARD_PX + ALBUM_GRID_GAP_PX)));
+      setAlbumGridCols(cols);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [perfFlags.disableMainstageVirtualLists, visibleAlbums.length]);
+
+  const albumVirtualRowCount = Math.max(0, Math.ceil(visibleAlbums.length / albumGridCols));
+
+  const mainScrollViewportHeight = useElementClientHeightById(APP_MAIN_SCROLL_VIEWPORT_ID);
+  /** ~One full viewport of grid rows above + below visible range (TanStack overscan = rows per side). */
+  const albumGridOverscan = Math.max(
+    2,
+    Math.ceil(mainScrollViewportHeight / ALBUM_VIRTUAL_ROW_HEIGHT),
+  );
+
+  const albumGridVirtualizer = useVirtualizer({
+    count: perfFlags.disableMainstageVirtualLists ? 0 : albumVirtualRowCount,
+    getScrollElement: () => document.getElementById(APP_MAIN_SCROLL_VIEWPORT_ID),
+    estimateSize: () => ALBUM_VIRTUAL_ROW_HEIGHT,
+    overscan: albumGridOverscan,
+  });
 
   const selectedAlbums = visibleAlbums.filter(a => selectedIds.has(a.id));
   const openContextMenu = usePlayerStore(state => state.openContextMenu);
@@ -261,6 +304,8 @@ export default function Albums() {
 
                 <GenreFilterBar selected={selectedGenres} onSelectionChange={setSelectedGenres} />
 
+                <StarFilterButton active={starredOnly} onChange={setStarredOnly} />
+
                 <button
                   className={`btn btn-surface${compFilter !== 'all' ? ' btn-sort-active' : ''}`}
                   onClick={cycleCompFilter}
@@ -304,18 +349,66 @@ export default function Albums() {
       ) : (
         <>
           {!perfFlags.disableMainstageGridCards && (
-            <div className="album-grid-wrap">
-              {visibleAlbums.map(a => (
-                <AlbumCard
-                  key={a.id}
-                  album={a}
-                  selectionMode={selectionMode}
-                  selected={selectedIds.has(a.id)}
-                  onToggleSelect={toggleSelect}
-                  selectedAlbums={selectedAlbums}
-                />
-              ))}
-            </div>
+            perfFlags.disableMainstageVirtualLists ? (
+              <div className="album-grid-wrap">
+                {visibleAlbums.map(a => (
+                  <AlbumCard
+                    key={a.id}
+                    album={a}
+                    selectionMode={selectionMode}
+                    selected={selectedIds.has(a.id)}
+                    onToggleSelect={toggleSelect}
+                    selectedAlbums={selectedAlbums}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div
+                ref={albumGridWrapRef}
+                className="album-grid-wrap"
+                style={{ display: 'block', position: 'relative', width: '100%' }}
+              >
+                <div
+                  style={{
+                    height: albumVirtualRowCount === 0 ? 0 : albumGridVirtualizer.getTotalSize(),
+                    width: '100%',
+                    position: 'relative',
+                  }}
+                >
+                  {albumGridVirtualizer.getVirtualItems().map(vRow => {
+                    const start = vRow.index * albumGridCols;
+                    const rowAlbums = visibleAlbums.slice(start, start + albumGridCols);
+                    return (
+                      <div
+                        key={vRow.key}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          transform: `translateY(${vRow.start}px)`,
+                          display: 'grid',
+                          gridTemplateColumns: `repeat(${albumGridCols}, minmax(0, 1fr))`,
+                          gap: 'var(--space-4)',
+                          alignItems: 'start',
+                        }}
+                      >
+                        {rowAlbums.map(a => (
+                          <AlbumCard
+                            key={a.id}
+                            album={a}
+                            selectionMode={selectionMode}
+                            selected={selectedIds.has(a.id)}
+                            onToggleSelect={toggleSelect}
+                            selectedAlbums={selectedAlbums}
+                          />
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )
           )}
           {!genreFiltered && (
             <div ref={observerTarget} style={{ height: '20px', margin: '2rem 0', display: 'flex', justifyContent: 'center' }}>

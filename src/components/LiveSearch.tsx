@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Disc3, Users, Music, TextSearch } from 'lucide-react';
-import { search, SearchResults, buildCoverArtUrl, coverArtCacheKey } from '../api/subsonic';
+import { search, SearchResults, buildCoverArtUrl, coverArtCacheKey, type SubsonicArtist } from '../api/subsonic';
 import { usePlayerStore, songToTrack } from '../store/playerStore';
 import { useAuthStore } from '../store/authStore';
 import { useTranslation } from 'react-i18next';
-import CachedImage from './CachedImage';
+import CachedImage, { FETCH_QUEUE_BIAS_SEARCH_ARTIST_OVER_ALBUM } from './CachedImage';
 import { showToast } from '../utils/toast';
 
 function debounce(fn: (q: string) => void, ms: number): (q: string) => void {
@@ -14,6 +14,32 @@ function debounce(fn: (q: string) => void, ms: number): (q: string) => void {
     clearTimeout(timer);
     timer = setTimeout(() => fn(q), ms);
   };
+}
+
+function LiveSearchAlbumThumb({ coverArt }: { coverArt: string }) {
+  const src = useMemo(() => buildCoverArtUrl(coverArt, 40), [coverArt]);
+  const cacheKey = useMemo(() => coverArtCacheKey(coverArt, 40), [coverArt]);
+  return <CachedImage className="search-result-thumb" src={src} cacheKey={cacheKey} alt="" />;
+}
+
+function LiveSearchArtistThumb({ artist }: { artist: Pick<SubsonicArtist, 'id' | 'coverArt'> }) {
+  const [failed, setFailed] = useState(false);
+  const coverId = artist.coverArt || artist.id;
+  const src = useMemo(() => buildCoverArtUrl(coverId, 40), [coverId]);
+  const cacheKey = useMemo(() => coverArtCacheKey(coverId, 40), [coverId]);
+  useEffect(() => { setFailed(false); }, [coverId]);
+  if (failed) return <div className="search-result-icon"><Users size={14} /></div>;
+  return (
+    <CachedImage
+      className="search-result-thumb"
+      src={src}
+      cacheKey={cacheKey}
+      alt=""
+      loading="eager"
+      fetchQueueBias={FETCH_QUEUE_BIAS_SEARCH_ARTIST_OVER_ALBUM}
+      onError={() => setFailed(true)}
+    />
+  );
 }
 
 export default function LiveSearch() {
@@ -300,8 +326,10 @@ export default function LiveSearch() {
                           openContextMenu(e.clientX, e.clientY, a, 'artist');
                         }}
                         role="option" aria-selected={activeIndex === i}>
-                        <div className="search-result-icon"><Users size={14} /></div>
-                        <span>{a.name}</span>
+                        <LiveSearchArtistThumb artist={a} />
+                        <div>
+                          <div className="search-result-name">{a.name}</div>
+                        </div>
                       </button>
                     );
                   })}
@@ -323,12 +351,7 @@ export default function LiveSearch() {
                         }}
                         role="option" aria-selected={activeIndex === i}>
                         {a.coverArt ? (
-                          <CachedImage
-                            className="search-result-thumb"
-                            src={buildCoverArtUrl(a.coverArt, 40)}
-                            cacheKey={coverArtCacheKey(a.coverArt, 40)}
-                            alt=""
-                          />
+                          <LiveSearchAlbumThumb coverArt={a.coverArt} />
                         ) : (
                           <div className="search-result-icon"><Disc3 size={14} /></div>
                         )}

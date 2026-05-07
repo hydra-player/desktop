@@ -208,7 +208,6 @@
 }
 
 .album-card:hover {
-  transform: translateY(-3px);
   box-shadow: inset 0 0 0 1px var(--border), var(--shadow-md);
 }
 
@@ -223,11 +222,13 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform var(--transition-slow);
+  transform-origin: center center;
+  transform: scale(1);
+  transition: opacity 0.15s ease, transform 350ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .album-card:hover .album-card-cover img {
-  transform: scale(1.04);
+  transform: scale(1.02);
 }
 
 .album-card-cover-placeholder {
@@ -252,7 +253,6 @@
 }
 
 .artist-card:hover {
-  transform: translateY(-3px);
   box-shadow: var(--shadow-md);
   border-color: var(--border);
 }
@@ -272,11 +272,13 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform var(--transition-slow);
+  transform-origin: center center;
+  transform: scale(1);
+  transition: opacity 0.15s ease, transform 350ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .artist-card:hover .artist-card-avatar img {
-  transform: scale(1.04);
+  transform: scale(1.02);
 }
 
 .artist-card-avatar-initial {
@@ -318,6 +320,67 @@
 .artist-card-meta {
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+/* ─ Composer Grid (text-only, compact) ─
+ * Composers carry no useful imagery — visual is just noise. Strip the avatar,
+ * keep the name as the visual anchor with the participation count below. */
+.composer-grid-wrap {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+.composer-grid-wrap > .composer-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 78px;
+}
+
+.composer-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  padding: var(--space-3) var(--space-3);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    transform 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 200ms ease,
+    background 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.composer-card:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px -6px rgba(0, 0, 0, 0.4);
+}
+
+.composer-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.25;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  /* Reserve two name lines so the participation row stays vertically aligned
+   * across the grid, regardless of whether the name wraps or not. */
+  min-height: calc(14px * 1.25 * 2);
+}
+
+.composer-card-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.3;
 }
 
 /* ─ Album Row Container ─ */
@@ -401,6 +464,12 @@
   contain-intrinsic-size: 0 220px;
 }
 
+/* Same wrap as Albums grid; defer layout/paint for off-screen artist tiles (helps scroll on WebKit/Linux). */
+.album-grid-wrap > .artist-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 220px;
+}
+
 
 @media (min-width: 1024px) {
   .album-grid-wrap {
@@ -416,6 +485,11 @@
 
 /* Horizontal rails can hold many off-screen cards; skip their paint/layout until visible. */
 .album-grid .album-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 240px;
+}
+
+.album-grid .artist-card {
   content-visibility: auto;
   contain-intrinsic-size: 0 240px;
 }
@@ -1933,24 +2007,10 @@ html[data-track-previews-randommix="off"]   [data-preview-loc="randomMix"]   .pl
 
 .track-row.active {
   background: var(--accent-dim);
-  animation: track-pulse 3s ease-in-out infinite;
 }
 
 .track-row.active:hover {
   background: var(--accent-dim);
-  animation: none;
-}
-
-@keyframes track-pulse {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.6;
-  }
 }
 
 .track-row>* {
@@ -2037,56 +2097,14 @@ html[data-track-previews-randommix="off"]   [data-preview-loc="randomMix"]   .pl
   color: var(--accent);
 }
 
-/* Equalizer bars — shown for the currently playing track */
+/* "Now playing" indicator — Lucide AudioLines icon coloured with the active
+ * accent. Was an animated three-bar transform setup; the per-frame opacity +
+ * scaleY repaints fell back to software composite on WebKitGTK without
+ * compositing (NVIDIA proprietary + WEBKIT_DISABLE_COMPOSITING_MODE=1) and
+ * pegged the WebProcess at ~80% CPU on AlbumDetail with a long tracklist. */
 .eq-bars {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 2px;
-  width: 14px;
-  height: 13px;
-}
-
-.eq-bar {
-  flex: 1;
-  height: 100%;
-  background: var(--accent);
-  border-radius: 1px;
-  transform-origin: bottom;
-  transform: scaleY(0.25);
-  animation: eq-bounce 1.1s ease-in-out infinite;
-}
-
-.eq-bar:nth-child(1) {
-  animation-delay: 0s;
-  animation-duration: 1.0s;
-}
-
-.eq-bar:nth-child(2) {
-  animation-delay: 0.18s;
-  animation-duration: 1.3s;
-}
-
-.eq-bar:nth-child(3) {
-  animation-delay: 0.35s;
-  animation-duration: 0.9s;
-}
-
-/* Pause EQ bars animation when playback is paused */
-.eq-bars.paused .eq-bar {
-  animation-play-state: paused;
-}
-
-@keyframes eq-bounce {
-
-  0%,
-  100% {
-    transform: scaleY(0.25);
-  }
-
-  50% {
-    transform: scaleY(1);
-  }
+  color: var(--accent);
+  display: block;
 }
 
 /* CD / Disc separator */
@@ -3833,6 +3851,60 @@ html[data-track-previews-randommix="off"]   [data-preview-loc="randomMix"]   .pl
   .help-columns {
     columns: 1;
   }
+}
+
+.help-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  width: 280px;
+  max-width: 100%;
+  transition: border-color var(--transition-fast);
+}
+
+.help-search:focus-within {
+  border-color: var(--accent);
+}
+
+.help-search-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.help-search-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 2px 0;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.help-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.help-search-clear {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: color var(--transition-fast);
+}
+
+.help-search-clear:hover {
+  color: var(--text-primary);
 }
 
 .help-list {
@@ -7883,7 +7955,7 @@ html.no-compositing .fs-seekbar-played {
 }
 
 .mix-pick-card:hover {
-  transform: translateY(-4px) scale(1.015);
+  transform: scale(1.015);
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--accent), 0 0 24px -4px var(--accent);
   border-color: var(--accent);
 }
@@ -8609,6 +8681,31 @@ html.no-compositing .fs-seekbar-played {
   justify-content: center;
 }
 
+.artist-release-group {
+  margin-bottom: 1.5rem;
+}
+
+.artist-release-group__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0.75rem;
+}
+
+.artist-release-group__header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.artist-release-group__count {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border-radius: 10px;
+  padding: 1px 8px;
+}
+
 .app-shell[data-mobile] .album-grid-wrap--artist {
   grid-template-columns: repeat(2, 1fr);
 }
@@ -8924,6 +9021,10 @@ html.no-compositing .fs-seekbar-played {
   border-radius: 6px;
   object-fit: cover;
   flex-shrink: 0;
+}
+
+.mobile-search-thumb--artist-round {
+  border-radius: 50%;
 }
 
 .mobile-search-avatar {
@@ -9300,6 +9401,53 @@ html.no-compositing .fs-seekbar-played {
   transition: background var(--transition-fast);
 }
 
+.mp-album-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.mp-album-plays-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.mp-album-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.mp-album-action-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.mp-album-action-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
 .mp-album-row:hover {
   background: var(--bg-hover);
 }
@@ -9347,16 +9495,6 @@ html.no-compositing .fs-seekbar-played {
   color: var(--text-muted);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-}
-
-.mp-album-plays {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--accent);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-  min-width: 36px;
-  text-align: right;
 }
 
 .mp-load-more {
@@ -12146,7 +12284,7 @@ html[data-perf-disable-home-artwork-clip="true"] .home-lite-artwork .song-card-c
   min-width: 0;
   transition: transform 0.15s;
 }
-.np-dash-disc-tile:hover { transform: translateY(-2px); }
+.np-dash-disc-tile:hover { transform: none; }
 .np-dash-disc-cover {
   aspect-ratio: 1 / 1;
   border-radius: var(--radius-sm);
@@ -13763,4 +13901,192 @@ html[data-perf-disable-home-artwork-clip="true"] .home-lite-artwork .song-card-c
 .orbit-start-modal__copy:hover {
   background: color-mix(in srgb, var(--accent) 26%, transparent);
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+/* FPS overlay (Performance Probe → Show FPS overlay) */
+.fps-overlay {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 100003;
+  pointer-events: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-family: var(--font-mono, ui-monospace, 'Courier New', monospace);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary, #fff);
+  background: color-mix(in srgb, var(--ctp-crust, #111) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle, #444) 70%, transparent);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.fps-overlay__unit {
+  font-size: 10px;
+  color: var(--text-muted, #888);
+  letter-spacing: 0.02em;
+}
+
+/* Because-you-like rail — performance-conscious by design.
+   No filter/blur/transform animations (WebKitGTK / software-compositing friendly). */
+.because-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 1rem;
+}
+.because-card {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 1rem;
+  background: var(--bg-card);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border-subtle));
+  border-radius: 10px;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  min-height: 220px;
+  box-shadow: 0 1px 0 0 color-mix(in srgb, var(--accent) 25%, transparent) inset;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+.because-card-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(28px);
+  opacity: 0.22;
+  transform: scale(1.2);
+  z-index: 0;
+  pointer-events: none;
+}
+.because-card > :not(.because-card-bg) {
+  position: relative;
+  z-index: 1;
+}
+.because-card-text {
+  /* Theme-aware contrast halo — dark glow on dark themes, light on light. */
+  text-shadow:
+    0 0 2px color-mix(in srgb, var(--bg-card) 90%, transparent),
+    0 0 4px color-mix(in srgb, var(--bg-card) 70%, transparent),
+    0 1px 4px color-mix(in srgb, var(--bg-card) 55%, transparent);
+}
+.because-card:hover {
+  background: var(--bg-hover, var(--bg-card));
+  border-color: var(--accent, var(--border-subtle));
+}
+.because-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.because-card-cover-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  width: 160px;
+  height: 160px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-input, rgba(0, 0, 0, 0.15));
+}
+.because-card-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.because-card-cover-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: color-mix(in srgb, var(--text-primary) 30%, transparent);
+}
+.because-card:hover .album-card-play-overlay {
+  opacity: 1;
+}
+.because-card-text {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.25rem 0;
+}
+.because-card-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.because-card-similar {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent, var(--text-muted, #888));
+  font-weight: 700;
+}
+.because-card-title {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-primary, inherit);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.because-card-artist {
+  font-size: 15px;
+  color: var(--text-secondary, inherit);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.because-card-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.because-card-pill {
+  padding: 2px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--text-secondary, inherit);
+  white-space: nowrap;
+}
+.because-card-pill-type {
+  border-color: color-mix(in srgb, var(--accent, currentColor) 50%, transparent);
+  color: var(--accent, var(--text-secondary, inherit));
+}
+.because-card-meta {
+  align-self: center;
+  justify-content: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  row-gap: 0;
+  column-gap: 0.4rem;
+  font-size: 10px;
+  letter-spacing: 0.01em;
+  width: max-content;
+  max-width: 100%;
+  color: var(--text-primary, var(--text-secondary, inherit));
+  background: color-mix(in srgb, var(--text-primary) 14%, transparent);
+  padding: 3px 10px;
+  border-radius: 999px;
+  text-shadow: none;
+}
+.because-card-meta > span:not(:last-child)::after {
+  content: '·';
+  margin-left: 0.4rem;
+  opacity: 0.5;
 }

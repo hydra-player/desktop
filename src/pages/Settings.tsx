@@ -6,7 +6,7 @@ import {
   Wifi, WifiOff, Globe, Music2, Sliders, LogOut, CheckCircle2, FolderOpen,
   Palette, Server, Plus, Trash2, Eye, EyeOff, Info, ExternalLink, Shuffle, X, Play, Type, Keyboard, ChevronDown,
   GripVertical, PanelLeft, RotateCcw, LayoutGrid, AppWindow, HardDrive, Upload, Download, Waves, Star, Clock, ZoomIn, Sparkles, AlertTriangle, Maximize2, AudioLines, User, Lock,
-  Users, UserPlus, Shield, Wand2, Search
+  Users, UserPlus, Shield, Wand2, Search, Scale
 } from 'lucide-react';
 import i18n from '../i18n';
 import { exportBackup, importBackup } from '../utils/backup';
@@ -22,6 +22,7 @@ import { lastfmGetToken, lastfmAuthUrl, lastfmGetSession, lastfmGetUserInfo, Las
 import LastfmIcon from '../components/LastfmIcon';
 import CustomSelect from '../components/CustomSelect';
 import SettingsSubSection from '../components/SettingsSubSection';
+import LicensesPanel from '../components/LicensesPanel';
 import { AboutHydraBrandHeader } from '../components/AboutHydraLol';
 import { useLuckyMixAvailable } from '../hooks/useLuckyMixAvailable';
 import ThemePicker, { THEME_GROUPS } from '../components/ThemePicker';
@@ -206,6 +207,9 @@ const CONTRIBUTORS = [
       'Queue: drag rows outside to remove with trash ghost (PR #420)',
       'Tauri: modularize audio and lib command layers (PR #422)',
       'Shortcuts: action registry, dynamic CLI help, 9 new input targets + F1 help binding (PR #435)',
+      'Environment upgrade & hot-cache playback — replay via RAM/disk on same-track and queue-end resume, playback-source icon stays correct after resume/undo/gapless, sidebar new-releases 500-id cap merge, Windows tray double-click fix, lazy-loaded routes, rodio 0.22 migration (PR #463)',
+      'Audio: post-sleep stream recovery (Windows + Linux) with poll-gap-armed stall watchdog; preview seekbar freeze + anti-jump on preview end; remove card hover lift and per-card GPU compositing hints (PR #476)',
+      'Analysis queue control: prune stale http-backfill / cpu-seed jobs when tracks leave the playback queue, cap loudness backfill warmup to current + next 5 tracks, plus debug counters for diagnostics (PR #480)',
     ],
   },
   {
@@ -250,6 +254,7 @@ const CONTRIBUTORS = [
       'Artist page: continue playback when starting top songs (PR #220)',
       'Floating player bar: scroll-padding fix (PR #221)',
       'Queue Panel — position counter, tri-state duration toggle (total/remaining/ETA), persistent Now Playing collapse, animated EQ indicator (PR #419)',
+      'Community themes — redesign pass: removed 5 overlapping / eye-straining palettes, added 8 new dark themes (Obsidian Black, Carbon Grey, Volcanic Dark, Forest Green, Violet Haze, Copper Oxide, Sakura Night, Obsidian Gold) (PR #490)',
     ],
   },
   {
@@ -266,6 +271,14 @@ const CONTRIBUTORS = [
     since: '1.43.0',
     contributions: [
       'WebView2 idle hooks when Tauri windows are hidden — Windows GPU and compositor mitigation (PR #273)',
+    ],
+  },
+  {
+    github: 'Sayykii',
+    since: '1.46.0',
+    contributions: [
+      'Discord Rich Presence: cover art from your own server (Subsonic getAlbumInfo2) with three-way picker — none / server / Apple Music (PR #462)',
+      'Artist page: group albums by OpenSubsonic releaseTypes (Album / EP / Single / Compilation / Live / Soundtrack / Remix) with deterministic order and i18n section headers in all 8 locales (PR #471)',
     ],
   },
   {
@@ -352,6 +365,12 @@ const CONTRIBUTORS = [
       'Settings: 3-state animation mode (Full / Reduced / Static) — replaces boolean reduce-animations toggle (PR #441)',
       'Tracks: Highly Rated rail and per-card star display, with cache layer for ndListSongs (PR #443)',
       'Random Mix: playlist-size picker (50/75/100/125/150) and filter-panel layout cleanup (PR #445)',
+      'Queue: optional "Preserve Play Next order" toggle — multiple Play Next inserts queue up behind each other instead of latest-on-top (PR #464)',
+      'Library: "favorites only" filter on Albums, Artists and Advanced Search — toolbar toggle reading star overrides live (PR #466)',
+      'Settings: keep current active server when adding a new one — no more auto-switch interrupting playback or library context (PR #475)',
+      'Help page: full rewrite with 45 focused entries across 10 themed sections (Getting Started / Playback & Queue / Audio Tools / Library & Discovery / Lyrics / Sharing & Social / Personalization / Power User / Offline & Sync / Integrations & Troubleshooting), in-page live search with case-insensitive substring matching and auto-expand on hits, translated to all 8 locales (PR #485)',
+      'Library: Browse by Composer — native-API role listing for classical libraries, library-scoped queries, composer as a first-class share entity (PR #487)',
+      'Home: "Because you listened" recommendation rail — Last.fm-anchored similar-artist surfacing with round-robin anchor rotation per server (PR #489)',
     ],
   },
 ] as const;
@@ -427,6 +446,7 @@ const SETTINGS_INDEX: SearchIndexEntry[] = [
   { tab: 'system',         titleKey: 'settings.loggingTitle',             keywords: 'log logs diagnostic debug verbose' },
   { tab: 'system',         titleKey: 'settings.aboutTitle',               keywords: 'about version update changelog release notes' },
   { tab: 'system',         titleKey: 'settings.aboutContributorsLabel',   keywords: 'contributors credits maintainers' },
+  { tab: 'system',         titleKey: 'licenses.title',                    keywords: 'licenses license open source attribution copyright third party dependencies oss' },
 ];
 
 // Substring-first, Fuzzy-Fallback (alle Query-Zeichen in Reihenfolge im
@@ -2057,8 +2077,6 @@ export default function Settings() {
         };
         auth.setSubsonicServerIdentity(id, identity);
         scheduleInstantMixProbeForServer(id, data.url, data.username, data.password, identity);
-        auth.setActiveServer(id);
-        auth.setLoggedIn(true);
         setConnStatus(s => ({ ...s, [id]: 'ok' }));
       } else {
         setConnStatus(s => ({ ...s, [tempId]: 'error' }));
@@ -2544,6 +2562,22 @@ export default function Settings() {
                   <span className="toggle-track" />
                 </label>
               </div>
+
+              <div className="settings-toggle-row" style={{ marginTop: '0.75rem' }}>
+                <div>
+                  <div style={{ fontWeight: 500 }}>
+                    {t('settings.preservePlayNextOrder')}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    {t('settings.preservePlayNextOrderDesc')}
+                  </div>
+                </div>
+                <label className="toggle-switch" aria-label={t('settings.preservePlayNextOrder')}>
+                  <input type="checkbox" checked={auth.preservePlayNextOrder}
+                    onChange={e => auth.setPreservePlayNextOrder(e.target.checked)} />
+                  <span className="toggle-track" />
+                </label>
+              </div>
             </div>
           </SettingsSubSection>
 
@@ -2802,14 +2836,36 @@ export default function Settings() {
               </div>
               {auth.discordRichPresence && (
                 <>
-                  <div className="settings-section-divider" />
-                  <div className="settings-toggle-row">
-                    <div>
-                      <div style={{ fontWeight: 500 }}>{t('settings.discordAppleCovers')}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('settings.discordAppleCoversDesc')}</div>
-                    </div>
-                    <label className="toggle-switch" aria-label={t('settings.discordAppleCovers')}>
-                      <input type="checkbox" checked={auth.enableAppleMusicCoversDiscord} onChange={e => auth.setEnableAppleMusicCoversDiscord(e.target.checked)} />
+                  <div className="settings-toggle-row" style={{ padding: '4px var(--space-3) 4px var(--space-6)', fontSize: 13 }}>
+                    <div style={{ fontWeight: 500 }}>{t('settings.discordCoverNone')}</div>
+                    <label className="toggle-switch" aria-label={t('settings.discordCoverNone')}>
+                      <input
+                        type="checkbox"
+                        checked={auth.discordCoverSource === 'none'}
+                        onChange={e => auth.setDiscordCoverSource(e.target.checked ? 'none' : 'server')}
+                      />
+                      <span className="toggle-track" />
+                    </label>
+                  </div>
+                  <div className="settings-toggle-row" style={{ padding: '4px var(--space-3) 4px var(--space-6)', fontSize: 13 }}>
+                    <div style={{ fontWeight: 500 }}>{t('settings.discordCoverServer')}</div>
+                    <label className="toggle-switch" aria-label={t('settings.discordCoverServer')}>
+                      <input
+                        type="checkbox"
+                        checked={auth.discordCoverSource === 'server'}
+                        onChange={e => auth.setDiscordCoverSource(e.target.checked ? 'server' : 'none')}
+                      />
+                      <span className="toggle-track" />
+                    </label>
+                  </div>
+                  <div className="settings-toggle-row" style={{ padding: '4px var(--space-3) 4px var(--space-6)', fontSize: 13 }}>
+                    <div style={{ fontWeight: 500 }}>{t('settings.discordCoverApple')}</div>
+                    <label className="toggle-switch" aria-label={t('settings.discordCoverApple')}>
+                      <input
+                        type="checkbox"
+                        checked={auth.discordCoverSource === 'apple'}
+                        onChange={e => auth.setDiscordCoverSource(e.target.checked ? 'apple' : 'none')}
+                      />
                       <span className="toggle-track" />
                     </label>
                   </div>
@@ -2824,7 +2880,7 @@ export default function Settings() {
                         type="text"
                         value={auth.discordTemplateDetails}
                         onChange={e => auth.setDiscordTemplateDetails(e.target.value)}
-                        placeholder="{artist} - {title}"
+                        placeholder="{artist}"
                       />
                     </div>
                     <div className="form-group" style={{ marginBottom: '0.75rem' }}>
@@ -2834,7 +2890,7 @@ export default function Settings() {
                         type="text"
                         value={auth.discordTemplateState}
                         onChange={e => auth.setDiscordTemplateState(e.target.value)}
-                        placeholder="{album}"
+                        placeholder="{title}"
                       />
                     </div>
                     <div className="form-group">
@@ -4526,6 +4582,13 @@ export default function Settings() {
             </div>
           </SettingsSubSection>
 
+          <SettingsSubSection
+            title={t('licenses.title')}
+            icon={<Scale size={16} />}
+          >
+            <LicensesPanel />
+          </SettingsSubSection>
+
         </>
       )}
       </>}
@@ -4555,6 +4618,7 @@ function HomeCustomizer() {
     hero:            t('home.hero'),
     recent:          t('home.recent'),
     discover:        t('home.discover'),
+    becauseYouLike:  t('home.becauseYouLike'),
     discoverSongs:   t('home.discoverSongs'),
     discoverArtists: t('home.discoverArtists'),
     recentlyPlayed:  t('home.recentlyPlayed'),

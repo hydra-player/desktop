@@ -14,6 +14,195 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > **📦 Version jump 1.34.x → 1.40.0:** The 1.34.x patch series was bumped a lot as each small feature landed. 1.40.0 consolidates the last few weeks of work — macOS signing + auto-updater, the Device-Sync overhaul, theme work and contrast audits — into a single coherent release. The next major bump (2.0.0) is planned once Windows code-signing + Windows auto-updater are active as well.
 
 
+## [1.46.0] - 2026-05-05
+
+## Added
+
+### Discord — album cover art from your own server
+
+**By [@Sayykii](https://github.com/Sayykii), PR [#462](https://github.com/Psychotoxical/psysonic/pull/462)**
+
+* Discord Rich Presence can now show **album artwork from your own server** via the Subsonic `getAlbumInfo2` endpoint (requires the server to be publicly reachable).
+* New cover-source picker under Discord Rich Presence settings: **None** (app icon only), **Server**, or **Apple Music**. Mutually exclusive.
+* Fresh installs default to **Server** for opt-in-friendly cover art with no third-party data leak. Existing users keep their previous Apple-covers preference via migration.
+
+### Queue — preserve "Play Next" insertion order (toggle)
+
+**By [@Psychotoxical](https://github.com/Psychotoxical), suggested by [@Sayykii](https://github.com/Sayykii), PR [#464](https://github.com/Psychotoxical/psysonic/pull/464)**
+
+* New optional toggle in Settings → Audio → Playback ("Preserve Play Next order"). When on, multiple "Play Next" insertions **queue up behind each other** instead of the latest one bumping earlier picks down. Default off — existing behaviour unchanged.
+* Side-benefit: single-song "Play Next" now goes through the unified `enqueueAt` path and gets undo + server-sync support that the album path already had.
+
+### Library — "favorites only" filter on Albums, Artists and Advanced Search
+
+**By [@Psychotoxical](https://github.com/Psychotoxical), suggested by [@lilgringo](https://github.com/lilgringo), PR [#466](https://github.com/Psychotoxical/psysonic/pull/466)**
+
+* New star-toggle button in the toolbars of **Albums**, **Artists** and **Advanced Search** that flips the visible list to favourites-only.
+* Filter state is ephemeral per page (not persisted) so users don't come back to a half-empty library and wonder where their content went.
+* Reads star state live from in-memory overrides — toggling a favourite from a context menu updates the visible list immediately, no refetch.
+
+### Search — artist photos in live and mobile results
+
+**By [@cucadmuh](https://github.com/cucadmuh), PR [#470](https://github.com/Psychotoxical/psysonic/pull/470)**
+
+* **Live search** and the **mobile search overlay** now load **artist images** for rows in the **Artists** section via the same **`getCoverArt` / image-cache path** as album art (**`coverArt`** when present, otherwise the **artist id** where the server supports it), with a **fallback icon** when art is missing or fails.
+* **Mobile** artist hits use a **round** thumbnail next to **square** album art so the two result types read clearly at a glance.
+
+### Artist page — group albums by release type
+
+**By [@Sayykii](https://github.com/Sayykii), PR [#471](https://github.com/Psychotoxical/psysonic/pull/471)**
+
+* Albums on the artist page can now be **grouped into sections** by their OpenSubsonic `releaseTypes` (Album, EP, Single, Compilation, Live, Soundtrack, Remix). Section order is deterministic across languages, with unknown types appended at the end.
+* Falls back to the previous flat list when the server doesn't return `releaseTypes` or all albums share the default Album type — no behaviour change for non-OpenSubsonic servers.
+* Section headers are localised in all 8 supported languages.
+
+### Library — Browse by Composer
+
+**By [@Psychotoxical](https://github.com/Psychotoxical), suggested by mmourez ([issue #465](https://github.com/Psychotoxical/psysonic/issues/465)), PR [#487](https://github.com/Psychotoxical/psysonic/pull/487)**
+
+* New **Composers** library section listing every artist credited as composer on at least one track, with a detail page showing all works they hold in that role. Aimed at classical-music libraries where the recording artist is the orchestra and the composer tag carries Bach / Mozart / Chopin.
+* Uses Navidrome's native API (`/api/artist?_filters={"role":"composer"}` for the listing, `/api/album?_filters={"role_composer_id":"…"}` for the works) — Subsonic `getArtist` only walks AlbumArtist relations and returns zero albums for composer-only credits, so the native path is the only one that works. Requires **Navidrome 0.55+**; older / pure-Subsonic servers see a one-line capability banner.
+* Music-folder scope is honoured: role queries pass Navidrome's `library_id` filter so per-folder browsing matches the Albums / Artists pages. Bio + Last.fm portrait stay stable across scope changes.
+* **Composers are a first-class share entity.** `psysonic2-` links with `k=composer` paste to `/composer/:id`; the Share button on the detail page and the right-click menu both copy a `composer` link.
+* Sidebar entry is **off by default** (classical-music use case is a niche) — toggle in Settings → Sidebar.
+
+### Home — "Because you listened" recommendation rail
+
+**By [@Psychotoxical](https://github.com/Psychotoxical), PR [#489](https://github.com/Psychotoxical/psysonic/pull/489)**
+
+* New Home rail that surfaces albums **similar to one of your most-played artists** — Spotify-style "Because you listened to …" recommendations.
+* Anchor artist is rotated **round-robin** between Home opens through the top **8** entries in Most Played (so the rail does not get stuck on the same name). `getArtistInfo` returns up to **12** similar artists; the rail randomly samples **6** of them and surfaces **3** albums (one random per matching artist) that exist on your server.
+* Anchor rotation is **per-server**: switching servers keeps independent rotation state instead of aliasing one server's anchor id onto the next server's pool.
+* Toggleable in the Home customizer like every other rail; respects the existing performance flags ("Disable rail artwork", "Disable Home album rows").
+
+## Changed
+
+### Dependencies — npm / Cargo refresh and rodio 0.22
+
+**By [@cucadmuh](https://github.com/cucadmuh), PR [#463](https://github.com/Psychotoxical/psysonic/pull/463)**
+
+* Bumped **frontend** and **Tauri / Rust** dependencies across the workspace (`package.json`, `package-lock.json`, `Cargo.toml`, `Cargo.lock`).
+* Playback stack migrated to **rodio 0.22** with corresponding updates in decode, sources, engine, device I/O and related modules.
+
+### Build — lazy-loaded routes and Vite chunk warnings
+
+**By [@cucadmuh](https://github.com/cucadmuh), PR [#463](https://github.com/Psychotoxical/psysonic/pull/463)**
+
+* Heavier app **routes** are loaded **lazily** so the initial JS bundle stays smaller (`App.tsx` and related entry wiring).
+* Restored **default Vite `chunkSizeWarningLimit`** behaviour so oversized chunks are reported again during production builds (`vite.config.ts`).
+
+### UI — cover cache, mainstage rails, and smoother virtual lists
+
+**By [@cucadmuh](https://github.com/cucadmuh), PR [#468](https://github.com/Psychotoxical/psysonic/pull/468)**
+
+* **Image cache:** **Network fetches** share a small concurrency pool; **IndexedDB** hits are no longer queued behind remote downloads. **Debounced** disk eviction avoids hammering storage during fast cover scrolling. Related **shared blob URL** / hot-path fixes for thumbnails.
+* **Mainstage & rails:** **Horizontal rows** use **reworked artwork windowing** (higher initial budgets, extra slack ahead of the viewport, **no budget reset** when “load more” extends the list). **Duplicate album/song IDs** from the API are **deduped** for stable React reconciliation. **CachedImage** handles **already-decoded / cache-hit** images cleanly; rail **Album / song cards** load covers **eagerly** to reduce **blank art** while scrubbing sideways.
+* **Virtualised lists:** **Albums**, **Artists** (list mode), and the **Tracks** virtual song browser **derive** **TanStack Virtual `overscan`** from the **measured scroll viewport** (~ **one screen** of extra rows above and below) instead of a tiny fixed cushion.
+* **Library & chrome:** assorted **scroll / layout** improvements on **Artist detail**, **Playlists**, **Most played**; smaller touch-ups to **Mini player**, **Live search**, **Album header**, and **dynamic colour** extraction used by player / album surfaces.
+
+### Covers / image cache — parallel fetch + downscale, registry guard, search slot hints
+
+**By [@cucadmuh](https://github.com/cucadmuh), PR [#470](https://github.com/Psychotoxical/psysonic/pull/470)**
+
+* When a **pixel size** misses **disk** but **another size** of the same **`cover:id` is already cached**, **remote `getCoverArt`** and **client JPEG downscale** run in **parallel**; the **first good blob wins** and the other side **aborts** (network + downscale **signals**).
+* **Sibling key reads** use **one IndexedDB readonly transaction** instead of many separate transactions.
+* **`COVER_ART_REGISTERED_SIZES`** centralises known **`getCoverArt` widths** for **invalidation** and sibling lookup; **`coverArtRegisteredSizes.test.ts`** (**Vitest**) keeps **literal** `coverArtCacheKey(_, n)` call sites in **`src`** in sync with that list.
+* **`downscaleCoverBlob`** respects **AbortSignal** through **`canvas.toBlob`**.
+* **`CachedImage`:** **`fetchQueueBias`** gives **artist** search thumbs **higher network-slot priority** than **album** thumbs when the pool is saturated; **`observeRootMargin`** defaults **wider** so **priority** updates **earlier** ahead of the scroll viewport.
+
+### Settings — adding a server no longer switches to it
+
+**By [@Psychotoxical](https://github.com/Psychotoxical), PR [#475](https://github.com/Psychotoxical/psysonic/pull/475)**
+
+* When you add a new server from **Settings → Servers**, the new entry now appears in the server picker but **your current active server stays active** — playback, queue and library view are no longer interrupted.
+* The login screen on `/login` is unchanged: signing in there still selects the chosen server.
+
+### Most Played — quick actions, real context menu, prominent plays badge
+
+**By [@Psychotoxical](https://github.com/Psychotoxical), suggested by nzxl, PR [#482](https://github.com/Psychotoxical/psysonic/pull/482)**
+
+* Each album row now shows always-visible **Play** and **Enqueue** quick-action buttons, reusing the same flows as `AlbumCard` (Play kicks the fade-out replace-and-play, Enqueue appends the album's songs to the queue end).
+* **Right-click** on an album row now opens the standard album context menu (Play / Add to queue / Play next / Add to playlist / Go to artist) instead of firing a hidden direct-play action; right-click on a Top Artists card opens the artist context menu.
+* The **play count** moved from a small right-aligned column to a localized **pill right next to the album title** — `11 plays` (en), `11× gespielt` (de) — since the play count is the central datum on this page.
+
+### Multi-select — Shift+Click range selection on grid pages
+
+**By [@Psychotoxical](https://github.com/Psychotoxical), PR [#484](https://github.com/Psychotoxical/psysonic/pull/484)**
+
+* In multi-select mode on **Albums**, **Random Albums**, **New Releases** and **Playlists**, holding **Shift** while clicking a second card now selects every item between the anchor (last clicked) and the click target — the standard OS-level pattern. Range expansion follows the user-visible order, so filters and sort affect what gets included.
+* Plain click still toggles a single item and moves the anchor to it; behaviour without Shift is unchanged.
+
+### Help — full rewrite with live search and 10 cleanly-themed sections
+
+**By [@Psychotoxical](https://github.com/Psychotoxical), PR [#485](https://github.com/Psychotoxical/psysonic/pull/485)**
+
+* Help page rebuilt from scratch: dropped entries the UI itself answers, consolidated natural groupings, and added entries for features that didn't exist yet when the original Q/A list was written (**Orbit**, **Magic Strings**, **LUFS**, **Mini Player**, **Smart Playlists**, **Track Preview**, **Search**, **Statistics**, **Tracks** hub, **Genre Browser**, **Discord**, **Bandsintown**, **Multi-select**, **Sidebar/Home/Artist customization**, **Sleep Timer**, **Open Source Licenses**). 45 focused entries across **10 themed sections**.
+* New **live in-page search**: case-insensitive substring across every Q+A, sections without hits collapse out, matches auto-expand so the answer is visible without clicking. × button clears the query.
+* Translated to all **8 supported locales** (en, de, fr, nl, zh, nb, ru, es). Russian and Chinese are at machine-translation quality and would benefit from a polish pass by the original locale maintainers.
+
+### Community themes — redesign pass
+
+**By [@kveld9](https://github.com/kveld9), PR [#490](https://github.com/Psychotoxical/psysonic/pull/490)**
+
+* Removed five themes that overlapped or felt strenuous on the eyes: **Amber Night**, **Ice Blue**, **Monochrome**, **Phosphor Green**, **Rose Dark**.
+* Added eight new dark themes covering the colour families people most commonly ask for: **Obsidian Black**, **Carbon Grey**, **Volcanic Dark**, **Forest Green**, **Violet Haze**, **Copper Oxide**, **Sakura Night**, **Obsidian Gold**.
+* Light polish on the existing **AMOLED Black Pure** surface variables so card surfaces no longer collapse onto a pure-black background that read as a single flat slab.
+
+## Fixed
+
+### Hot cache, HTTP streaming replay, and queue source indicator
+
+**By [@cucadmuh](https://github.com/cucadmuh), PR [#463](https://github.com/Psychotoxical/psysonic/pull/463)**
+
+* **`stream_completed_cache`** is **no longer cleared** on **`audio_stop`**, so a fully buffered ranged download is not thrown away when the queue ends; starting the same track again can reuse **RAM** or **hot-disk** data instead of running a full **HTTP ranged** fetch from scratch (when hot cache is enabled and promotion succeeds).
+* **Same-track `playTrack`** and **cold `resume`** after **`audio:ended`** (engine not in paused-loaded state) **await hot-cache promote** so `resolvePlaybackUrl` can switch to **`psysonic-local://`** before the next **`audio_play`**.
+* **Ranged HTTP** sources merge format hints from the URL tail, **`Content-Type`**, **`Content-Disposition`** filename, and Subsonic **`song.suffix`** (IPC **`streamFormatSuffix`**). A bounded **Range** probe runs only when hints are still missing. Generic **`video/mp4`** **Content-Type** is not treated as an audio-container hint.
+* **SQLite analysis:** skip redundant **CPU seeds** when **waveform and loudness** rows already exist; emit **`analysis:waveform-updated`** only after a real DB **upsert**, not on cache-hit no-ops. Ranged / legacy download tasks re-check **playback generation** after awaits before writing the completed-stream slot.
+* **Queue panel** source icon (**stream / hot cache / offline**) now updates on **resume**, **queue-undo restore**, and **gapless `audio:track_switched`**, not only when **`playTrack`** runs.
+* **TypeScript / robustness:** non-null **`activeServerId`** bindings for promote IPC; **`.catch`** on the same-track **promote → play** promise chain with generation guard and prefetch-reset on failure.
+
+### Sidebar — New Releases read state under storage cap
+
+**By [@cucadmuh](https://github.com/cucadmuh), PR [#463](https://github.com/Psychotoxical/psysonic/pull/463)**
+
+* When persisted “seen” release IDs hit the **500-id cap**, **fresh reads are merged** at the front of the capped set so **unread badges** do not come back incorrectly (`mergeSeenNewReleaseIdsCap`).
+
+### Windows — tray double-click
+
+**By [@cucadmuh](https://github.com/cucadmuh), PR [#463](https://github.com/Psychotoxical/psysonic/pull/463)**
+
+* **Double-click** on the tray icon opens (or focuses) the main window without a spurious **context-menu** interaction; tray module import cleanup.
+
+### Playback stability — preview seekbar, sleep/wake recovery, and card-hover jitter
+
+**By [@cucadmuh](https://github.com/cucadmuh), PR [#476](https://github.com/Psychotoxical/psysonic/pull/476)**
+
+* **Preview seekbar:** while Rust preview playback pauses the main sink, the main seekbar no longer extrapolates forward, and preview end no longer causes a brief forward jump before snapping back.
+* **Sleep/wake audio recovery:** added post-sleep output reopen hooks for **Windows** (power notifications) and **Linux** (logind `PrepareForSleep` wake signal), plus a guarded fallback watchdog path and richer runtime diagnostics.
+* **False-positive mitigation:** the watchdog now arms only after a long poll gap (sleep/resume-like condition) and logs arm/clear/trigger decisions, reducing unexpected stream reopens during normal playback.
+* **Card hover stability:** removed vertical lift on album/artist/base cards to avoid pointer-edge pulsation, kept artwork zoom smooth, and dropped per-card GPU layer hints that could regress software-composited Linux paths.
+
+### Analysis queue control — prune stale backfill jobs and cap warmup window
+
+**By [@cucadmuh](https://github.com/cucadmuh), PR [#480](https://github.com/Psychotoxical/psysonic/pull/480)**
+
+* Added a queue-prune path for pending analysis work so stale `http_backfill` / `cpu_seed` jobs are dropped when tracks leave the active playback queue.
+* Limited loudness backfill warmup to the current track plus the next 5 tracks, reducing runaway analysis scheduling from large bulk queue updates.
+* Added debug counters for prune results to make queue-pressure behavior visible during diagnostics.
+
+### Sidebar — Playlists icon and hover hitbox in collapsed mode
+
+**By [@Psychotoxical](https://github.com/Psychotoxical), PR [#481](https://github.com/Psychotoxical/psysonic/pull/481)**
+
+* The **Playlists** icon in the collapsed sidebar was **off-centre** and had a **wider hover background** than every other item, because it still rendered through the expanded-mode wrapper (with `padding-right` and a `flex: 1` main link to fit the expand-toggle). Collapsed mode now reuses the **standard nav-link path** — same hitbox, same alignment as Artists, Albums, Favorites, etc.
+
+### Tracklist — drop now-playing pulse + EQ-bar animations
+
+**By [@Psychotoxical](https://github.com/Psychotoxical), PR [#488](https://github.com/Psychotoxical/psysonic/pull/488)**
+
+* The currently-playing track in any tracklist (**AlbumDetail**, **ArtistDetail**, **PlaylistDetail**, **Favorites**, **RandomMix**) ran an **`opacity` pulse** on the entire row plus three **`transform` keyframe** EQ-bar siblings — both compositor properties, but on **WebKitGTK without compositing** (Linux + NVIDIA proprietary + `WEBKIT_DISABLE_COMPOSITING_MODE=1`) every animated row falls back to a full **software repaint** of the subtree per frame. On AlbumDetail the combined cost held the WebProcess at **~80 % CPU** for the duration of playback; CPU dropped immediately on pause/stop.
+* `.track-row.active` keeps the **accent-tinted background** but no longer pulses. The "now playing" indicator becomes a single Lucide **`AudioLines` icon** (one SVG per active row instead of three animated spans). Cleanup: dead `track-pulse` + `eq-bounce` keyframes and a duplicate, shadowed `.eq-bar` block in `theme.css`.
+
 ## [1.45.0] - 2026-05-04
 
 ## Added

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { usePlayerStore, getPlaybackProgressSnapshot, subscribePlaybackProgress } from '../store/playerStore';
+import { usePreviewStore } from '../store/previewStore';
 import { useAuthStore, type SeekbarStyle } from '../store/authStore';
 import { bumpPerfCounter } from '../utils/perfTelemetry';
 function fmt(s: number): string {
@@ -961,6 +962,8 @@ export default function WaveformSeek({ trackId }: Props) {
 
   const seek         = usePlayerStore(s => s.seek);
   const isPlaying    = usePlayerStore(s => s.isPlaying);
+  /** Track preview pauses the main sink in Rust; `isPlaying` stays true so the bar must not extrapolate. */
+  const previewFreezesMainSeekbar = usePreviewStore(s => s.previewingId != null);
   const waveformBins = usePlayerStore(s => s.waveformBins);
   const duration     = usePlayerStore(s => s.currentTrack?.duration ?? 0);
   const seekbarStyle = useAuthStore(s => s.seekbarStyle);
@@ -1192,8 +1195,39 @@ export default function WaveformSeek({ trackId }: Props) {
   }, [seekbarStyle, animationMode]);
 
   // Smoothly advance progress between sparse transport ticks.
+  // Preview pauses main sink in Rust while UI `isPlaying` may still be true.
+  // When preview ends, interpolation must restart from "now", otherwise the
+  // old anchor timestamp adds preview duration and causes a one-frame jump.
   useEffect(() => {
-    if (!isPlaying || duration <= 0 || !isFinite(duration)) return;
+    progressAnchorRef.current = {
+      progress: progressRef.current,
+      atMs: performance.now(),
+    };
+    const quantizedOrRaw = isBarQuantizedSeekStyle(styleRef.current)
+      ? quantizeProgressByBars(progressRef.current)
+      : progressRef.current;
+    visualTargetProgressRef.current = quantizedOrRaw;
+    // Keep current visual position as-is; only reset timing anchor.
+  }, [previewFreezesMainSeekbar]);
+
+  useEffect(() => {
+    if (!isPlaying || previewFreezesMainSeekbar || duration <= 0 || !isFinite(duration)) return;
+    // This effect is torn down while paused, so `progressAnchorRef.atMs` is not refreshed.
+    // On resume the first `tick` would add the entire pause duration to `elapsedSec` and
+    // overshoot the playhead until the next transport heartbeat corrects it.
+    const snap = getPlaybackProgressSnapshot();
+    const raw = snap.progress;
+    progressRef.current = raw;
+    progressAnchorRef.current = {
+      progress: raw,
+      atMs: performance.now(),
+    };
+    const resumeVisual = isBarQuantizedSeekStyle(styleRef.current)
+      ? quantizeProgressByBars(raw)
+      : raw;
+    visualTargetProgressRef.current = resumeVisual;
+    visualProgressRef.current = resumeVisual;
+
     let rafId: number | null = null;
     let lastPaintAt = 0;
     const tick = (now: number) => {
@@ -1249,7 +1283,7 @@ export default function WaveformSeek({ trackId }: Props) {
     return () => {
       if (rafId != null) cancelAnimationFrame(rafId);
     };
-  }, [duration, isPlaying]);
+  }, [duration, isPlaying, previewFreezesMainSeekbar]);
 
   // Resize observer.
   useEffect(() => {

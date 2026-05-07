@@ -38,6 +38,26 @@ const NEW_RELEASES_UNREAD_STORAGE_PREFIX = 'psy_new_releases_unread_seen_v1';
 const NEW_RELEASES_UNREAD_SAMPLE_SIZE = 80;
 const NEW_RELEASES_UNREAD_POLL_MS = 2 * 60 * 1000;
 const NEW_RELEASES_RESET_DELAY_MS = 5_000;
+/** Max album ids persisted per server/scope; cap must not drop the latest "newest" batch when marking read. */
+const NEW_RELEASES_SEEN_MAX_IDS = 500;
+
+/** Merge previous seen IDs with the current `getAlbumList(newest)` sample: newest batch is kept in full first, then older seen until `maxIds` (localStorage budget). */
+function mergeSeenNewReleaseIdsCap(prevSeen: string[], newestBatch: string[], maxIds: number): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const id of newestBatch) {
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  for (const id of prevSeen) {
+    if (out.length >= maxIds) break;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
 
 function isSmartPlaylistName(name: string): boolean {
   return (name ?? '').toLowerCase().startsWith(SMART_PREFIX);
@@ -196,7 +216,7 @@ export default function Sidebar({
   );
 
   const writeSeenNewReleaseIdsByKey = useCallback((key: string, ids: string[]) => {
-    const normalized = Array.from(new Set(ids.filter(Boolean))).slice(0, 500);
+    const normalized = Array.from(new Set(ids.filter(Boolean))).slice(0, NEW_RELEASES_SEEN_MAX_IDS);
     localStorage.setItem(key, JSON.stringify(normalized));
   }, []);
 
@@ -237,11 +257,16 @@ export default function Sidebar({
       }
 
       if (markAsSeen) {
-        writeSeenNewReleaseIds([...seenIds, ...newestIds]);
+        // Prepend the live newest sample so a full `seenIds` list + slice(500)
+        // cannot silently discard freshly "read" albums (fixes badge coming back).
+        writeSeenNewReleaseIds(mergeSeenNewReleaseIdsCap(seenIds, newestIds, NEW_RELEASES_SEEN_MAX_IDS));
         // Keep server-wide baseline in sync so scope fallback never resurrects
         // already-viewed items after opening the New Releases page.
         const allScopeSeen = readSeenNewReleaseIdsByKey(newReleasesSeenAllScopeStorageKey);
-        writeSeenNewReleaseIdsByKey(newReleasesSeenAllScopeStorageKey, [...allScopeSeen, ...newestIds]);
+        writeSeenNewReleaseIdsByKey(
+          newReleasesSeenAllScopeStorageKey,
+          mergeSeenNewReleaseIdsCap(allScopeSeen, newestIds, NEW_RELEASES_SEEN_MAX_IDS),
+        );
         if (isCurrent()) setNewReleasesUnreadCount(0);
         return;
       }
@@ -835,7 +860,7 @@ export default function Sidebar({
               }
             : {};
 
-          return item.to === '/playlists' ? (
+          return item.to === '/playlists' && !isCollapsed ? (
             <div
               key={item.to}
               className={`sidebar-playlists-wrapper${rowClass ? ` ${rowClass}` : ''}`}
@@ -846,25 +871,21 @@ export default function Sidebar({
                 <NavLink
                   to={item.to}
                   className={({ isActive }) => `nav-link sidebar-playlists-main-link ${isActive ? 'active' : ''}`}
-                  data-tooltip={isCollapsed ? t(item.labelKey) : undefined}
-                  data-tooltip-pos="bottom"
                 >
-                  <item.icon size={isCollapsed ? 22 : 18} />
-                  {!isCollapsed && <span>{t(item.labelKey)}</span>}
+                  <item.icon size={18} />
+                  <span>{t(item.labelKey)}</span>
                 </NavLink>
-                {!isCollapsed && (
-                  <button
-                    className={`sidebar-playlists-toggle ${playlistsExpanded ? 'expanded' : ''}`}
-                    onClick={() => setPlaylistsExpanded(!playlistsExpanded)}
-                    aria-expanded={playlistsExpanded}
-                    aria-label={playlistsExpanded ? t('sidebar.collapsePlaylists') : t('sidebar.expandPlaylists')}
-                    data-tooltip={playlistsExpanded ? t('sidebar.collapsePlaylists') : t('sidebar.expandPlaylists')}
-                  >
-                    <ChevronRight size={14} />
-                  </button>
-                )}
+                <button
+                  className={`sidebar-playlists-toggle ${playlistsExpanded ? 'expanded' : ''}`}
+                  onClick={() => setPlaylistsExpanded(!playlistsExpanded)}
+                  aria-expanded={playlistsExpanded}
+                  aria-label={playlistsExpanded ? t('sidebar.collapsePlaylists') : t('sidebar.expandPlaylists')}
+                  data-tooltip={playlistsExpanded ? t('sidebar.collapsePlaylists') : t('sidebar.expandPlaylists')}
+                >
+                  <ChevronRight size={14} />
+                </button>
               </div>
-              {!isCollapsed && playlistsExpanded && (
+              {playlistsExpanded && (
                 <div className="sidebar-playlists-list">
                   {playlistsLoading ? (
                     <div className="sidebar-playlists-loading">
@@ -878,8 +899,6 @@ export default function Sidebar({
                         key={pl.id}
                         to={`/playlists/${pl.id}`}
                         className={({ isActive }) => `nav-link sidebar-playlist-item ${isActive ? 'active' : ''}`}
-                        data-tooltip={isCollapsed ? displayPlaylistName(pl.name) : undefined}
-                        data-tooltip-pos="bottom"
                       >
                         {isSmartPlaylistName(pl.name) ? <Sparkles size={12} /> : <PlayCircle size={12} />}
                         <span>{displayPlaylistName(pl.name)}</span>
@@ -1086,6 +1105,14 @@ export default function Sidebar({
             <p className="sidebar-perf-modal__hint">
               Temporary runtime switches to estimate UI effect cost.
             </p>
+            <label className="sidebar-perf-modal__item">
+              <input
+                type="checkbox"
+                checked={perfFlags.showFpsOverlay}
+                onChange={e => setPerfProbeFlag('showFpsOverlay', e.target.checked)}
+              />
+              <span>Show FPS overlay (requestAnimationFrame rate)</span>
+            </label>
             <div className="sidebar-perf-modal__cpu">
               <div className="sidebar-perf-modal__cpu-title">Live CPU (approx)</div>
               {perfCpu == null ? (
@@ -1216,7 +1243,7 @@ export default function Sidebar({
                 />
                 <span>Disable central route content mount</span>
               </label>
-              <details className="sidebar-perf-modal__phase sidebar-perf-modal__phase--nested" open>
+              <details className="sidebar-perf-modal__phase sidebar-perf-modal__phase--nested">
                 <summary className="sidebar-perf-modal__phase-title">Shared mainstage layers (multiple pages)</summary>
                 <label className="sidebar-perf-modal__item">
                   <input
@@ -1228,7 +1255,7 @@ export default function Sidebar({
                 </label>
               </details>
 
-              <details className="sidebar-perf-modal__phase sidebar-perf-modal__phase--nested" open>
+              <details className="sidebar-perf-modal__phase sidebar-perf-modal__phase--nested">
                 <summary className="sidebar-perf-modal__phase-title">Home (`/`)</summary>
                 <label className="sidebar-perf-modal__item">
                   <input
@@ -1320,7 +1347,7 @@ export default function Sidebar({
                 </label>
               </details>
 
-              <details className="sidebar-perf-modal__phase sidebar-perf-modal__phase--nested" open>
+              <details className="sidebar-perf-modal__phase sidebar-perf-modal__phase--nested">
                 <summary className="sidebar-perf-modal__phase-title">Tracks (`/tracks`)</summary>
                 <label className="sidebar-perf-modal__item">
                   <input
@@ -1364,7 +1391,7 @@ export default function Sidebar({
                 </label>
               </details>
 
-              <details className="sidebar-perf-modal__phase sidebar-perf-modal__phase--nested" open>
+              <details className="sidebar-perf-modal__phase sidebar-perf-modal__phase--nested">
                 <summary className="sidebar-perf-modal__phase-title">Albums (`/albums`)</summary>
                 <label className="sidebar-perf-modal__item">
                   <input
@@ -1376,7 +1403,7 @@ export default function Sidebar({
                 </label>
               </details>
             </details>
-            <details className="sidebar-perf-modal__phase" open>
+            <details className="sidebar-perf-modal__phase">
               <summary className="sidebar-perf-modal__phase-title">Phase 3 — Active diagnostics (quick access)</summary>
               <label className="sidebar-perf-modal__item">
                 <input

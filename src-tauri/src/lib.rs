@@ -10,7 +10,7 @@ mod lib_commands;
 #[cfg(target_os = "windows")]
 mod taskbar_win;
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -126,6 +126,13 @@ impl AnalysisBackfillQueueState {
             self.deque.push_back((tid, url));
             AnalysisBackfillEnqueueKind::NewBack
         }
+    }
+
+    fn prune_queued_not_in(&mut self, keep_track_ids: &HashSet<&str>) -> usize {
+        let before = self.deque.len();
+        self.deque
+            .retain(|(track_id, _)| keep_track_ids.contains(track_id.as_str()));
+        before.saturating_sub(self.deque.len())
     }
 }
 
@@ -300,6 +307,27 @@ impl AnalysisCpuSeedQueueState {
         };
         (kind, done_rx)
     }
+
+    fn prune_queued_not_in(&mut self, keep_track_ids: &HashSet<&str>) -> (usize, usize) {
+        let mut kept = VecDeque::with_capacity(self.deque.len());
+        let mut removed_jobs = 0usize;
+        let mut removed_waiters = 0usize;
+        while let Some(job) = self.deque.pop_front() {
+            if keep_track_ids.contains(job.track_id.as_str()) {
+                kept.push_back(job);
+                continue;
+            }
+            removed_jobs += 1;
+            removed_waiters += job.waiters.len();
+            for tx in job.waiters {
+                let _ = tx.send(Err(
+                    "cpu-seed pruned: track no longer in playback queue".to_string(),
+                ));
+            }
+        }
+        self.deque = kept;
+        (removed_jobs, removed_waiters)
+    }
 }
 
 struct AnalysisCpuSeedShared {
@@ -446,8 +474,9 @@ async fn analysis_cpu_seed_worker_loop(
 /// Submit full-buffer analysis; serializes with other producers. `high_priority` mirrors
 /// HTTP backfill head insertion for the currently playing track.
 ///
-/// Emits `analysis:waveform-updated` once here when the DB row is ready (Upserted or cache hit),
-/// so `audio` and other callers do not duplicate IPC.
+/// Emits `analysis:waveform-updated` when analysis **wrote** new waveform data (`Upserted`).
+/// Cache-hit skips (`SkippedWaveformCacheHit`) omit the event so the frontend does not
+/// re-run loudness refresh / waveform IPC for rows that were already current.
 pub(crate) async fn submit_analysis_cpu_seed(
     app: tauri::AppHandle,
     track_id: String,
@@ -467,11 +496,7 @@ pub(crate) async fn submit_analysis_cpu_seed(
         Ok(res) => res?,
         Err(_) => return Err("cpu-seed: result channel dropped".to_string()),
     };
-    if matches!(
-        outcome,
-        analysis_cache::SeedFromBytesOutcome::Upserted
-            | analysis_cache::SeedFromBytesOutcome::SkippedWaveformCacheHit
-    ) {
+    if matches!(outcome, analysis_cache::SeedFromBytesOutcome::Upserted) {
         let _ = app.emit(
             "analysis:waveform-updated",
             WaveformUpdatedPayload {
@@ -771,6 +796,9 @@ pub fn run() {
                 audio::start_device_watcher(&engine, app.handle().clone());
             }
 
+            // ── Reopen output after system sleep/resume (WASAPI / PipeWire etc.)
+            audio::register_post_sleep_audio_recovery(app.handle().clone());
+
             // ── Pre-create mini player window (Windows) ──────────────────
             // Creating the second WebView2 webview lazily from an invoke
             // handler on Windows reliably stalls the Tauri event loop —
@@ -902,6 +930,8 @@ pub fn run() {
             nd_delete_user,
             nd_list_libraries,
             nd_list_songs,
+            nd_list_artists_by_role,
+            nd_list_albums_by_artist_role,
             nd_set_user_libraries,
             nd_list_playlists,
             nd_create_playlist,
@@ -920,6 +950,7 @@ pub fn run() {
             analysis_delete_loudness_for_track,
             analysis_delete_all_waveforms,
             analysis_enqueue_seed_from_url,
+            analysis_prune_pending_to_track_ids,
             download_track_offline,
             delete_offline_track,
             get_offline_cache_size,

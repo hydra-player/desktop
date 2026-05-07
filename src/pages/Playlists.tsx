@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ListMusic, Play, Plus, Trash2, CheckSquare2, Check, Clock3, Sparkles, Pencil } from 'lucide-react';
 import { deletePlaylist, SubsonicPlaylist, getPlaylist, buildCoverArtUrl, coverArtCacheKey, updatePlaylist, getGenres, SubsonicGenre, filterSongsToActiveLibrary } from '../api/subsonic';
@@ -11,9 +11,36 @@ import { useTranslation } from 'react-i18next';
 import { formatHumanHoursMinutes } from '../utils/formatHumanDuration';
 import { showToast } from '../utils/toast';
 import { ndCreateSmartPlaylist, ndGetSmartPlaylist, ndListSmartPlaylists, ndUpdateSmartPlaylist } from '../api/navidromeSmart';
+import { useRangeSelection } from '../hooks/useRangeSelection';
 
 function formatDuration(seconds: number): string {
   return formatHumanHoursMinutes(seconds);
+}
+
+function PlaylistSmartCoverCell({ coverId }: { coverId: string }) {
+  const src = useMemo(() => buildCoverArtUrl(coverId, 200), [coverId]);
+  const cacheKey = useMemo(() => coverArtCacheKey(coverId, 200), [coverId]);
+  return (
+    <CachedImage
+      className="playlist-cover-cell"
+      src={src}
+      cacheKey={cacheKey}
+      alt=""
+    />
+  );
+}
+
+function PlaylistCardMainCover({ coverArt, alt }: { coverArt: string; alt: string }) {
+  const src = useMemo(() => buildCoverArtUrl(coverArt, 256), [coverArt]);
+  const cacheKey = useMemo(() => coverArtCacheKey(coverArt, 256), [coverArt]);
+  return (
+    <CachedImage
+      src={src}
+      cacheKey={cacheKey}
+      alt={alt}
+      className="album-card-cover-img"
+    />
+  );
 }
 
 const SMART_PREFIX = 'psy-smart-';
@@ -199,7 +226,7 @@ export default function Playlists() {
 
   // ── Multi-selection ──────────────────────────────────────────────────────
   const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const { selectedIds, toggleSelect, clearSelection: resetSelection } = useRangeSelection(playlists);
   const isNavidromeServer = Boolean(
     activeServerId &&
     (subsonicIdentityByServer[activeServerId]?.type ?? '').toLowerCase() === 'navidrome',
@@ -207,20 +234,12 @@ export default function Playlists() {
 
   const toggleSelectionMode = () => {
     setSelectionMode(v => !v);
-    setSelectedIds(new Set());
+    resetSelection();
   };
-
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }, []);
 
   const clearSelection = () => {
     setSelectionMode(false);
-    setSelectedIds(new Set());
+    resetSelection();
   };
 
   const selectedPlaylists = playlists.filter(p => selectedIds.has(p.id));
@@ -876,9 +895,9 @@ export default function Playlists() {
             <div
               key={pl.id}
               className={`album-card${selectionMode && selectedIds.has(pl.id) ? ' selected' : ''}`}
-              onClick={() => {
+              onClick={(e) => {
                 if (selectionMode) {
-                  toggleSelect(pl.id);
+                  toggleSelect(pl.id, { shiftKey: e.shiftKey });
                 } else {
                   navigate(`/playlists/${pl.id}`);
                 }
@@ -940,25 +959,14 @@ export default function Playlists() {
                     {Array.from({ length: 4 }, (_, i) => {
                       const id = smartCoverIdsByPlaylist[pl.id][i % smartCoverIdsByPlaylist[pl.id].length];
                       return id ? (
-                        <CachedImage
-                          key={i}
-                          className="playlist-cover-cell"
-                          src={buildCoverArtUrl(id, 200)}
-                          cacheKey={coverArtCacheKey(id, 200)}
-                          alt=""
-                        />
+                        <PlaylistSmartCoverCell key={i} coverId={id} />
                       ) : (
                         <div key={i} className="playlist-cover-cell playlist-cover-cell--empty" />
                       );
                     })}
                   </div>
                 ) : pl.coverArt ? (
-                  <CachedImage
-                    src={buildCoverArtUrl(pl.coverArt, 256)}
-                    cacheKey={coverArtCacheKey(pl.coverArt, 256)}
-                    alt={pl.name}
-                    className="album-card-cover-img"
-                  />
+                  <PlaylistCardMainCover coverArt={pl.coverArt} alt={pl.name} />
                 ) : (
                   <div className="album-card-cover-placeholder playlist-card-icon">
                     <ListMusic size={48} strokeWidth={1.2} />

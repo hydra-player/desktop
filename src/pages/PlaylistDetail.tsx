@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ChevronDown, ChevronLeft, ChevronRight, Play, ListPlus, Trash2, Search, X, Loader2, Plus, GripVertical, Star, RefreshCw, Shuffle, Heart, HardDriveDownload, Check, Pencil, Globe, Lock, Camera, Download, FileUp, RotateCcw, Sparkles, Square } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Play, ListPlus, Trash2, Search, X, Loader2, Plus, GripVertical, Star, RefreshCw, Shuffle, Heart, HardDriveDownload, Check, Pencil, Globe, Lock, Camera, Download, FileUp, RotateCcw, Sparkles, Square, AudioLines } from 'lucide-react';
 import { useTracklistColumns, type ColDef } from '../utils/useTracklistColumns';
 import { AddToPlaylistSubmenu } from '../components/ContextMenu';
 import {
@@ -234,6 +234,12 @@ const PL_COLUMNS: readonly ColDef[] = [
 ];
 
 const PL_CENTERED = new Set(['favorite', 'rating', 'duration']);
+
+function PlaylistSearchResultThumb({ coverArt }: { coverArt: string }) {
+  const src = useMemo(() => buildCoverArtUrl(coverArt, 40), [coverArt]);
+  const cacheKey = useMemo(() => coverArtCacheKey(coverArt, 40), [coverArt]);
+  return <CachedImage src={src} cacheKey={cacheKey} alt="" className="playlist-search-thumb" />;
+}
 
 export default function PlaylistDetail() {
   const { id } = useParams<{ id: string }>();
@@ -1408,7 +1414,7 @@ export default function PlaylistDetail() {
                     return next;
                   })}
                 />
-                <CachedImage src={buildCoverArtUrl(song.coverArt ?? '', 40)} cacheKey={coverArtCacheKey(song.coverArt ?? '', 40)} alt="" className="playlist-search-thumb" />
+                <PlaylistSearchResultThumb coverArt={song.coverArt ?? ''} />
                 <div className="playlist-search-info">
                   <span className="playlist-search-title">{song.title}</span>
                   <span className="playlist-search-artist">{song.artist} · <span className="playlist-search-album">{song.album}</span></span>
@@ -1691,7 +1697,7 @@ export default function PlaylistDetail() {
                     <div key="num" className={`track-num${currentTrack?.id === song.id ? ' track-num-active' : ''}`}>
                       <span className={`bulk-check${selectedIds.has(song.id) ? ' checked' : ''}${inSelectMode ? ' bulk-check-visible' : ''}`} onClick={e => { e.stopPropagation(); toggleSelect(song.id, i, e.shiftKey); }} />
                       {currentTrack?.id === song.id && isPlaying ? (
-                        <span className="track-num-eq"><div className="eq-bars"><span className="eq-bar" /><span className="eq-bar" /><span className="eq-bar" /></div></span>
+                        <span className="track-num-eq"><AudioLines className="eq-bars" size={14} /></span>
                       ) : (
                         <span className="track-num-number">{i + 1}</span>
                       )}

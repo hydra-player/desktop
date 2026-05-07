@@ -75,6 +75,8 @@ export interface SubsonicAlbum {
   userRating?: number;
   /** OpenSubsonic: true when the album is tagged as a compilation. */
   isCompilation?: boolean;
+  /** OpenSubsonic: release types from MusicBrainz tags (e.g. "Album", "EP", "Single", "Compilation", "Live"). */
+  releaseTypes?: string[];
 }
 
 /** OpenSubsonic `artists` / `albumArtists` entries on a child song (may include `userRating`). */
@@ -1051,6 +1053,23 @@ export function buildDownloadUrl(id: string): string {
     t: token, s: salt, v: '1.16.1', c: SUBSONIC_CLIENT, f: 'json',
   });
   return `${baseUrl}/rest/download.view?${p.toString()}`;
+}
+
+// ─── Album Info (public image URLs from Last.fm/MusicBrainz) ──
+export interface AlbumInfo {
+  largeImageUrl?: string;
+  mediumImageUrl?: string;
+  smallImageUrl?: string;
+  notes?: string;
+}
+
+export async function getAlbumInfo2(albumId: string): Promise<AlbumInfo | null> {
+  try {
+    const data = await api<{ albumInfo: AlbumInfo }>('getAlbumInfo2.view', { id: albumId });
+    return data.albumInfo ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // ─── Playlists ────────────────────────────────────────────────
